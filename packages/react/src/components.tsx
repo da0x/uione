@@ -66,6 +66,54 @@ function useFilled(): (to: string) => string {
     });
 }
 
+// A link to the record before or after this one in a list, in its own order: the same
+// screen for that one, in this one's place, so going back goes where it was opened from.
+// At either end it's there, but can't be followed, as it doesn't go around.
+export function StepLink({
+  view,
+  list,
+  to,
+  next = false,
+  icon,
+  keys,
+  children,
+}: {
+  view: ViewState;
+  list: string;
+  to: string; // the screen's route, its last parameter the record shown, like /things/:thing
+  next?: boolean;
+  icon?: string;
+  keys?: string[];
+  children: ReactNode;
+}) {
+  const ui = useUI();
+  const params = useParams();
+  const navigate = useNavigate();
+  const tool = useTool();
+  const off = useOff();
+  const target = view.status === "live" ? steppedTo(rowsOf(view.data?.[list]), to, params, next) : undefined;
+  const go = () => {
+    if (target) void navigate(target, { replace: true });
+  };
+  useKeys(keys, go, !off && target !== undefined);
+  return (
+    <ui.Button kind="secondary" icon={icon} tool={tool} disabled={off || target === undefined} hint={hintOf(typeof children === "string" ? children : "", keys)} onClick={go}>
+      {children}
+    </ui.Button>
+  );
+}
+
+// The address of the row before or after the one a route's last parameter names, as
+// its own link does, or none at either end, or when the rows don't hold that one.
+function steppedTo(rows: Row[], route: string, params: Readonly<Record<string, string | undefined>>, next: boolean): string | undefined {
+  const last = /\/:([a-z_]+)[*?]?$/.exec(route)?.[1];
+  if (!last) return undefined;
+  const named = (row: Row) => (typeof row[last] === "string" && row[last] !== "" ? String(row[last]) : row.id);
+  const at = rows.findIndex((row) => named(row) === params[last]);
+  const to = rows[next ? at + 1 : at - 1];
+  return at < 0 || !to ? undefined : rowLink(route, to, params);
+}
+
 export function Link({ to, icon, keys, children }: { to: string; icon?: string; keys?: string[]; children: ReactNode }) {
   const ui = useUI();
   const link = useLinks();

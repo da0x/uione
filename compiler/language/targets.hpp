@@ -53,6 +53,7 @@ namespace one::language {
         drawn_by{"link", "a link", everywhere},
         drawn_by{"link.icon", "a link's icon", everywhere},
         drawn_by{"link.built", "a link to what the site was built from", everywhere},
+        drawn_by{"link.step", "a link to the record before or after, in a list", everywhere},
         drawn_by{"hero", "a hero", everywhere},
         drawn_by{"section", "a section", everywhere},
         drawn_by{"section.color", "a section's color", everywhere},
@@ -282,7 +283,7 @@ namespace one::language {
                         else use("text");
                         if (n.when) use("text.when");
                     } else if constexpr (std::is_same_v<T, content_link>) {
-                        use(n.built.empty() ? "link" : "link.built");
+                        use(!n.step.empty() ? "link.step" : n.built.empty() ? "link" : "link.built");
                         if (n.icon) use("link.icon");
                         if (!n.keys.empty()) use("key");
                     } else if constexpr (std::is_same_v<T, table_item>) {

@@ -1973,7 +1973,15 @@ namespace one::language {
             if (at_word("link") && peek(1).kind != token_kind::scope) {
                 advance();
                 content_link link;
-                if (at(token_kind::route)) {
+                if ((at_word("previous") || at_word("next")) && peek(1).kind == token_kind::identifier && peek(1).text == "in") {
+                    link.step = advance().text;
+                    advance();
+                    link.step_view = parse_qualified_name("the view whose list it steps through, like library.things");
+                    if (at(token_kind::dot)) {
+                        advance();
+                        link.step_list = expect(token_kind::identifier, "which of the view's lists, like things").text;
+                    }
+                } else if (at(token_kind::route)) {
                     link.target = advance().text;
                 } else if (at(token_kind::anchor)) {
                     link.target = "#" + advance().text;
@@ -1991,7 +1999,7 @@ namespace one::language {
                     link.built_where = peek().where;
                     link.built = expect(token_kind::identifier, "what the site was built from, release or source").text;
                 } else {
-                    fail_expecting("where the link goes, like /docs, #waitlist, namespace projects or \"https://example.com\"");
+                    fail_expecting("where the link goes, like /docs, #waitlist, namespace projects, \"https://example.com\" or next in library.things");
                 }
                 link.label = expect(token_kind::string, "the link's text").text;
                 if (at_word("icon")) {

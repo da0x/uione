@@ -1780,6 +1780,28 @@ namespace one::screens {
 
 	int mosaic_rows(std::size_t count) { return static_cast<int>((count + 3) / 4) * 2; }
 
+	std::string stepped_to(page_base& p, const step_spec& spec) {
+		const view_state& v = *spec.view;
+		std::size_t at = spec.route.rfind("/:");
+		if (v.status != status::ready || at == std::string::npos) return "";
+		std::string last = spec.route.substr(at + 2);
+		if (last.ends_with('*') || last.ends_with('?')) last.pop_back();
+		// A row is the one shown when it holds what the parameter names, as its link does,
+		// or is that one itself.
+		auto named = [&](const value& row) {
+			const value& own = row[last];
+			return own.is_string() && !own.text.empty() ? own.text : row["id"].as_string();
+		};
+		const auto& rows = rows_of(v, spec.list);
+		std::string shown = p.param(last);
+		for (std::size_t i = 0; i < rows.size(); ++i) {
+			if (named(rows[i]) != shown) continue;
+			if (spec.next ? i + 1 == rows.size() : i == 0) return "";
+			return row_link(spec.route, rows[spec.next ? i + 1 : i - 1], p.params());
+		}
+		return "";
+	}
+
 	std::vector<card_model> cards_of(page_base& p, const cards_spec& spec) {
 		std::vector<card_model> out;
 		std::string title = spec.columns.empty() ? "" : spec.columns.front().field;

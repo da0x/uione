@@ -926,6 +926,78 @@ TEST_CASE("cards set as a mosaic of their pictures say so to both runtimes, and 
     CHECK(messages(fitted) == std::vector<std::string>{"31: a mosaic's pictures each fill their tile, so its picture line says fill, or nothing"});
 }
 
+TEST_CASE("a record's screen steps to the one before or after it in a list's own order, in its place, and says why when it can't") {
+    const std::string pieces = R"(namespace studio at / {
+	entity poster {
+		title  text
+	}
+
+	entity clipping {
+		poster  poster  required
+		name    text
+		image   file
+	}
+
+	view archive {
+		posters = each poster {
+			order by title
+			title
+		}
+	}
+
+	view poster_page per poster {
+		title
+		clippings = each clipping in poster {
+			name  image
+		}
+	}
+
+	screen "Posters" /posters {
+		cards archive.posters link /posters/:poster {
+			title
+		}
+	}
+
+	screen "{poster_page.title}" /posters/:poster {
+		link previous in archive.posters "Previous" icon previous key left
+		link next in archive.posters "Next" icon next key right
+		link /posters "Posters" key escape
+	}
+}
+)";
+    CHECK(messages(project + pieces).empty());
+    auto files = built(project + pieces);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    CHECK(web.find(R"(<StepLink view={archive} list="posters" to="/posters/:poster" icon="previous" keys={["left"]}>Previous</StepLink>)") != std::string::npos);
+    CHECK(web.find(R"(<StepLink view={archive} list="posters" to="/posters/:poster" next icon="next" keys={["right"]}>Next</StepLink>)") != std::string::npos);
+    CHECK(native.find(R"(step(p, {.view = archive, .list = "posters", .route = "/posters/:poster"}, "Previous", "previous", std::vector<std::string>{"left"}))") != std::string::npos);
+    CHECK(native.find(R"(step(p, {.view = archive, .list = "posters", .route = "/posters/:poster", .next = true}, "Next", "next", std::vector<std::string>{"right"}))") != std::string::npos);
+    // A view of each poster's own, not one of them all.
+    std::string per = project + pieces;
+    per.replace(per.find("link next in archive.posters"), std::string("link next in archive.posters").size(), "link next in poster_page.clippings");
+    CHECK(messages(per) == std::vector<std::string>{"41: view poster_page is one per poster, so its list changes with each record; step through a view of them all"});
+    std::string missing = project + pieces;
+    missing.replace(missing.find("link next in archive.posters"), std::string("link next in archive.posters").size(), "link next in catalog.posters");
+    CHECK(messages(missing) == std::vector<std::string>{"41: there's no view catalog in namespace studio"});
+    std::string unlisted = project + pieces;
+    unlisted.replace(unlisted.find("link next in archive.posters"), std::string("link next in archive.posters").size(), "link next in archive.prints");
+    CHECK(messages(unlisted) == std::vector<std::string>{"41: view archive has no list called prints"});
+    // The list is of what the screen's address names.
+    std::string other = project + pieces;
+    other.replace(other.find("\t\tposters = each poster {"), std::string("\t\tposters = each poster {").size(), "\t\tposters = each clipping {");
+    other.replace(other.find("\t\t\torder by title\n\t\t\ttitle\n"), std::string("\t\t\torder by title\n\t\t\ttitle\n").size(), "\t\t\torder by name\n\t\t\tname\n");
+    other.replace(other.find("\t\t\ttitle\n\t\t}\n\t}\n\n\tscreen \"{poster_page"), std::string("\t\t\ttitle\n").size(), "\t\t\tname\n");
+    CHECK(messages(other) == std::vector<std::string>{"40: archive.posters lists clippings, and this screen's address names a poster, so it can't step through them",
+                                                     "41: archive.posters lists clippings, and this screen's address names a poster, so it can't step through them"});
+    // And its address names one.
+    std::string nameless = project + pieces;
+    nameless.replace(nameless.find("\t\tlink next in archive.posters"), 0, "\t}\n\n\tscreen \"Every poster\" /every {\n");
+    CHECK(messages(nameless) == std::vector<std::string>{"44: a link next steps from one record to another, so its screen's address names one, like /things/:thing"});
+}
+
 TEST_CASE("a collage reads each part from the field named like it, or from the one it says, and hands its runtimes which") {
     const std::string noted = R"(namespace studio at / {
 	entity poster {

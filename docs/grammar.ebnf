@@ -327,7 +327,7 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? ("icon" NAME)? ("color" N
                  | "text" STRING ("when" condition)? END
                  | "code" STRING END
                  | "markdown" STRING ("as" "document")? END
-                 | "link" (ROUTE | ANCHOR | "namespace" qualified | STRING | "build" "." ("release" | "source")) STRING ("icon" NAME)? key* END
+                 | "link" (ROUTE | ANCHOR | "namespace" qualified | STRING | "build" "." ("release" | "source") | ("previous" | "next") "in" qualified ("." NAME)?) STRING ("icon" NAME)? key* END
                  | "table" qualified ("." NAME)? ("by" NAME tabs_over?)? ("link" ROUTE)? ("when" expression)? ("{" NEWLINE? table_line* "}")? END
                  | "form" qualified+ STRING? "{" NEWLINE? form_line* "}" END
                  | "confirm" qualified STRING END

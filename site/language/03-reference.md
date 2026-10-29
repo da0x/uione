@@ -2821,10 +2821,21 @@ issue::verify "Verify" when {
   "tel:+15555550100" "Call us"`. A link to an address or a
   namespace has to reach a screen that's there, so a renamed namespace or a typo
   is an error rather than a page that isn't found.
+- `link next in archive.posters "Next" icon next key right` and `link previous in
+  archive.posters "Previous" icon previous key left`, on a screen for one record,
+  like `/posters/:poster`, open the same screen for the record after or before it in
+  that list, in the list's own order. The record shown is the one the address's last
+  parameter names, and the screen it steps to opens in its place, so going back goes
+  where it was opened from. At either end the link is still there, but can't be
+  followed, as it doesn't go around. The list is in a view of them all, not one per
+  record, and it lists what the address names, posters here; a view of one list
+  names none, as in `link next in posters "Next"`. In a terminal, an arrow goes first
+  to what's beside what has the keyboard, as it does everywhere there, and steps
+  when there's nothing that way.
 - A screen shown again while the app is open, gone back to or opened by a link, is
   as it was left: scrolled where it was, once what it shows reaches that far, with
-  what was last opened from it, like a card, given the keyboard and in view.
-  Nothing of this is kept once the app is closed.
+  what was last opened from it, like a card, or the record stepped to from that,
+  given the keyboard and in view. Nothing of this is kept once the app is closed.
 - `menu { link /:project/settings "General"  link /:project/settings/deployments
   "Deployments" }` puts its links down the side of the page, with everything after
   it on the screen beside them, and marks the link to the page it's on. On a phone

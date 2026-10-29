@@ -422,6 +422,10 @@ namespace one::screens {
 		std::vector<card_link> filters;
 	};
 	std::vector<card_model> cards_of(page_base& p, const cards_spec& spec);
+	// The address of the record a step goes to: the same screen for the row before or
+	// after the one the page's address names. None at either end, as it doesn't go
+	// around, nor while the list isn't there or doesn't hold the one shown.
+	std::string stepped_to(page_base& p, const step_spec& spec);
 
 	// Where the nth card of a mosaic goes, in its columns and rows: every 8 cards are
 	// two blocks, one above the other, each three equal columns by two rows as tall as

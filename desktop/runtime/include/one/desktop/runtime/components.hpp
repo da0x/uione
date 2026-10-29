@@ -65,6 +65,9 @@ namespace one::desktop::runtime {
 
 	// A link to another screen, to a part of this one, like #projects, or out of the app.
 	desktop::view link(page& p, std::string words, std::string to, std::string icon = "", std::vector<std::string> keys = {});
+	// link next in library.things "Next": a button to the record after this one, or
+	// before it, in the record's place; faint, and not pressed, at either end.
+	desktop::view step(page& p, step_spec spec, std::string words, std::string icon = "", std::vector<std::string> keys = {});
 	// A part of the page a link names, like #projects, brought to the top when it's followed.
 	desktop::view anchored(page& p, std::string name, desktop::view part);
 	desktop::view hero(std::string title, std::vector<desktop::view> inside);

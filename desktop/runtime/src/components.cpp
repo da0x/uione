@@ -334,6 +334,21 @@ namespace one::desktop::runtime {
 		return std::move(part).key("#" + name + "-" + std::to_string(times)).brought_to_top();
 	}
 
+	desktop::view step(page& p, step_spec spec, std::string words, std::string icon, std::vector<std::string> keys) {
+		std::string to = stepped_to(p, spec);
+		bool off = to.empty() || (p.in_group() && p.off());
+		// In the record's place, so going back goes where it was opened from.
+		auto go = [&p, to] {
+			if (!to.empty()) p.open_instead(to);
+		};
+		if (!off) {
+			for (const auto& k : keys) p.on_key(k, go);
+		}
+		std::string drawn = desktop::has_icon(icon) ? icon : "";
+		if (auto small = p.in_group()) return desktop::tool_button(drawn, *small ? hint_of(words, keys) : words, std::move(go), {.large = !*small, .off = off});
+		return desktop::tool_button(drawn, drawn.empty() ? words : hint_of(words, keys), std::move(go), {.off = off});
+	}
+
 	desktop::view link(page& p, std::string words, std::string to, std::string icon, std::vector<std::string> keys) {
 		bool off = p.in_group() && p.off();
 		if (!off) {

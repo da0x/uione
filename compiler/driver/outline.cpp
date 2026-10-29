@@ -102,7 +102,7 @@ namespace one::driver {
                         out.label = n.value;
                     } else if constexpr (std::is_same_v<T, language::content_link>) {
                         out.kind = "link";
-                        out.subject = n.target;
+                        out.subject = n.step_view ? n.step + " in " + named(*n.step_view, n.step_list) : n.target;
                         out.label = n.label;
                     } else if constexpr (std::is_same_v<T, language::table_item>) {
                         out.kind = "table";

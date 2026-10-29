@@ -711,6 +711,11 @@ namespace one::language {
         std::string built;                             // link build.release: what the site was built from, release or source
         location built_where;
         std::vector<key_chord> keys;                   // key ctrl+o: opened by that key too
+        // link next in library.things "Next": the same screen for the record after the
+        // one its address names, or before it, in that list's own order.
+        std::string step;                              // previous or next
+        std::optional<qualified_name> step_view;
+        std::string step_list;
     };
 
     struct table_column {

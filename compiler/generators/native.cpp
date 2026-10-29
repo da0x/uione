@@ -1814,6 +1814,11 @@ namespace one::generators {
                         code = "link(p, " + said_of(parts, ns, link->label) + ", \"https://github.com/da0x/uione/releases/tag/v\" + build_version)";
                     } else if (!link->built.empty()) {
                         code = "build_commit.empty() || build_repository.empty() ? view() : link(p, " + said_of(parts, ns, link->label) + ", build_repository + \"/commit/\" + build_commit)";
+                    } else if (!link->step.empty()) {
+                        // The record before or after this one, in a list's own order.
+                        code = "step(p, {.view = " + view_variable(parts, screens::full_view(ns, link->step_view->text())) + ", .list = " + str(link->step_list) + ", .route = " +
+                               str(route_) + (link->step == "next" ? ", .next = true" : "") + "}, " + said_of(parts, ns, link->label) + ", " + str(link->icon.value_or("")) +
+                               (link->keys.empty() ? "" : ", " + keys_of(link->keys)) + ")";
                     } else {
                         std::string target = link->namespace_name ? model_.full_route(link->namespace_name->text(), "/") : link->target.starts_with("/") ? model_.full_route(ns, link->target) : link->target;
                         std::string keys = link->keys.empty() ? "" : keys_of(link->keys);

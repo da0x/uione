@@ -747,6 +747,16 @@ namespace one::screens {
 		bool paste = false;
 	};
 
+	// Stepping from a record's screen to the one before or after it in a list of them,
+	// as link next in library.things does: the list, in its own order, and the screen's
+	// route, whose last parameter names the record shown.
+	struct step_spec {
+		state<view_state> view;
+		std::string list;
+		std::string route;  // like /things/:thing
+		bool next = false;
+	};
+
 	// A chart's run of numbers: by its field and a name in it, like stats.cpu; its
 	// title; and its unit, "", percent, bytes or rate.
 	struct chart_line {

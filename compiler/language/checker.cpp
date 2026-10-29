@@ -989,7 +989,9 @@ namespace one::language {
                 for (const auto& item : list) {
                     auto* text = std::get_if<content_text>(&item.node);
                     auto* block = std::get_if<content_block>(&item.node);
-                    if ((text && text->type == content_text::kind::text) || std::holds_alternative<content_link>(item.node)) {
+                    if (auto* l = std::get_if<content_link>(&item.node); l && !l->step.empty()) {
+                        error(item.where, "a footer is on every screen, so its links can't step from record to record");
+                    } else if ((text && text->type == content_text::kind::text) || std::holds_alternative<content_link>(item.node)) {
                         continue;
                     } else if (block && block->type == content_block::kind::section && !in_section) {
                         items(block->items, true);
@@ -2625,10 +2627,39 @@ namespace one::language {
             statements(ns, f.body, nullptr, context{ns, nullptr, nullptr, f.parameters, false});
         }
 
+        // link next in library.things: a screen whose address names one record steps to
+        // the one after it in a list of them, so the list is of what the address names,
+        // in a view the screen reads whole, not one per record.
+        void step(const std::string& ns, const std::string& screen_route, const content_link& link, location where) {
+            const view_declaration* view = find(ns, *link.step_view, &scope::views);
+            if (view && view->per) {
+                error(link.step_view->where, "view " + link.step_view->text() + " is one per " + *view->per + ", so its list changes with each record; step through a view of them all");
+                return;
+            }
+            const view_each* rows = named_list(ns, *link.step_view, link.step_list, screen_route);
+            if (!rows) return;
+            std::size_t at = screen_route.rfind("/:");
+            if (at == std::string::npos) {
+                error(where, "a link " + link.step + " steps from one record to another, so its screen's address names one, like /things/:thing");
+                return;
+            }
+            std::string last = screen_route.substr(at + 2);
+            if (last.ends_with("*")) last.pop_back();
+            const entity_declaration* listed = listed_entity(ns, *rows);
+            if (listed && listed->name != last) {
+                error(link.step_view->where, link.step_view->text() + (link.step_list.empty() ? "" : "." + link.step_list) + " lists " + listed->name +
+                                                 "s, and this screen's address names a " + last + ", so it can't step through them");
+            }
+        }
+
         // A link opens a screen that's there: one written as an address matches a
         // screen's, with any :parameter standing for one part, and a namespace has a
         // screen at its own address.
         void link(const std::string& ns, const std::string& screen_route, const content_link& link, location where) {
+            if (!link.step.empty()) {
+                step(ns, screen_route, link, where);
+                return;
+            }
             if (link.namespace_name) {
                 snake(*link.namespace_name);
                 std::string name = link.namespace_name->text();
@@ -3434,6 +3465,8 @@ namespace one::language {
                         for (const auto& inside : block->items) {
                             if (!std::holds_alternative<content_link>(inside.node)) {
                                 error(inside.where, "a menu holds links, like link /settings \"General\"");
+                            } else if (!std::get<content_link>(inside.node).step.empty()) {
+                                error(inside.where, "a menu's links each open a screen, so stepping from record to record is a link of the screen's own");
                             }
                         }
                     }

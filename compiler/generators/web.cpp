@@ -1175,7 +1175,13 @@ namespace one::generators {
                                          : link->target.starts_with("/") ? full_route(ns, link->target)
                                                                                          : link->target;
                     std::string icon = link->icon ? " icon=" + web_detail::js_string(*link->icon) : "";
-                    if (!link->built.empty()) {
+                    if (!link->step.empty()) {
+                        // The record before or after this one, in a list's own order.
+                        parts.components.insert("StepLink");
+                        out.line("<StepLink view={" + view_variable(parts, full_view(ns, link->step_view->text())) + "} list=" + web_detail::js_string(link->step_list.empty() ? "rows" : link->step_list) +
+                                 " to=" + web_detail::js_string(route_) + (link->step == "next" ? " next" : "") + icon + keys_of(link->keys) + ">" + live_text(parts, ns, link->label) +
+                                 "</StepLink>");
+                    } else if (!link->built.empty()) {
                         // What the site was built from: its release's notes, or its commit.
                         parts.components.insert("BuiltLink");
                         out.line("<BuiltLink to=" + web_detail::js_string(link->built) + ">" + live_text(parts, ns, link->label) + "</BuiltLink>");

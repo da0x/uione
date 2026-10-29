@@ -6,7 +6,8 @@
 // that keep them; several at once one step to undo, and a drop target while empty.
 
 import { fireEvent, render, waitFor } from "@testing-library/react";
-import { App, Cards, PaperButton, memorySource, mosaicRows, mosaicTile, screen as defineScreen, useView } from "../src/index.js";
+import { App, Cards, Link, PaperButton, StepLink, memorySource, mosaicRows, mosaicTile, screen as defineScreen, useView } from "../src/index.js";
+import { useNavigate } from "react-router";
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
 import { takeInTurn } from "../src/workspace.js";
@@ -138,5 +139,97 @@ describe("cards as a mosaic", () => {
     expect(drawn.getByRole("link", { name: "Clipping 11" }).getAttribute("href")).toBe("/pieces/c11");
     fireEvent.drop(drawn.container.querySelector(".one-cards-taking")!, { dataTransfer: { files: [new File(["abcd"], "harbor.jpg", { type: "image/jpeg" })], getData: () => "", types: ["Files"] } });
     await waitFor(() => expect(source.runs.some((r) => r.command === "studio::piece::create")).toBe(true));
+  });
+});
+
+describe("a record's screen stepping through its list", () => {
+  function renderArchive(source: MemorySource, from: string) {
+    function Posters() {
+      const archive = useView("studio::archive");
+      return <Cards view={archive} list="posters" columns={{ title: "Title" }} link="/posters/:poster" />;
+    }
+    function Poster() {
+      const archive = useView("studio::archive");
+      const navigate = useNavigate();
+      return (
+        <>
+          <StepLink view={archive} list="posters" to="/posters/:poster" icon="previous" keys={["left"]}>
+            Previous
+          </StepLink>
+          <StepLink view={archive} list="posters" to="/posters/:poster" next icon="next" keys={["right"]}>
+            Next
+          </StepLink>
+          <Link to="/posters" keys={["escape"]}>
+            Posters
+          </Link>
+          <button type="button" onClick={() => void navigate(-1)}>
+            Back
+          </button>
+        </>
+      );
+    }
+    const screens = [defineScreen({ title: "Posters", route: "/posters" }, () => <Posters />), defineScreen({ title: "Poster", route: "/posters/:poster" }, () => <Poster />)];
+    return render(<App name="studio" screens={screens} ui={plain} data={source} location={from} />);
+  }
+
+  function archive(count: number) {
+    const source = memorySource();
+    source.set("studio::archive", { posters: Array.from({ length: count }, (_, i) => ({ id: `p${i}`, title: `Poster ${i}` })) });
+    return source;
+  }
+
+  // The page's scroll, which jsdom doesn't lay out: as tall as a long list.
+  let scrolled = 0;
+  beforeEach(() => {
+    scrolled = 0;
+    const page = document.scrollingElement ?? document.documentElement;
+    Object.defineProperty(page, "scrollTop", { configurable: true, get: () => scrolled, set: (to: number) => void (scrolled = to) });
+    Object.defineProperty(page, "scrollHeight", { configurable: true, get: () => 5000 });
+    Object.defineProperty(page, "clientHeight", { configurable: true, get: () => 600 });
+  });
+
+  it("steps to the one before or after it in its list's own order, by its buttons or keys, and not past either end", async () => {
+    const drawn = renderArchive(archive(3), "/posters/p0");
+    await waitFor(() => expect(drawn.getByText("Next").closest("button")!.disabled).toBe(false));
+    expect(drawn.getByText("Previous").closest("button")!.disabled).toBe(true);
+    fireEvent.keyDown(window, { key: "ArrowLeft" });
+    expect(drawn.getByText("Previous").closest("button")!.disabled).toBe(true);
+    fireEvent.click(drawn.getByText("Next"));
+    await waitFor(() => expect(drawn.getByText("Previous").closest("button")!.disabled).toBe(false));
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    // At the last, Next can't be followed, as it doesn't go around.
+    await waitFor(() => expect(drawn.getByText("Next").closest("button")!.disabled).toBe(true));
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    fireEvent.keyDown(window, { key: "ArrowLeft" });
+    await waitFor(() => expect(drawn.getByText("Next").closest("button")!.disabled).toBe(false));
+    fireEvent.keyDown(window, { key: "ArrowLeft" });
+    await waitFor(() => expect(drawn.getByText("Previous").closest("button")!.disabled).toBe(true));
+  });
+
+  it("goes back, or by a link, to the list scrolled where it was left, the card opened or stepped to last given the keyboard", async () => {
+    const drawn = renderArchive(archive(30), "/posters");
+    await waitFor(() => expect(drawn.getByText("Poster 12")).toBeTruthy());
+    scrolled = 900;
+    fireEvent.scroll(window);
+    fireEvent.click(drawn.getByText("Poster 12"));
+    await waitFor(() => expect(drawn.getByText("Next")).toBeTruthy());
+    // A record opened afresh starts at its top.
+    expect(scrolled).toBe(0);
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    await new Promise((done) => setTimeout(done, 0));
+    // By the window's own back.
+    fireEvent.click(drawn.getByText("Back"));
+    await waitFor(() => expect(drawn.getByText("Poster 14")).toBeTruthy());
+    await waitFor(() => expect(document.activeElement?.textContent).toBe("Poster 14"));
+    expect(scrolled).toBe(900);
+    // And by a link to it, as Escape is on the record's screen.
+    fireEvent.click(drawn.getByText("Poster 14"));
+    await waitFor(() => expect(drawn.getByText("Next")).toBeTruthy());
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    await new Promise((done) => setTimeout(done, 0));
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(document.activeElement?.textContent).toBe("Poster 15"));
+    expect(scrolled).toBe(900);
   });
 });

@@ -19,6 +19,7 @@
 #include <cmath>
 #include <cstdio>
 #include <format>
+#include <functional>
 #include <map>
 #include <memory>
 #include <limits>
@@ -157,9 +158,49 @@ namespace one::desktop::runtime {
 		// window's thread, and nothing until it is; the window built again then. With no
 		// window to build again, it's read now.
 		state<int> pictures_read{0};
-		std::optional<desktop::picture> read_soon(const std::filesystem::path& file, int longest) {
+		kept_by<desktop::picture>& pictures_kept(int longest) {
 			static kept_by<desktop::picture> whole(8), small(512);
-			auto& kept = longest > 0 ? small : whole;
+			return longest > 0 ? small : whole;
+		}
+		// The whole of one `wanted` only while something holds it, like the page it's on, is
+		// read in turn with the others wanted so, one at a time, the last asked for first,
+		// and not at all once nothing holds it: so stepping on through records faster than
+		// their pictures can be read reads the one shown, not each one passed.
+		struct waiting_read {
+			std::string key;
+			std::function<desktop::picture()> make;
+			std::weak_ptr<void> wanted;
+		};
+		std::mutex reading;
+		std::set<std::string> working;
+		std::vector<waiting_read> waiting;
+		bool reading_in_turn = false;
+		void read_in_turn() {
+			for (;;) {
+				waiting_read next;
+				{
+					std::lock_guard hold(reading);
+					std::erase_if(waiting, [](const waiting_read& w) { return w.wanted.expired() && working.erase(w.key); });
+					if (waiting.empty()) {
+						reading_in_turn = false;
+						break;
+					}
+					next = std::move(waiting.back());
+					waiting.pop_back();
+				}
+				pictures_kept(0).get(next.key, next.make);
+				{
+					std::lock_guard hold(reading);
+					working.erase(next.key);
+				}
+				post([] {
+					pictures_read.set(pictures_read.peek() + 1);
+					redraw();
+				});
+			}
+		}
+		std::optional<desktop::picture> read_soon(const std::filesystem::path& file, int longest, std::optional<std::weak_ptr<void>> wanted = std::nullopt) {
+			auto& kept = pictures_kept(longest);
 			std::string key = std::format("{} {}", file.string(), longest);
 			auto make = [file, longest] {
 				if (longest <= 0) return desktop::picture::read(file).value_or(desktop::picture());
@@ -182,10 +223,20 @@ namespace one::desktop::runtime {
 			};
 			if (!posting()) return kept.get(key, make);
 			if (auto known = kept.peek(key)) return known;
-			static std::mutex reading;
-			static std::set<std::string> working;
 			pictures_read.get();
 			std::lock_guard hold(reading);
+			if (longest <= 0 && wanted) {
+				// Asked for again, it's the last asked for, by what asked.
+				auto found = std::ranges::find(waiting, key, &waiting_read::key);
+				if (found != waiting.end()) {
+					found->wanted = *wanted;
+					std::rotate(found, found + 1, waiting.end());
+				} else if (working.insert(key).second) {
+					waiting.push_back({key, make, *wanted});
+				}
+				if (!std::exchange(reading_in_turn, true)) in_background(read_in_turn);
+				return std::nullopt;
+			}
 			if (working.insert(key).second) {
 				in_background([key, make, &kept] {
 					kept.get(key, make);
@@ -1638,7 +1689,13 @@ namespace one::desktop::runtime {
 
 	desktop::view picture_of(page& p, const std::string& kept, bool fit, float height, int longest) {
 		auto file = kept.empty() ? std::nullopt : p.file_here(kept);
-		desktop::picture shown = file ? read_soon(*file, longest).value_or(desktop::picture()) : desktop::picture();
+		// The whole of one is wanted for as long as the page is open.
+		std::optional<std::weak_ptr<void>> wanted;
+		if (longest <= 0) wanted = p.kept<std::shared_ptr<void>>("pictures wanted", std::make_shared<bool>()).peek();
+		auto read = file ? read_soon(*file, longest, wanted) : std::optional(desktop::picture());
+		// Until it's read, the copy a card drew of it, when there's one.
+		if (!read && longest <= 0) read = pictures_kept(640).peek(std::format("{} {}", file->string(), 640));
+		desktop::picture shown = read.value_or(desktop::picture());
 		return desktop::drawing([shown, fit](desktop::canvas& c, desktop::rect area) {
 			       const auto& t = current_theme();
 			       c.box(area, {.fill = t.sunken});

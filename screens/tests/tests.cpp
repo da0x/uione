@@ -420,6 +420,28 @@ TEST("a mosaic's cards each go in their tile by their place alone, two blocks of
 	CHECK(mosaic_rows(11) == 6);
 }
 
+TEST("a record's page steps to the one before or after it in its list's own order, and not past either end") {
+	site s{.name = "studio"};
+	s.screens.push_back({"Posters", "/posters"});
+	s.screens.push_back({"", "/posters/:poster"});
+	memory_source data;
+	data.set("studio::archive", "", value(fields{{"posters", list{value(fields{{"id", "p1"}}), value(fields{{"id", "p2"}}), value(fields{{"id", "p3"}})}}}));
+	navigator nav(s, data);
+	nav.open("/posters/p2");
+	auto& p = nav.current();
+	auto archive = p.view("studio::archive");
+	for (int i = 0; i < 3 && archive.peek().status != status::ready; ++i) {}
+	CHECK(stepped_to(p, {.view = archive, .list = "posters", .route = "/posters/:poster", .next = true}) == "/posters/p3");
+	CHECK(stepped_to(p, {.view = archive, .list = "posters", .route = "/posters/:poster"}) == "/posters/p1");
+	nav.replace("/posters/p3");
+	CHECK(stepped_to(nav.current(), {.view = nav.current().view("studio::archive"), .list = "posters", .route = "/posters/:poster", .next = true}).empty());
+	nav.replace("/posters/p1");
+	CHECK(stepped_to(nav.current(), {.view = nav.current().view("studio::archive"), .list = "posters", .route = "/posters/:poster"}).empty());
+	// One the list doesn't hold steps nowhere.
+	nav.replace("/posters/p9");
+	CHECK(stepped_to(nav.current(), {.view = nav.current().view("studio::archive"), .list = "posters", .route = "/posters/:poster", .next = true}).empty());
+}
+
 TEST("a page is found as it was left when it's gone back to or opened again: scrolled as it was, with what was opened from it, or stepped to from that") {
 	site s{.name = "studio"};
 	s.screens.push_back({"Posters", "/posters"});

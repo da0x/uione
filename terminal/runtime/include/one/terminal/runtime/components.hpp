@@ -37,6 +37,9 @@ namespace one::terminal::runtime {
 	}
 	// A link to another screen, to a part of this one, like #projects, or out of the app.
 	terminal::view link(page& p, std::string words, std::string to, std::string icon = "", std::vector<std::string> keys = {});
+	// link next in library.things "Next": to the record after this one, or before it, in
+	// the record's place; only its words at either end.
+	terminal::view step(page& p, step_spec spec, std::string words, std::string icon = "", std::vector<std::string> keys = {});
 	// A part of the page a link names, like #projects, brought to the top when it's followed.
 	terminal::view anchored(page& p, std::string name, terminal::view part);
 	terminal::view hero(std::string title, std::vector<terminal::view> inside);
