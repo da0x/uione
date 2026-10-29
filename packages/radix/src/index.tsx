@@ -1214,16 +1214,23 @@ export const radix: ComponentSet = {
       {cards.map((card) => {
         const total = card.tally?.reduce((n, part) => n + part.count, 0) ?? 0;
         return (
-          <article key={card.id} className="flex flex-col gap-3 rounded-box border border-line bg-surface p-4 shadow-panel">
+          // A card that opens something opens it from anywhere on it: its name's link
+          // reaches over the whole card, the filters on it still their own.
+          <article
+            key={card.id}
+            className={`relative flex flex-col gap-3 rounded-box border border-line bg-surface p-4 shadow-panel ${
+              card.link ? "transition-colors hover:border-accent/50 has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-accent" : ""
+            }`}
+          >
             {card.picture && (
               <div className="-mx-4 -mt-4 aspect-video overflow-hidden rounded-t-box bg-sunken">
                 {card.picture.source && <img src={card.picture.source} alt="" className={`h-full w-full ${card.picture.fit ? "object-contain" : "object-cover"}`} />}
               </div>
             )}
             <div className="flex items-start justify-between gap-3">
-              <h2 className="text-lg leading-snug font-semibold">
+              <h2 className="text-lg leading-snug font-semibold" style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}>
                 {card.link ? (
-                  <a {...card.link} className="text-ink hover:text-accent hover:underline">
+                  <a {...card.link} className="text-ink no-underline outline-none after:absolute after:inset-0 after:rounded-box after:content-[''] hover:no-underline">
                     {card.title}
                   </a>
                 ) : (
@@ -1270,7 +1277,7 @@ export const radix: ComponentSet = {
               </div>
             )}
             {card.filters.length > 0 && (
-              <nav aria-label="Filters" className="mt-auto flex flex-wrap gap-2 border-t border-line pt-3">
+              <nav aria-label="Filters" className="relative z-10 mt-auto flex flex-wrap gap-2 border-t border-line pt-3">
                 {card.filters.map((f) => (
                   <a
                     key={f.label}
