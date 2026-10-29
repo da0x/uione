@@ -742,6 +742,66 @@ export function pathMoved(absolute: string, node: number, dx: number, dy: number
   return writtenOf(commands);
 }
 
+// A control point of a path's node, where it is: the one its own curve comes into it by,
+// or the one the next curve leaves it by, `out`. A line's end has none.
+export interface PathHandle {
+  at: Point;
+  out: boolean;
+}
+
+// Where the node at `node` is among the commands, or past them.
+function commandOf(commands: { letter: string; numbers: number[] }[], node: number): number {
+  let at = 0;
+  for (let i = 0; i < commands.length; i++) {
+    if (commands[i]!.numbers.length < 2 || commands[i]!.letter === "Z") continue;
+    if (at++ === node) return i;
+  }
+  return commands.length;
+}
+// The numbers of a node's control point, coming in or going out, and where they start.
+function handleOf(commands: { letter: string; numbers: number[] }[], i: number, out: boolean): { numbers: number[]; from: number } | undefined {
+  const c = out ? commands[i + 1] : commands[i];
+  if (i >= commands.length || c?.letter !== "C" || c.numbers.length < 6) return undefined;
+  return { numbers: c.numbers, from: out ? 0 : 2 };
+}
+
+export function pathHandles(absolute: string, node: number): PathHandle[] {
+  const commands = commandsOf(absolute);
+  const i = commandOf(commands, node);
+  const out: PathHandle[] = [];
+  for (const going of [false, true]) {
+    const h = handleOf(commands, i, going);
+    if (h) out.push({ at: { x: h.numbers[h.from]!, y: h.numbers[h.from + 1]! }, out: going });
+  }
+  return out;
+}
+
+// The path with a control point of its node at `node` moved by dx and dy. When the node's
+// two were in line, as a smooth node's are, the other turns to stay in line, as long as it
+// was.
+export function pathHandleMoved(absolute: string, node: number, out: boolean, dx: number, dy: number): string {
+  const commands = commandsOf(absolute);
+  const i = commandOf(commands, node);
+  const moved = handleOf(commands, i, out);
+  if (!moved) return writtenOf(commands);
+  const n = commands[i]!.numbers;
+  const at = { x: n[n.length - 2]!, y: n[n.length - 1]! };
+  const m = moved.numbers, f = moved.from;
+  const other = handleOf(commands, i, !out);
+  if (other) {
+    const o = other.numbers, g = other.from;
+    const ax = m[f]! - at.x, ay = m[f + 1]! - at.y, bx = o[g]! - at.x, by = o[g + 1]! - at.y;
+    const a = Math.hypot(ax, ay), b = Math.hypot(bx, by);
+    const smooth = a > 0 && b > 0 && Math.abs(ax * by - ay * bx) / (a * b) < 0.05 && ax * bx + ay * by < 0;
+    (m[f]! += dx), (m[f + 1]! += dy);
+    const nx = m[f]! - at.x, ny = m[f + 1]! - at.y, now = Math.hypot(nx, ny);
+    if (smooth && now > 0) (o[g] = at.x - (nx / now) * b), (o[g + 1] = at.y - (ny / now) * b);
+    return writtenOf(commands);
+  }
+  (m[f]! += dx), (m[f + 1]! += dy);
+  return writtenOf(commands);
+}
+
 // Whether a press at `at` reaches the path: within `reach` of its outline, or, when it's
 // `filled` and closed, inside it.
 export function pathReaches(absolute: string, at: Point, reach: number, filled: boolean): boolean {

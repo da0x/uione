@@ -600,6 +600,17 @@ TEST("a collage's layers go where collage-cases.json says, as they do on the web
 		} else if (what == "path_moved") {
 			auto got = c::path_moved(k["path"].as_string(), static_cast<std::size_t>(k["node"].as_integer()), n(k["by"], 0), n(k["by"], 1));
 			check::verify(got == k["moved"].as_string(), "path_moved", note + ": " + got);
+		} else if (what == "path_handles") {
+			auto got = c::path_handles(k["path"].as_string(), static_cast<std::size_t>(k["node"].as_integer()));
+			const auto& want = k["handles"].as_array();
+			bool same_handles = got.size() == want.size();
+			for (std::size_t i = 0; same_handles && i < got.size(); ++i) {
+				same_handles = near(got[i].at.x, n(want[i], 0)) && near(got[i].at.y, n(want[i], 1)) && got[i].out == want[i].as_array()[2].as_bool();
+			}
+			check::verify(same_handles, "path_handles", note);
+		} else if (what == "path_handle_moved") {
+			auto got = c::path_handle_moved(k["path"].as_string(), static_cast<std::size_t>(k["node"].as_integer()), k["out"].as_bool(), n(k["by"], 0), n(k["by"], 1));
+			check::verify(got == k["moved"].as_string(), "path_handle_moved", note + ": " + got);
 		} else if (what == "path_reaches") {
 			bool got = c::path_reaches(k["path"].as_string(), {n(k["at"], 0), n(k["at"], 1)}, k["reach"].as_double(), k["filled"].as_bool());
 			check::verify(got == k["reaches"].as_bool(), "path_reaches", note);

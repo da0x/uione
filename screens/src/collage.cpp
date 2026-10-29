@@ -715,6 +715,54 @@ namespace one::screens::collage {
 		return written(commands);
 	}
 
+	namespace {
+		// Where the node at `node` is among the commands, or past them.
+		std::size_t command_of(const std::vector<command>& commands, std::size_t node) {
+			std::size_t at = 0;
+			for (std::size_t i = 0; i < commands.size(); ++i) {
+				if (commands[i].numbers.size() < 2 || commands[i].letter == 'Z') continue;
+				if (at++ == node) return i;
+			}
+			return commands.size();
+		}
+		// The numbers of a node's control point, coming in or going out, or none.
+		double* handle_of(std::vector<command>& commands, std::size_t i, bool out) {
+			if (i >= commands.size()) return nullptr;
+			if (!out) return commands[i].letter == 'C' && commands[i].numbers.size() >= 6 ? &commands[i].numbers[2] : nullptr;
+			return i + 1 < commands.size() && commands[i + 1].letter == 'C' && commands[i + 1].numbers.size() >= 6 ? &commands[i + 1].numbers[0] : nullptr;
+		}
+	}  // namespace
+
+	std::vector<path_handle> path_handles(std::string_view absolute, std::size_t node) {
+		auto commands = commands_of(absolute);
+		std::size_t i = command_of(commands, node);
+		std::vector<path_handle> out;
+		for (bool going : {false, true}) {
+			if (const double* h = handle_of(commands, i, going)) out.push_back({{h[0], h[1]}, going});
+		}
+		return out;
+	}
+
+	std::string path_handle_moved(std::string_view absolute, std::size_t node, bool out, double dx, double dy) {
+		auto commands = commands_of(absolute);
+		std::size_t i = command_of(commands, node);
+		double* moved = handle_of(commands, i, out);
+		if (!moved) return written(commands);
+		const auto& n = commands[i].numbers;
+		point at{n[n.size() - 2], n.back()};
+		if (double* other = handle_of(commands, i, !out)) {
+			double ax = moved[0] - at.x, ay = moved[1] - at.y, bx = other[0] - at.x, by = other[1] - at.y;
+			double a = std::hypot(ax, ay), b = std::hypot(bx, by);
+			bool smooth = a > 0 && b > 0 && std::abs(ax * by - ay * bx) / (a * b) < 0.05 && ax * bx + ay * by < 0;
+			moved[0] += dx, moved[1] += dy;
+			double nx = moved[0] - at.x, ny = moved[1] - at.y, now = std::hypot(nx, ny);
+			if (smooth && now > 0) other[0] = at.x - nx / now * b, other[1] = at.y - ny / now * b;
+			return written(commands);
+		}
+		moved[0] += dx, moved[1] += dy;
+		return written(commands);
+	}
+
 	bool path_reaches(std::string_view absolute, point at, double reach, bool filled) {
 		auto runs = flattened(absolute);
 		auto near = [&](point a, point b) {

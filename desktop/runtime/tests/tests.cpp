@@ -2149,6 +2149,59 @@ TEST("a collage's path is picked by its stroke alone, shows its nodes, and is re
 	CHECK(std::abs(sent["h"].as_double() - 100) < 0.5);
 }
 
+TEST("a collage's path shows a node's control points once the node is pressed, and is reshaped by one dragged") {
+	memory_source data;
+	data.set("studio::poster_page", "p1",
+	         value(fields{{"width", 1600}, {"height", 900},
+	                      {"layers", list{value(fields{{"id", "l1"}, {"shape", "path"}, {"points", "M 0 0 C 0 1 1 1 1 0"}, {"stroke", "#1d1d1f"}, {"stroke_width", 4}, {"x", 100}, {"y", 100},
+	                                                   {"w", 400}, {"h", 200}})}}}));
+	data.on("studio::layer::reshape", [](const value& f, memory_source&) -> answer { return f["id"].as_string(); });
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Poster", "/", "", [](page& p) {
+		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .width = "width", .height = "height",
+		                                                                         .fields = named_like_parts, .place = "studio::layer::place", .reshape = "studio::layer::reshape",
+		                                                                         .pick = "/ layer", .fills = true}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	auto root = built(nav);
+	std::function<one::desktop::element*(one::desktop::element&)> drawing = [&](one::desktop::element& e) -> one::desktop::element* {
+		if (e.children.empty() && e.frame.width > 400 && e.frame.height > 200) return &e;
+		for (auto& child : e.children) {
+			if (auto* found = drawing(*child)) return found;
+		}
+		return nullptr;
+	};
+	auto* board = drawing(*root);
+	CHECK(board != nullptr);
+	if (!board) return;
+	(void)one::desktop::offscreen::draw({900, 900}, 1, tested_theme().page, [&](one::desktop::canvas& c) { root->paint(c); });
+	auto area = board->frame;
+	float scale = std::min((area.width - 64) / 1600.f, (area.height - 64) / 900.f);
+	one::desktop::point origin{area.x + (area.width - 1600 * scale) / 2, area.y + (area.height - 900 * scale) / 2};
+	auto on = [&](double x, double y) { return one::desktop::point{origin.x + static_cast<float>(x) * scale, origin.y + static_cast<float>(y) * scale}; };
+	// Its curve, halfway along, at 300 250: picked.
+	CHECK(board->press(on(300, 250), 1));
+	board->release(on(300, 250), board);
+	CHECK(nav.current().picked_id("/ layer") == "l1");
+	root = built(nav);
+	board = drawing(*root);
+	if (!board) return;
+	(void)one::desktop::offscreen::draw({900, 900}, 1, tested_theme().page, [&](one::desktop::canvas& c) { root->paint(c); });
+	// Its last node, at 500 100, pressed and let go where it was: nothing sent.
+	CHECK(board->press(on(500, 100), 1));
+	board->release(on(500, 100), board);
+	CHECK(data.runs().empty());
+	// Its control point, at 500 300, dragged left 100.
+	CHECK(board->press(on(500, 300), 1));
+	board->drag(on(450, 300));
+	board->release(on(400, 300), board);
+	CHECK(data.runs().size() == 1);
+	if (data.runs().empty()) return;
+	CHECK(data.runs().back().fields["points"].as_string() == "M 0 0 C 0 1 0.75 1 1 0");
+}
+
 TEST("a collage's layers listed beside it, topmost first: each an eye, its preview in the collage's proportions, its name, up, down and delete; a hidden one isn't drawn") {
 	memory_source data;
 	auto shape = [](std::string id, std::string kind, double x, double y, double w, double h, std::string fill, double depth, double hidden = 0) {

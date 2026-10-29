@@ -216,6 +216,17 @@ namespace one::screens::collage {
 	// The path with its node at `node` moved by dx and dy, the control points either
 	// side of it moving with it, as a drawing program moves them.
 	std::string path_moved(std::string_view absolute, std::size_t node, double dx, double dy);
+	// A control point of a path's node, where it is: the one its own curve comes into it
+	// by, or the one the next curve leaves it by, `out`. A line's end has none.
+	struct path_handle {
+		point at;
+		bool out = false;
+	};
+	std::vector<path_handle> path_handles(std::string_view absolute, std::size_t node);
+	// The path with a control point of its node at `node` moved by dx and dy. When the
+	// node's two were in line, as a smooth node's are, the other turns to stay in line,
+	// as long as it was.
+	std::string path_handle_moved(std::string_view absolute, std::size_t node, bool out, double dx, double dy);
 	// Whether a press at `at` reaches the path: within `reach` of its outline, or, when
 	// it's `filled` and closed, inside it.
 	bool path_reaches(std::string_view absolute, point at, double reach, bool filled);

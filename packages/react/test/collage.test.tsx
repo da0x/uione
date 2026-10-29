@@ -7,7 +7,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { colorShifter, svgElement, cornerAt, cropEdgesAt, cropped, drawn, drawnLine, freehand, penPath, pathBounds, pathFractions, pathMoved, pathNodes, pathReaches, svgDocument, halo, harmonicFill, matched, moved, resized, shifted, sitting, snapLines, statsOf, wholeOf } from "../src/collage.js";
+import { colorShifter, svgElement, cornerAt, cropEdgesAt, cropped, drawn, drawnLine, freehand, penPath, pathBounds, pathFractions, pathHandleMoved, pathHandles, pathMoved, pathNodes, pathReaches, svgDocument, halo, harmonicFill, matched, moved, resized, shifted, sitting, snapLines, statsOf, wholeOf } from "../src/collage.js";
 import type { Box, Guided } from "../src/collage.js";
 
 type Numbers = number[];
@@ -72,6 +72,8 @@ interface Case {
   nodes?: Numbers[];
   node?: number;
   moved?: string;
+  out?: boolean;
+  handles?: (number | boolean)[][];
   filled?: boolean;
   reaches?: boolean;
   points?: string;
@@ -152,6 +154,12 @@ describe("where a collage's layers go", () => {
         break;
       case "path_moved":
         expect(pathMoved(k.path!, k.node!, k.by![0]!, k.by![1]!)).toBe(k.moved);
+        break;
+      case "path_handles":
+        expect(pathHandles(k.path!, k.node!).map((h) => [h.at.x, h.at.y, h.out])).toEqual(k.handles);
+        break;
+      case "path_handle_moved":
+        expect(pathHandleMoved(k.path!, k.node!, k.out!, k.by![0]!, k.by![1]!)).toBe(k.moved);
         break;
       case "path_reaches":
         expect(pathReaches(k.path!, { x: k.at![0]!, y: k.at![1]! }, k.reach!, k.filled!)).toBe(k.reaches);

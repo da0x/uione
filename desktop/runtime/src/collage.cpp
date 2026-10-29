@@ -444,10 +444,17 @@ namespace one::desktop::runtime {
 			model::box from;
 			desktop::point at;
 			int corner = 0;
-			int edges = 0;                           // a crop's edges dragged, or none to move it
+			int edges = 0;                           // a crop's edges dragged, or none to move it; a path's control point
 			model::box kept_from = {};               // while a crop's picture shifts, what's kept as it was
 			bool free = false;                       // a shape, resized freely, its shape kept only with Shift
 		};
+
+		// A path as a reshape has it so far: its node moved, or one of its control points,
+		// in edges 1 coming in and 2 going out.
+		std::string reshaped_by(const std::string& outline, const gesture& g, double dx, double dy) {
+			auto node = static_cast<std::size_t>(g.corner);
+			return g.edges ? model::path_handle_moved(outline, node, g.edges == 2, dx, dy) : model::path_moved(outline, node, dx, dy);
+		}
 
 		// Where the collage was last drawn in the window, and how much smaller than
 		// itself; what the pointer is doing; where a layer is going, or was let go until
@@ -480,6 +487,8 @@ namespace one::desktop::runtime {
 			// A path being reshaped: its outline as it was, and as it is now, by its id.
 			std::string reshape_from;
 			std::optional<std::pair<std::string, std::string>> reshaped;
+			// The picked path's node last pressed, whose control points show, by its id.
+			std::optional<std::pair<std::string, std::size_t>> node;
 			std::vector<std::pair<desktop::rect, std::size_t>> tools;
 			model::box on_board(const model::box& b) const {
 				return {board.x + b.x * scale, board.y + b.y * scale, b.w * scale, b.h * scale};
@@ -1601,6 +1610,8 @@ namespace one::desktop::runtime {
 			float framed_radius = 0;  // a picture's frame follows its corners, round as they are
 			bool framed_words = false, chosen_picture = false;
 			std::vector<desktop::point> nodes;  // a picked path's, drawn instead of its frame
+			std::vector<std::pair<desktop::point, desktop::point>> levers;  // its chosen node's control points, from the node
+			std::optional<desktop::point> chosen_node;
 			// While something's moved, resized or cropped, its pictures alone, nothing worked
 			// out from where they are drawn around them, so what's being done is plain to see.
 			bool effects = w->now.what == gesture::none && !w->crop;
@@ -1647,9 +1658,18 @@ namespace one::desktop::runtime {
 							framed = on, chosen_picture = true;
 							// A path picked shows its nodes, not a box.
 							if (is_path(shown) && !spec.reshape.empty()) {
-								for (const auto& n : model::path_nodes(outline_of(shown, b))) {
+								std::string outline = outline_of(shown, b);
+								auto all = model::path_nodes(outline);
+								for (const auto& n : all) {
 									model::box at = w->on_board({n.x, n.y, 0, 0});
 									nodes.push_back({static_cast<float>(at.x), static_cast<float>(at.y)});
+								}
+								if (w->node && w->node->first == id && w->node->second < all.size()) {
+									chosen_node = nodes[nodes.size() - all.size() + w->node->second];
+									for (const auto& h : model::path_handles(outline, w->node->second)) {
+										model::box at = w->on_board({h.at.x, h.at.y, 0, 0});
+										levers.emplace_back(*chosen_node, desktop::point{static_cast<float>(at.x), static_cast<float>(at.y)});
+									}
 								}
 							}
 						}
@@ -1734,8 +1754,14 @@ namespace one::desktop::runtime {
 				float mid_x = framed->x + framed->width / 2, mid_y = framed->y + framed->height / 2;
 				handles.insert(handles.end(), {{mid_x, framed->y}, {framed->right(), mid_y}, {mid_x, framed->bottom()}, {framed->x, mid_y}});
 			}
+			for (const auto& [from, to] : levers) c.line(from, to, 1, t.accent);
 			for (auto at : handles) {
-				c.box({at.x - handle / 2, at.y - handle / 2, handle, handle}, {.fill = desktop::color::hex(0xffffff), .border = t.accent, .border_width = 2, .radius = 2});
+				bool chosen = chosen_node && at.x == chosen_node->x && at.y == chosen_node->y;
+				c.box({at.x - handle / 2, at.y - handle / 2, handle, handle}, {.fill = chosen ? t.accent : desktop::color::hex(0xffffff), .border = t.accent, .border_width = 2, .radius = 2});
+			}
+			// A control point is round, as a node is square.
+			for (const auto& [_, at] : levers) {
+				c.box({at.x - handle / 2 + 1, at.y - handle / 2 + 1, handle - 2, handle - 2}, {.fill = desktop::color::hex(0xffffff), .border = t.accent, .border_width = 1.5f, .radius = handle / 2});
 			}
 			// While cropping, keep and put away; otherwise the buttons the screen gives.
 			std::vector<std::pair<std::string, std::string>> drawn;  // icon, label
@@ -1854,16 +1880,27 @@ namespace one::desktop::runtime {
 				        w->hand = {w->on_collage(at)};
 				        return true;
 			        }
-			        // A node of the picked path reshapes it.
+			        // A node of the picked path reshapes it, and shows its control points,
+			        // which reshape it too.
 			        for (const auto& l : layers.as_array()) {
 				        if (l["id"].as_string() != picked || !is_path(l) || spec.reshape.empty()) continue;
 				        std::string outline = outline_of(l, box_of(l));
+				        if (w->node && w->node->first == picked) {
+					        for (const auto& h : model::path_handles(outline, w->node->second)) {
+						        model::box lever = w->on_board({h.at.x, h.at.y, 0, 0});
+						        if (std::abs(lever.x - at.x) > handle || std::abs(lever.y - at.y) > handle) continue;
+						        w->now = {.what = gesture::reshaping, .id = picked, .from = box_of(l), .at = at, .corner = static_cast<int>(w->node->second), .edges = h.out ? 2 : 1, .kept_from = {}};
+						        w->reshape_from = outline;
+						        return true;
+					        }
+				        }
 				        auto nodes = model::path_nodes(outline);
 				        for (std::size_t k = 0; k < nodes.size(); ++k) {
 					        model::box node = w->on_board({nodes[k].x, nodes[k].y, 0, 0});
 					        if (std::abs(node.x - at.x) > handle || std::abs(node.y - at.y) > handle) continue;
 					        w->now = {.what = gesture::reshaping, .id = picked, .from = box_of(l), .at = at, .corner = static_cast<int>(k), .edges = 0, .kept_from = {}};
 					        w->reshape_from = outline;
+					        w->node = std::pair{picked, k};
 					        return true;
 				        }
 			        }
@@ -1894,6 +1931,7 @@ namespace one::desktop::runtime {
 				        }
 				        if (!hits(all[i], b, w->on_collage(at), 1 / w->scale)) continue;
 				        std::string id = all[i]["id"].as_string();
+				        w->node.reset();
 				        if (!spec.pick.empty()) p.pick(spec.pick, id);
 				        // Its layer is the current one, as new objects go in it.
 				        if (!spec.layer_pick.empty() && !all[i][spec.layer].as_string().empty()) p.pick(spec.layer_pick, all[i][spec.layer].as_string());
@@ -1909,6 +1947,7 @@ namespace one::desktop::runtime {
 				        return true;
 			        }
 			        // On nothing, or off the collage, nothing is picked.
+			        w->node.reset();
 			        if (!spec.pick.empty()) p.pick(spec.pick, "");
 			        return false;
 		        },
@@ -1917,7 +1956,7 @@ namespace one::desktop::runtime {
 			        if (w->now.what == gesture::none) return;
 			        if (w->now.what == gesture::reshaping) {
 				        double dx = (at.x - w->now.at.x) / w->scale, dy = (at.y - w->now.at.y) / w->scale;
-				        w->reshaped = std::pair{w->now.id, model::path_moved(w->reshape_from, static_cast<std::size_t>(w->now.corner), dx, dy)};
+				        w->reshaped = std::pair{w->now.id, reshaped_by(w->reshape_from, w->now, dx, dy)};
 				        return;
 			        }
 			        if (w->now.what == gesture::drawing) {
@@ -1952,7 +1991,7 @@ namespace one::desktop::runtime {
 				        gesture g = std::exchange(w->now, {});
 				        double dx = (at.x - g.at.x) / w->scale, dy = (at.y - g.at.y) / w->scale;
 				        if (dx == 0 && dy == 0) return w->reshaped.reset();
-				        std::string outline = model::path_moved(w->reshape_from, static_cast<std::size_t>(g.corner), dx, dy);
+				        std::string outline = reshaped_by(w->reshape_from, g, dx, dy);
 				        w->reshaped = std::pair{g.id, outline};
 				        auto [points, b] = reshaped_as(outline);
 				        // Kept, it's drawn from the view again; turned down, as it was.

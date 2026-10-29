@@ -16,7 +16,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
-import { colorShifter, cornerAt, pathIn, cropEdgesAt, cropped, drawn, drawnLine, freehand, halo, penPath, haloInside, haloReach, harmonicFill, matched, matchingCast, matchingStrength, moved, resized, sitting, pathBounds, pathFractions, pathMoved, pathNodes, pathReaches, snapLines, statsOf, svgDocument, wholeOf } from "./collage.js";
+import { colorShifter, cornerAt, pathIn, cropEdgesAt, cropped, drawn, drawnLine, freehand, halo, penPath, haloInside, haloReach, harmonicFill, matched, matchingCast, matchingStrength, moved, resized, sitting, pathBounds, pathFractions, pathHandleMoved, pathHandles, pathMoved, pathNodes, pathReaches, snapLines, statsOf, svgDocument, wholeOf } from "./collage.js";
 import type { Box, ColorShift, ColorStats, Guided, Lines, PenNode, Point, SavedLayer } from "./collage.js";
 import { useFiles, useRunner } from "./data.js";
 import { pictureSize, svgIn, svgShapes, svgSize } from "./vectors.js";
@@ -713,6 +713,14 @@ interface Placed {
   // A path being reshaped: its outline as it was, and as it is now, by its id.
   reshapeFrom?: string;
   reshaped?: { id: string; outline: string };
+  // The picked path's node last pressed, whose control points show, by its id.
+  node?: { id: string; at: number };
+}
+
+// A path as a reshape has it so far: its node moved, or one of its control points, in
+// edges 1 coming in and 2 going out. The same as the desktop's.
+function reshapedBy(outline: string, g: Gesture, dx: number, dy: number): string {
+  return g.edges ? pathHandleMoved(outline, g.corner, g.edges === 2, dx, dy) : pathMoved(outline, g.corner, dx, dy);
 }
 
 // draw layer::create { fill = "#2e86de" } when tool == tool::box: a drag makes a layer
@@ -1220,6 +1228,8 @@ export function Collage({
     let framed: Box | undefined;
     let framedRadius = 0;
     let nodes: Box[] = []; // a picked path's, drawn instead of its frame
+    let levers: Box[] = []; // its chosen node's control points
+    let chosenNode: Box | undefined;
     c.save();
     c.beginPath();
     c.rect(board.x, board.y, bw, bh);
@@ -1274,7 +1284,14 @@ export function Collage({
         }
         paintShape(c, shown, b, kept);
         // A path picked shows its nodes, not a box.
-        if (l["id"] === picked && !full && isPath(shown) && reshape) nodes = pathNodes(outlineOf(shown, kept)).map((n) => onBoard({ x: n.x, y: n.y, w: 0, h: 0 }));
+        if (l["id"] === picked && !full && isPath(shown) && reshape) {
+          const outline = outlineOf(shown, kept);
+          nodes = pathNodes(outline).map((n) => onBoard({ x: n.x, y: n.y, w: 0, h: 0 }));
+          if (w.node?.id === l["id"] && nodes[w.node.at]) {
+            chosenNode = nodes[w.node.at];
+            levers = pathHandles(outline, w.node.at).map((h) => onBoard({ x: h.at.x, y: h.at.y, w: 0, h: 0 }));
+          }
+        }
       } else {
         const path = str(l["picture"]);
         const p = pictureOf(path, address);
@@ -1380,11 +1397,27 @@ export function Collage({
     // picked path's nodes instead.
     if (framed && nodes.length) {
       c.strokeStyle = accent;
+      c.lineWidth = 1;
+      for (const h of levers) {
+        c.beginPath();
+        c.moveTo(chosenNode!.x, chosenNode!.y);
+        c.lineTo(h.x, h.y);
+        c.stroke();
+      }
       c.lineWidth = 2;
       for (const n of nodes) {
-        c.fillStyle = "#fff";
+        c.fillStyle = n === chosenNode ? accent : "#fff";
         c.fillRect(n.x - handle / 2, n.y - handle / 2, handle, handle);
         c.strokeRect(n.x - handle / 2, n.y - handle / 2, handle, handle);
+      }
+      // A control point is round, as a node is square.
+      c.lineWidth = 1.5;
+      c.fillStyle = "#fff";
+      for (const h of levers) {
+        c.beginPath();
+        c.arc(h.x, h.y, handle / 2 - 1, 0, 2 * Math.PI);
+        c.fill();
+        c.stroke();
       }
     } else if (framed) {
       c.strokeStyle = accent;
@@ -1603,9 +1636,20 @@ export function Collage({
       return;
     }
     // A corner of the picked layer resizes it: a picture with its shape kept, words by their size.
-    // A node of the picked path reshapes it.
+    // A node of the picked path reshapes it, and shows its control points, which reshape
+    // it too.
     if (chosen && isPath(chosen) && reshape) {
       const outline = outlineOf(chosen, boxOf(chosen));
+      const lever = w.node?.id === picked ? pathHandles(outline, w.node.at).find((h) => {
+        const at = onBoard({ x: h.at.x, y: h.at.y, w: 0, h: 0 });
+        return Math.abs(at.x - p.x) <= handle && Math.abs(at.y - p.y) <= handle;
+      }) : undefined;
+      if (lever && w.node) {
+        w.now = { what: "reshaping", id: picked, from: boxOf(chosen), at: p, corner: w.node.at, edges: lever.out ? 2 : 1 };
+        w.reshapeFrom = outline;
+        e.currentTarget.setPointerCapture(e.pointerId);
+        return;
+      }
       const node = pathNodes(outline).findIndex((n) => {
         const at = onBoard({ x: n.x, y: n.y, w: 0, h: 0 });
         return Math.abs(at.x - p.x) <= handle && Math.abs(at.y - p.y) <= handle;
@@ -1613,6 +1657,8 @@ export function Collage({
       if (node >= 0) {
         w.now = { what: "reshaping", id: picked, from: boxOf(chosen), at: p, corner: node, edges: 0 };
         w.reshapeFrom = outline;
+        w.node = { id: picked, at: node };
+        paint();
         e.currentTarget.setPointerCapture(e.pointerId);
         return;
       }
@@ -1635,6 +1681,7 @@ export function Collage({
       const b = whereIs(l);
       if (!hits(l, b, p)) continue;
       const id = str(l["id"]);
+      w.node = undefined;
       pickRow(id);
       // Its layer is the current one, as new objects go in it.
       if (layerPick && layerField && str(l[layerField])) setPicked(layerPick, str(l[layerField]));
@@ -1652,6 +1699,7 @@ export function Collage({
       return;
     }
     // On nothing, nothing is picked.
+    w.node = undefined;
     pickRow("");
   };
   const move = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -1659,7 +1707,7 @@ export function Collage({
     if (!g) return;
     const p = at(e);
     if (g.what === "reshaping") {
-      w.reshaped = { id: g.id, outline: pathMoved(w.reshapeFrom ?? "", g.corner, (p.x - g.at.x) / w.scale, (p.y - g.at.y) / w.scale) };
+      w.reshaped = { id: g.id, outline: reshapedBy(w.reshapeFrom ?? "", g, (p.x - g.at.x) / w.scale, (p.y - g.at.y) / w.scale) };
       paint();
       return;
     }
@@ -1698,7 +1746,7 @@ export function Collage({
         w.reshaped = undefined;
         return paint();
       }
-      const outline = pathMoved(w.reshapeFrom ?? "", g.corner, (p.x - g.at.x) / w.scale, (p.y - g.at.y) / w.scale);
+      const outline = reshapedBy(w.reshapeFrom ?? "", g, (p.x - g.at.x) / w.scale, (p.y - g.at.y) / w.scale);
       w.reshaped = { id: g.id, outline };
       const { points, box } = reshapedAs(outline);
       // Kept, it's drawn from the view again; turned down, as it was.
