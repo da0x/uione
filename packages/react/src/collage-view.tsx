@@ -1493,6 +1493,20 @@ export function Collage({
     watching.observe(canvas);
     return () => watching.disconnect();
   });
+  // Drawn again as light and dark trade places, by the page's switch or the system's,
+  // as its colors come from the theme.
+  useEffect(() => {
+    if (typeof MutationObserver === "undefined") return;
+    const switched = new MutationObserver(() => paint());
+    switched.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-palette", "class"] });
+    const system = globalThis.matchMedia?.("(prefers-color-scheme: dark)");
+    const changed = () => paint();
+    system?.addEventListener?.("change", changed);
+    return () => {
+      switched.disconnect();
+      system?.removeEventListener?.("change", changed);
+    };
+  });
 
   // A path being drawn by a pen: Enter ends it, Esc drops it, Backspace takes back its
   // last node; put away when the pen is.
