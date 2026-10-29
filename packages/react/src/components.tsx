@@ -20,14 +20,14 @@ import type { CommandInput, ViewState } from "./data.js";
 import { action, dateOnly, label, runningTime, shortAddress, show, useLinks, useUI } from "./ui.js";
 import { generate, on, randomSeed, roles, schemeTitle, schemes, written, type PaletteTheme, type Scheme } from "./palette.js";
 
-export function Hero({ title, children }: { title: string; children: ReactNode }) {
+export function Hero({ title, children }: { title: string; children?: ReactNode }) {
   const ui = useUI();
   return <ui.Hero title={title}>{children}</ui.Hero>;
 }
 
 // On a front page, a section can have an icon, and be read as steps; its design
 // draws them.
-export function Section({ title, id, hue, children }: { title: string; id?: string; hue?: Hue; icon?: string; steps?: boolean; children: ReactNode }) {
+export function Section({ title, id, hue, children }: { title: string; id?: string; hue?: Hue; icon?: string; steps?: boolean; children?: ReactNode }) {
   const ui = useUI();
   return (
     <ui.Section title={title} id={id} {...(hue ? { hue } : {})}>
