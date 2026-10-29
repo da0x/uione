@@ -12,6 +12,7 @@
 #include "code/stream.hpp"
 #include "generators/output.hpp"
 #include "language/ast.hpp"
+#include "language/storage.hpp"
 #include "platform/files.hpp"
 #include "version.hpp"
 
@@ -84,6 +85,7 @@ namespace one::generators {
                     if (setting.key == "domain") s.domain = setting.value, s.redirect = setting.to;
                     if (setting.key == "firebase") s.firebase = setting.value;
                     if (setting.key == "region") s.region = setting.value;
+                    if (setting.key == "site") s.site = setting.value;
                     if (setting.key == "redirect") s.redirects.emplace_back(setting.value, setting.to);
                     if (setting.key == "signin") s.signs_in = true;
                 }
@@ -95,7 +97,9 @@ namespace one::generators {
                     s.services = s.services || has_services(other.declarations);
                     s.files = s.files || has_files(other.declarations);
                 }
-                s.backend = needs_backend(files);
+                // A project kept on its machine has no backend wherever it's served: its
+                // web app keeps its data in the browser, so it's only the app on Hosting.
+                s.backend = !language::stores_locally(files) && needs_backend(files);
                 return s;
             }
         }
@@ -195,6 +199,7 @@ namespace one::generators {
             if (s.signs_in) g.line("SignIn:   true,");
             if (s.files) g.line("Files:    true,");
             if (!s.redirect.empty()) g.line("Redirect: " + quoted(s.redirect) + ",");
+            if (!s.site.empty()) g.line("Site:     " + quoted(s.site) + ",");
             if (!s.backend) g.line("Static:   true,");
             g.close("})");
             g.close("}");

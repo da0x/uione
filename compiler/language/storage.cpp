@@ -127,10 +127,15 @@ namespace one::language {
                             } else if constexpr (std::is_same_v<kind, project_declaration>) {
                                 for (const auto& s : n.settings) {
                                     if (s.key == "signin") out.push_back({path, s.where, "nobody signs in to a project that says storage local, which is for one person on their own machine; take signin out"});
-                                    if (s.key == "firebase" || s.key == "region") refuse(s.where, "a Firebase project", needs::server);
                                 }
-                                bool targeted = false;
-                                for (const auto& s : n.settings) targeted = targeted || s.key == "target";
+                                bool targeted = false, web = false;
+                                for (const auto& s : n.settings) targeted = targeted || s.key == "target", web = web || (s.key == "target" && s.value == "web");
+                                // Its web app can be served from Hosting, keeping its data in the
+                                // browser; there's nothing else for a Firebase project to run.
+                                for (const auto& s : n.settings) {
+                                    if ((s.key == "firebase" || s.key == "region") && !web)
+                                        out.push_back({path, s.where, "a project that says storage local is served from a Firebase project only as its web app, so it says target web"});
+                                }
                                 if (!targeted)
                                     out.push_back({path, d.where, "a project that says storage local is built for this machine, so it says which app, like target desktop"});
                                 for (const auto& e : n.environments) refuse(e.where, "an environment", needs::server);

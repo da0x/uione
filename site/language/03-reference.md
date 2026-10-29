@@ -271,7 +271,11 @@ for the web app. Screens read views live, as they do from the cloud, and nothing
 leaves the machine. Nobody signs in to such an app, so what needs a person or a
 server, like `signin`, `me`, roles, a view `per user`, webhooks and Stripe, is an
 error at its line, saying why. It names its targets, like `target desktop` or
-`target web desktop`.
+`target web desktop`. Its web app can still be served for anyone to open, by naming
+`firebase`, `region` and `domain`: the deploy puts the app on Firebase Hosting and
+nothing else, no service, database or rules, and each visitor's data stays in their
+own browser. Such a project can share its Firebase project with another that has no
+backend, each served from a Hosting site of its own, named by `site "vectra-da0x"`.
 
 `target web desktop terminal` names the apps `one build` writes from the screens:
 the web site in `build/web`, and a desktop app and a terminal app drawn from the same

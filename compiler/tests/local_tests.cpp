@@ -130,6 +130,26 @@ TEST_CASE("a local project says which app it's built for") {
     CHECK(says(said, "a project that says storage local is built for this machine, so it says which app, like target desktop"));
 }
 
+TEST_CASE("a local project is served from a Firebase project only as its web app") {
+    const std::string hosted = "\ttarget   desktop\n\tfirebase \"pinned-1\"\n\tregion   \"us-east4\"\n\tdomain   \"pinned.example.com\"\n";
+    auto said = messages(with(board, "\ttarget   desktop\n", hosted));
+    CHECK(says(said, "is served from a Firebase project only as its web app, so it says target web"));
+    CHECK(messages(with(board, "\ttarget   desktop\n", with(hosted, "desktop", "desktop web"))).empty());
+}
+
+TEST_CASE("one build serves a local project's web app from Hosting, with nothing else") {
+    language::diagnostics out;
+    auto files = parsed(with(board, "\ttarget   desktop\n", "\ttarget   web\n\tfirebase \"pinned-1\"\n\tregion   \"us-east4\"\n\tdomain   \"pinned.example.com\"\n"), out);
+    REQUIRE(out.empty());
+    auto dir = std::filesystem::temp_directory_path() / "one-local-hosted";
+    auto whole = generators::generate_project(files, dir.string(), (dir / "build").string(), {"web"});
+    for (const auto& e : whole.errors) FAIL_CHECK(language::format(e));
+    auto found = std::ranges::find_if(whole.files, [](const auto& f) { return f.path == "infrastructure/main.go"; });
+    REQUIRE(found != whole.files.end());
+    CHECK(found->content.find("Static:   true") != std::string::npos);
+    CHECK(std::ranges::none_of(whole.files, [](const auto& f) { return f.path.starts_with("api/") || f.path.ends_with(".rules"); }));
+}
+
 TEST_CASE("a project on Firebase is checked as it always was") {
     auto said = messages(with(with(board, "\tstorage  local\n", ""), "\ttarget   desktop\n", "\tsignin   google\n"));
     CHECK(said.empty());

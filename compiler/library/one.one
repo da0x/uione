@@ -131,6 +131,10 @@ namespace one {
 		firebase    slug
 		// The Google Cloud region its backend runs in, like "us-east4".
 		region      slug
+		// The Firebase Hosting site it's served from, like "vectra-da0x", when it shares
+		// its Firebase project with another project with no backend; the project's own
+		// site when it doesn't say.
+		site        slug
 		// The component set it's drawn with.
 		ui          ui
 		// Where it keeps its data, on Firebase unless it says storage local.

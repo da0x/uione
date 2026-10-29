@@ -60,7 +60,7 @@ func (w *world) tools() Tools {
 			}
 			return nil
 		},
-		Upload: func(_ context.Context, project, web string, progress func(string, string)) error {
+		Upload: func(_ context.Context, project, _, web string, progress func(string, string)) error {
 			w.did = append(w.did, "upload "+project+" from "+filepath.Base(web))
 			progress("release", "released")
 			return w.fails("upload")
@@ -199,7 +199,7 @@ func TestADomainFirebaseHasntWorkedOutYetIsAskedAboutAgain(t *testing.T) {
 		"firebase_auth_domain": "uione-cloud.firebaseapp.com", "dns_records": []any{}, "domain": "studio.uione.io",
 	}}
 	tools := w.tools()
-	tools.Records = func(_ context.Context, project, domain string) ([]string, error) {
+	tools.Records = func(_ context.Context, project, _, domain string) ([]string, error) {
 		return []string{"add CNAME " + domain + " " + project + ".web.app"}, nil
 	}
 	needed, err := Run(context.Background(), Options{Build: dir, Stack: "production", Progress: io.Discard,

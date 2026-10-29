@@ -117,6 +117,12 @@ type Project struct {
 	// with no database, no Cloud Run and no budget, so it needs no billing account.
 	Static bool
 
+	// The Hosting site it's served from, like vectra-da0x, when it shares its Firebase
+	// project with another project with no backend; the Firebase project's own site,
+	// named like it, when it's empty. A site of its own is made, rather than taken
+	// over as the project's own is.
+	Site string
+
 	// The folder `one build` wrote, holding api/, web/ and firestore.rules. It's the
 	// parent of the Pulumi program's folder unless it's set.
 	Build string
@@ -240,21 +246,28 @@ func Declare(ctx *pulumi.Context, p Project) error {
 	// destroyed. In a fresh project's preview the Hosting API isn't on yet, so there's
 	// nothing to read; the deploy itself imports it once the API is on.
 	siteOptions := []pulumi.ResourceOption{after}
-	reachable, err := siteReachable(ctx.Context(), p.Firebase)
-	if err != nil {
-		return err
+	own := p.Site == "" || p.Site == p.Firebase
+	name := p.Firebase
+	if !own {
+		name = p.Site
 	}
-	if reachable || !ctx.DryRun() {
-		siteOptions = append(siteOptions, pulumi.Import(pulumi.ID(fmt.Sprintf("projects/%s/sites/%s", p.Firebase, p.Firebase))))
+	if own {
+		reachable, err := siteReachable(ctx.Context(), p.Firebase)
+		if err != nil {
+			return err
+		}
+		if reachable || !ctx.DryRun() {
+			siteOptions = append(siteOptions, pulumi.Import(pulumi.ID(fmt.Sprintf("projects/%s/sites/%s", p.Firebase, p.Firebase))))
+		}
 	}
 	// Turning an API on returns before Google has spread the word, so the site's
 	// import waits until the Hosting API answers for the project, which it does at
 	// once when it was on already.
 	siteID := hosting.Service.ApplyTWithContext(ctx.Context(), func(c context.Context, _ string) (string, error) {
 		if ctx.DryRun() {
-			return p.Firebase, nil
+			return name, nil
 		}
-		return p.Firebase, waitForHosting(c, p.Firebase)
+		return name, waitForHosting(c, p.Firebase)
 	}).(pulumi.StringOutput)
 	site, err := firebase.NewHostingSite(ctx, "site", &firebase.HostingSiteArgs{
 		Project:        project,
@@ -316,6 +329,7 @@ func Declare(ctx *pulumi.Context, p Project) error {
 		ctx.Export("backend_url", backendURL)
 	}
 	ctx.Export("dns_records", dnsRecords)
+	ctx.Export("site", site.SiteId.Elem())
 	ctx.Export("domain", pulumi.String(p.Domain))
 	return nil
 }
@@ -697,6 +711,12 @@ func (p Project) check() error {
 		return fmt.Errorf("infrastructure: GitHub's webhook route %q has to start with /", p.GitHub)
 	case p.Static && (p.GitHub != "" || p.Stripe != "" || p.Services || p.SignIn || p.Files):
 		return errors.New("infrastructure: a project with no backend can't take webhooks, services, sign-in or files, which the backend handles")
+	case p.Site != "" && !firebaseIds.MatchString(p.Site):
+		return fmt.Errorf("infrastructure: %q isn't a Hosting site id, which is 6 to 30 lowercase letters, digits "+
+			"and hyphens, starting with a letter and not ending with a hyphen", p.Site)
+	case p.Site != "" && p.Site != p.Firebase && !p.Static:
+		return errors.New("infrastructure: only a project with no backend shares its Firebase project with another, " +
+			"since the database and its rules belong to the project's own site")
 	}
 	return nil
 }

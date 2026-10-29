@@ -572,6 +572,27 @@ func TestAProjectWithNoBackendIsOnlyItsSiteAndNeedsNoBilling(t *testing.T) {
 	}
 }
 
+func TestAProjectSharingItsFirebaseProjectMakesASiteOfItsOwn(t *testing.T) {
+	m, err := declareChanged(t, t.TempDir(), settings, "", func(p *Project) { p.Static = true; p.Site = "tracker-ui-one" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := "gcp:firebase/hostingSite:HostingSite::site"
+	if got := m.imports[key]; got != "" {
+		t.Errorf("a site of its own is imported from %q, rather than made", got)
+	}
+	if got := m.get(t, key)["siteId"].StringValue(); got != "tracker-ui-one" {
+		t.Errorf("the site is %q", got)
+	}
+	if got := m.get(t, "gcp:firebase/hostingCustomDomain:HostingCustomDomain::domain")["siteId"].StringValue(); got != "tracker-ui-one" {
+		t.Errorf("the domain is served by %q", got)
+	}
+	// A project with a backend keeps its Firebase project to itself.
+	if _, err := declareChanged(t, build(t), settings, "", func(p *Project) { p.Site = "tracker-ui-one" }); err == nil || !strings.Contains(err.Error(), "no backend") {
+		t.Errorf("got %v", err)
+	}
+}
+
 func TestAProjectWithNoBackendTakesNothingABackendHandles(t *testing.T) {
 	for _, give := range []func(*Project){
 		func(p *Project) { p.SignIn = true },
