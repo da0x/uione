@@ -527,13 +527,14 @@ function ColorPicker({ label, value, disabled, onSettle }: ColorPickerProps) {
 }
 
 // A workspace's bar: the app's name in the middle, in the theme's heading font, as a
-// window's title is; the bar's lines at the start and light and dark at the end, each
-// side as wide as the other so the name stays centered. Where the lines don't fit
-// beside the name, as on a phone with many of them, the name is centered on a row of
-// its own above the rest.
-function WorkspaceBar({ site, children }: { site?: string; children: ReactNode }) {
+// window's title is; the bar's lines at the start, and its group at the end then light
+// and dark at the end, each side as wide as the other so the name stays centered. Where
+// either side doesn't fit beside the name, as on a phone with many lines, the name is
+// centered on a row of its own above the rest.
+function WorkspaceBar({ site, end, children }: { site?: string; end?: ReactNode; children: ReactNode }) {
   const bar = useRef<HTMLDivElement>(null);
   const lines = useRef<HTMLDivElement>(null);
+  const last = useRef<HTMLSpanElement>(null);
   const name = useRef<HTMLSpanElement>(null);
   const [stacked, setStacked] = useState(false);
   useLayoutEffect(() => {
@@ -542,12 +543,13 @@ function WorkspaceBar({ site, children }: { site?: string; children: ReactNode }
     const measure = () => {
       if (!lines.current || !name.current) return;
       const room = (at.clientWidth - 24 - name.current.offsetWidth - 16) / 2;
-      setStacked(lines.current.scrollWidth > room);
+      setStacked(Math.max(lines.current.scrollWidth, last.current?.scrollWidth ?? 0) > room);
     };
     measure();
     const watching = new ResizeObserver(measure);
     watching.observe(at);
     if (lines.current) watching.observe(lines.current);
+    if (last.current) watching.observe(last.current);
     return () => watching.disconnect();
   }, []);
   return (
@@ -567,7 +569,8 @@ function WorkspaceBar({ site, children }: { site?: string; children: ReactNode }
           {children}
         </div>
       </div>
-      <span className={`flex justify-end ${stacked ? "" : "col-start-3 row-start-1"}`}>
+      <span ref={last} className={`flex items-center justify-end gap-2 ${stacked ? "" : "col-start-3 row-start-1"}`}>
+        {end}
         <ThemeToggle />
       </span>
     </div>
@@ -2415,7 +2418,7 @@ export const radix: ComponentSet = {
       <div className="fixed inset-0 flex min-h-0 touch-manipulation flex-col bg-sunken text-ink">
         <Unzoomed />
         {regions.bar && (
-          <WorkspaceBar site={site}>{regions.bar}</WorkspaceBar>
+          <WorkspaceBar site={site} end={regions.barEnd}>{regions.bar}</WorkspaceBar>
         )}
         {regions.toolbar && (
           <div role="toolbar" className="flex shrink-0 items-stretch gap-1 overflow-x-auto border-b border-line bg-surface px-2 py-1 [&>[data-at-end]]:ml-auto [&>[data-at-end]~[data-at-end]]:ml-0">

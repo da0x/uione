@@ -111,8 +111,8 @@ namespace one::desktop::runtime {
 			if (auto v = taken(across); v.get()) {
 				// Filling the window, its bar says the app's name in the middle, in the theme's
 				// heading font, as a window's title is, and switches light and dark at its end,
-				// as the site's would: its lines and the switch each on a side as wide as the
-				// other, so the name stays centered.
+				// after its group at the end, as the site's would: its lines and the switch
+				// each on a side as wide as the other, so the name stays centered.
 				if (std::string_view(across) == "bar") {
 					auto mark = t.heading(20);
 					mark.line_height = 1.1f;
@@ -120,6 +120,7 @@ namespace one::desktop::runtime {
 					start.push_back(std::move(v));
 					start.push_back(desktop::spacer());
 					end.push_back(desktop::spacer());
+					if (auto last = taken("bar_end"); last.get()) end.push_back(std::move(last));
 					if (offers_dark()) end.push_back(desktop::tool_button(dark() ? "sun" : "moon", dark() ? "Light" : "Dark", [] { dark(!dark()); }));
 					std::vector<desktop::view> bar;
 					bar.push_back(desktop::row(std::move(start)).spacing(6).align(align::center).width(0).grow());

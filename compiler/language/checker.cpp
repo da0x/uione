@@ -203,6 +203,8 @@ namespace one::language {
         std::vector<const collage_item*> collages_;      // and its collages, which its collage buttons act on
         std::vector<const paper_item*> papers_;          // and its papers, which its insert buttons act on
         bool in_toolbar_ = false;        // whether what's being checked is in a workspace's toolbar
+        bool in_bar_ = false;            // or in its bar, where one group sits at the end
+        bool bar_end_said_ = false;      // and that bar's group at its end has been seen
 
         std::string prefix_of(const std::string& ns) const {
             if (ns.empty()) return "";
@@ -3414,15 +3416,24 @@ namespace one::language {
                 }
                 if (item.when) verify_condition(ns, *item.when, route);
                 if (auto* block = std::get_if<content_block>(&item.node)) {
-                    if (block->type == content_block::kind::group && !in_toolbar_) {
-                        error(item.where, "a group is part of a workspace's toolbar, so it goes in toolbar { ... }");
+                    if (block->type == content_block::kind::group && in_bar_) {
+                        // A bar's one group, at its end, before light and dark.
+                        if (!block->at_end) error(item.where, "a group in a bar sits at its end, before the switch between light and dark, as group \"Mode\" at end { ... }");
+                        else if (std::exchange(bar_end_said_, true)) error(item.where, "a bar has one group at its end, so this one's lines go in the first");
+                    } else if (block->type == content_block::kind::group && !in_toolbar_) {
+                        error(item.where, "a group is part of a workspace's toolbar, or at the end of its bar, so it goes in toolbar { ... }");
                     }
                     if (block->type == content_block::kind::group && block->across != 0) {
                         if (!block->small) error(block->across_where, "rows of says how a small group's tools are laid out, so the group is small, as in group \"Align\" small rows of 3");
                         else if (block->across < 1 || block->across > 8) error(block->across_where, "a row of a small group holds from 1 to 8 tools");
                     }
-                    bool was_in_toolbar = in_toolbar_;
-                    if (block->type == content_block::kind::region) in_toolbar_ = block->title == "toolbar";
+                    bool was_in_toolbar = in_toolbar_, was_in_bar = in_bar_;
+                    if (block->type == content_block::kind::region) {
+                        in_toolbar_ = block->title == "toolbar";
+                        in_bar_ = block->title == "bar";
+                        bar_end_said_ = false;
+                    }
+                    if (block->type == content_block::kind::group) in_bar_ = false;
                     if (block->type == content_block::kind::menu) {
                         for (const auto& inside : block->items) {
                             if (!std::holds_alternative<content_link>(inside.node)) {
@@ -3440,6 +3451,7 @@ namespace one::language {
                     }
                     screen_items(ns, block->items, route);
                     in_toolbar_ = was_in_toolbar;
+                    in_bar_ = was_in_bar;
                 } else if (auto* box = std::get_if<find_item>(&item.node)) {
                     for (const auto& source : box->sources) {
                         const view_each* list = named_list(ns, source.view, source.list, route);

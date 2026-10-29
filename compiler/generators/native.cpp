@@ -1532,6 +1532,7 @@ namespace one::generators {
         std::optional<std::string> collage_over_;  // and the pick over it, which they may name
         const language::collage_item* collage_ = nullptr;  // and the collage itself, which its layers list
         bool at_end_said_ = false;    // a group at the toolbar's end has been written
+        bool in_bar_ = false;         // writing a workspace bar's own lines, its group at its end apart
         std::set<std::string> toggles_;  // the screen's toggles, which its whens read
         std::map<std::string, std::string> choices_;  // and those over an enum, by it, each to the choice it starts at
         // and its picks, each the view and list it picks a row of, and that list's entity
@@ -1726,6 +1727,8 @@ namespace one::generators {
                     each_alone_ = alone;
                     // Kept open by where it's written, apart from others of the same words.
                     code = "options(p, " + str(o->title) + ", " + str(o->icon.value_or("")) + ", " + str(o->title + " " + std::to_string(item.where.line)) + ", [&] { return tools(" + joined_items(inside) + "); })";
+                } else if (auto* g = std::get_if<language::content_block>(&item.node); g && g->type == language::content_block::kind::group && in_bar_) {
+                    continue;  // drawn at the bar's end, by the layout
                 } else if (auto* g = std::get_if<language::content_block>(&item.node); g && g->type == language::content_block::kind::group) {
                     // A toolbar's group: its lines built as tools; the first at its end
                     // takes the toolbar's far end.
@@ -2101,13 +2104,27 @@ namespace one::generators {
                             drawn = "tool_column(p, [&] { return tools(" + joined_items(alternatives(items(parts, ns, region.items, s->items))) + "); })";
                             in_group_ = grouping;
                         } else {
+                            bool was = std::exchange(in_bar_, layout == "workspace" && region.title == "bar");
                             drawn = std::string(across ? "along(" : "items(") + joined_items(items(parts, ns, region.items, s->items)) + ")";
+                            in_bar_ = was;
+                        }
+                        // A bar's group at its end: its lines at the bar's far end, before light
+                        // and dark, each as the bar's others are.
+                        std::string end;
+                        if (layout == "workspace" && region.title == "bar") {
+                            for (const auto& line : region.items) {
+                                auto* g = std::get_if<language::content_block>(&line.node);
+                                if (!g || g->type != language::content_block::kind::group) continue;
+                                end = "along(" + joined_items(items(parts, ns, g->items, s->items)) + ")";
+                                if (line.when) end = "[&] { if (" + condition(parts, ns, *line.when) + ") return " + end + "; return view(); }()";
+                            }
                         }
                         each_alone_ = alone;
                         quiet_ = quiet;
                         // side when layers: there only while it holds.
                         if (item->when) drawn = "[&] { if (" + condition(parts, ns, *item->when) + ") return " + drawn + "; return view(); }()";
                         inside += (inside.empty() ? "" : ", ") + std::string("region{") + str(region.title) + ", " + drawn + "}";
+                        if (!end.empty()) inside += ", region{\"bar_end\", " + end + "}";
                     }
                     if (layout == "workspace") shown.push_back({"workspace(p, " + inside + ")", where.line});
                     else shown.push_back({"layout(" + str(layout) + ", " + inside + ")", where.line});

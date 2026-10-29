@@ -145,6 +145,7 @@ namespace one::generators {
         std::set<std::string> toggles_;  // its toggles, like layers, which its whens read
         std::map<std::string, std::string> choices_;  // and those over an enum, by it, each to the choice it starts at
         bool in_group_ = false;          // writing a toolbar group's lines, each its own tool
+        bool in_bar_ = false;            // writing a workspace bar's own lines, its group at its end apart
         bool workspace_ = false;         // the screen being written is laid out as a workspace
         std::optional<std::string> row_named_;  // the row an on open line's where reads, by what it's of
         std::string collage_key_;        // what its collage buttons name its collage by
@@ -452,6 +453,19 @@ namespace one::generators {
                             screen_items(items, parts, ns, region.items, s->items);
                             in_group_ = was;
                             items.close("</Tools>");
+                        } else if (layout == "workspace" && region.title == "bar") {
+                            // A bar's group at its end: its lines at the bar's far end, before
+                            // light and dark, each as the bar's others are.
+                            bool was = std::exchange(in_bar_, true);
+                            screen_items(items, parts, ns, region.items, s->items);
+                            in_bar_ = was;
+                            for (const auto& line : region.items) {
+                                auto* g = std::get_if<language::content_block>(&line.node);
+                                if (!g || g->type != language::content_block::kind::group) continue;
+                                items.close("</Region>");
+                                items.open("<Region name=\"barEnd\">");
+                                shown_while(items, parts, ns, line, [&] { screen_items(items, parts, ns, g->items, s->items); });
+                            }
                         } else {
                             screen_items(items, parts, ns, region.items, s->items);
                         }
@@ -1140,6 +1154,7 @@ namespace one::generators {
                     continue;
                 }
                 if (auto* group = std::get_if<language::content_block>(&item.node); group && group->type == language::content_block::kind::group) {
+                    if (in_bar_) continue;  // drawn at the bar's end, by the layout
                     parts.components.insert("Group");
                     shown_while(out, parts, ns, item, [&] {
                         out.open("<Group name=" + web_detail::js_string(group->title) + (group->small ? " small" : "") + (group->across ? " across={" + std::to_string(group->across) + "}" : "") +

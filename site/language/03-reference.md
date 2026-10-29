@@ -2508,7 +2508,10 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   key p`; a terminal lays them in a row under the toolbar. Any region may say `when`, as
   `side` does there. With the site's bar out of sight, a workspace's `bar` has the
   app's name in the middle, in the theme's heading font, as a window's title is,
-  its own lines at the start, and the switch between light and dark at the end.
+  its own lines at the start, and the switch between light and dark at the end. A
+  bar's one `group "Mode" at end { ... }` puts its lines just before that switch,
+  drawn as the bar's others are, for what changes the whole screen, like whether a
+  page is read or written.
 - `options "Page" icon page { ... }` in a toolbar's group is a tool that opens its
   buttons in a panel under it, over everything, each a choice: what it gives drawn
   small, its words, and what it's for under them, said by `about`, as in

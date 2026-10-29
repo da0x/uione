@@ -92,7 +92,7 @@ TEST_CASE("a workspace has a bar, a toolbar of groups, main, a side shown while 
 
 TEST_CASE("a workspace's regions are its own, and a group goes in its toolbar") {
     CHECK(messages(screen("\t\tlayout workspace\n\t\tmain {\n\t\t\tgroup \"Poster\" {\n\t\t\t\tposter::create \"New\"\n\t\t\t}\n\t\t}\n")) ==
-          std::vector<std::string>{"24: a group is part of a workspace's toolbar, so it goes in toolbar { ... }"});
+          std::vector<std::string>{"24: a group is part of a workspace's toolbar, or at the end of its bar, so it goes in toolbar { ... }"});
     CHECK(messages(screen("\t\tlayout two_columns\n\t\tbar {\n\t\t\ttext \"Posters\"\n\t\t}\n")) ==
           std::vector<std::string>{"23: layout two_columns has no region bar; its regions are main and side"});
     CHECK(messages(screen("\t\tlayout desk\n")) == std::vector<std::string>{"22: layout is single, two_columns or workspace"});
@@ -1158,4 +1158,21 @@ TEST_CASE("a mode the person switches to: only when takes a toolbar's line away,
     CHECK(web.find(R"(<Applies when={((chosenMode === "edit"))}>)") != std::string::npos);
     CHECK(web.find(R"(<Applies when={((chosenMode === "read"))}>)") == std::string::npos);
     CHECK(native.find(R"(if ((same(value(p.chosen("/posters/:poster mode", "edit")), value("edit")))) return group(p, "Write")") != std::string::npos);
+}
+
+TEST_CASE("a workspace's bar holds one group, at its end, before light and dark") {
+    CHECK(messages(screen("\t\tlayout workspace\n\t\tbar {\n\t\t\tgroup \"Mode\" {\n\t\t\t\tposter::create \"New\"\n\t\t\t}\n\t\t}\n")) ==
+          std::vector<std::string>{"24: a group in a bar sits at its end, before the switch between light and dark, as group \"Mode\" at end { ... }"});
+    CHECK(messages(screen("\t\tlayout workspace\n\t\tbar {\n\t\t\tgroup \"Mode\" at end {\n\t\t\t\tposter::create \"New\"\n\t\t\t}\n\t\t\tgroup \"More\" at end {\n\t\t\t\tposter::create \"Again\"\n\t\t\t}\n\t\t}\n")) ==
+          std::vector<std::string>{"27: a bar has one group at its end, so this one's lines go in the first"});
+    auto files = built(layered_screen("\t\tlayout workspace\n\t\tbar {\n\t\t\tundo \"Undo\" icon undo\n\t\t\tgroup \"Mode\" at end {\n\t\t\t\tredo \"Redo\" icon redo\n\t\t\t}\n\t\t}\n"));
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    CHECK(web.find("<Region name=\"barEnd\">") != std::string::npos);
+    CHECK(web.find("<Group") == std::string::npos);
+    CHECK(web.find("Undo") < web.find("barEnd"));
+    CHECK(web.find("barEnd") < web.find("Redo"));
+    CHECK(native.find("region{\"bar_end\", along(history(p, true, \"Redo\"") != std::string::npos);
 }
