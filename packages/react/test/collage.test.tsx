@@ -7,7 +7,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { around, boardOf, carried, colorShifter, zoomed, svgElement, cornerAt, cropEdgesAt, cropped, drawn, drawnLine, freehand, penPath, pathBounds, pathFractions, pathHandleMoved, pathHandles, pathMoved, pathNodes, pathReaches, svgDocument, halo, harmonicFill, matched, moved, resized, shifted, sitting, snapLines, statsOf, wholeOf } from "../src/collage.js";
+import { around, boardOf, carried, colorShifter, polygonPoints, zoomed, svgElement, cornerAt, cropEdgesAt, cropped, drawn, drawnLine, freehand, penPath, pathBounds, pathFractions, pathHandleMoved, pathHandles, pathMoved, pathNodes, pathReaches, svgDocument, halo, harmonicFill, matched, moved, resized, shifted, sitting, snapLines, statsOf, wholeOf } from "../src/collage.js";
 import type { Box, Guided } from "../src/collage.js";
 
 type Numbers = number[];
@@ -74,6 +74,9 @@ interface Case {
   moved?: string;
   out?: boolean;
   boxes?: Numbers[];
+  sides?: number;
+  spoke?: number;
+  star?: boolean;
   view?: Numbers;
   area?: Numbers;
   margin?: number;
@@ -170,6 +173,9 @@ describe("where a collage's layers go", () => {
         break;
       case "path_reaches":
         expect(pathReaches(k.path!, { x: k.at![0]!, y: k.at![1]! }, k.reach!, k.filled!)).toBe(k.reaches);
+        break;
+      case "polygon_points":
+        expect(polygonPoints(k.sides!, k.spoke!, k.star!)).toBe(k.points);
         break;
       case "zoomed": {
         const area = boxOf(k.area!);

@@ -385,6 +385,16 @@ export const buttonIcons: Record<string, ReactNode> = {
       <path d="M2 2.5h6v6H2zM8 7.5h6v6H8z" />
     </svg>
   ),
+  star: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8.0 1.9 L9.72 6.03 L14.18 6.39 L10.78 9.3 L11.82 13.66 L8.0 11.33 L4.18 13.66 L5.22 9.3 L1.82 6.39 L6.28 6.03z" />
+    </svg>
+  ),
+  polygon: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8.0 1.9 L14.18 6.39 L11.82 13.66 L4.18 13.66 L1.82 6.39z" />
+    </svg>
+  ),
   zoom_in: (
     <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M11.5 7A4.5 4.5 0 1 1 2.5 7 4.5 4.5 0 1 1 11.5 7zM10.2 10.2l3.8 3.8M5 7h4M7 5v4" />

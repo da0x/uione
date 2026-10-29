@@ -3326,7 +3326,7 @@ namespace one::language {
                 "lower",  "rotate_left", "rotate_right", "flip_horizontal", "flip_vertical", "check", "close", "paste", "save", "undo", "redo",
                 "text",   "screenshot", "picture", "gallery", "fullscreen", "sun", "moon", "bold", "smaller", "larger", "fill", "fit", "stretch",
                 "center", "color", "edges", "blend", "harmonize", "clear", "square", "rounded", "pointer", "rectangle", "ellipse", "line", "italic", "magic", "align_left", "align_center", "align_right",
-                "title", "heading", "quote", "equation", "book", "letters", "quill", "typewriter", "coffee", "eye", "eye_off", "opacity", "spectrum", "zoom_in", "zoom_out", "zoom_fit", "group", "ungroup", "chevron_right", "chevron_down", "spread", "contents", "calendar", "bell", "inbox", "previous", "next"};
+                "title", "heading", "quote", "equation", "book", "letters", "quill", "typewriter", "coffee", "eye", "eye_off", "opacity", "spectrum", "zoom_in", "zoom_out", "zoom_fit", "star", "polygon", "group", "ungroup", "chevron_right", "chevron_down", "spread", "contents", "calendar", "bell", "inbox", "previous", "next"};
             if (name && !known.contains(*name)) error(where, "there's no icon " + *name + nearest(*name, {known.begin(), known.end()}));
         }
 
@@ -4202,22 +4202,22 @@ namespace one::language {
                     verify_condition(ns, *v.value, route);
                 }
                 if (draw.when) verify_condition(ns, *draw.when, route);
-                if (draw.taken_from) {
+                for (const auto& taking : draw.takes) {
                     // with stroke from layer::paint: a command on the layers, changing each.
-                    verify_command_use(ns, *draw.taken_from);
+                    verify_command_use(ns, taking.from);
                     const command_declaration* from = nullptr;
                     if (auto here = scopes_.find(ns); here != scopes_.end()) {
-                        if (auto it = here->second.command_nodes.find(draw.taken_from->text()); it != here->second.command_nodes.end()) from = it->second;
+                        if (auto it = here->second.command_nodes.find(taking.from.text()); it != here->second.command_nodes.end()) from = it->second;
                     }
-                    if (find_command(ns, *draw.taken_from) != layer) error(draw.taken_from->where, "what's drawn takes what " + draw.taken_from->text() + " was last given, so it's a command on " + layer->name + ", like " + layer->name + "::paint");
-                    for (const auto& taken : draw.taken) {
+                    if (find_command(ns, taking.from) != layer) error(taking.from.where, "what's drawn takes what " + taking.from.text() + " was last given, so it's a command on " + layer->name + ", like " + layer->name + "::paint");
+                    for (const auto& taken : taking.fields) {
                         bool changed = false;
                         if (from) {
                             for (const auto& st : from->body) {
                                 if (auto* c = std::get_if<changes_statement>(&st.node)) changed = changed || std::ranges::contains(c->fields, taken);
                             }
                         }
-                        if (from && !changed) error(draw.taken_where, draw.taken_from->text() + " doesn't change " + taken + ", so it's never given it to take");
+                        if (from && !changed) error(taking.where, taking.from.text() + " doesn't change " + taken + ", so it's never given it to take");
                     }
                 }
                 if (draw.by && *draw.by != "line" && *draw.by != "hand" && *draw.by != "points") {

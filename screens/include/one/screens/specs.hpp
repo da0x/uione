@@ -63,6 +63,7 @@ namespace one::screens {
 		std::string field;
 		double from = 0, to = 1, by = 0.01;
 		value now = {};
+		value first = {};  // where it starts with nothing to read, as the field starts
 	};
 
 	// fill any color: a button's value any color, from what it is now, its command run
@@ -384,6 +385,10 @@ namespace one::screens {
 	// collage makes a layer by `command`, as big as the drag, given `fields`, while
 	// `when` holds; then each choice its when reads, by its key, goes back to its first.
 	// By "line", it's a line from where the drag began to where it ended, as a path.
+	struct collage_taken {
+		std::vector<std::string> fields;
+		std::string from;
+	};
 	struct collage_draw {
 		std::string command;
 		value fields = {};
@@ -391,8 +396,7 @@ namespace one::screens {
 		std::string by = "";
 		std::vector<std::pair<std::string, std::string>> back = {};
 		// with stroke from layer::paint: these fields as that command's buttons last gave them.
-		std::vector<std::string> with = {};
-		std::string with_from = "";
+		std::vector<collage_taken> with = {};
 	};
 
 	// A picture made of layers, as big as two of the view's values say, in its own

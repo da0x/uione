@@ -234,7 +234,7 @@ namespace one::desktop::runtime {
 		if (b.slide) {
 			const command_slide& s = *b.slide;
 			value was = only_remembers ? last_given(p, b.command).fields[s.field] : s.now;
-			double now = was.is_null() ? s.to : std::clamp(was.as_double(), s.from, s.to);
+			double now = std::clamp(!was.is_null() ? was.as_double() : !s.first.is_null() ? s.first.as_double() : s.to, s.from, s.to);
 			state<std::string> held(std::format("{}", now));
 			auto settled = [&p, give, name = b.command, fields = shown->fields, field = s.field, off, remembers = b.remembers, only_remembers](const std::string& text) {
 				if (off) return;

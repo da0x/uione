@@ -523,12 +523,31 @@ export function matched(pictures: ColorStats[], strength: number, cast: number):
 // collage's pixels, half of it outside its outline as SVG draws it. The same as the
 // desktop's.
 export interface Shape {
-  kind: string; // rectangle, ellipse or path
+  kind: string; // rectangle, ellipse, path, polygon or star
   points: string;
   fill: string;
   stroke: string;
   strokeWidth: number;
   corners: number;
+  sides?: number; // a polygon's or a star's corners
+  spoke?: number; // and how far in a star's go
+}
+
+// A polygon of `sides` corners, or a star of as many points, its inner corners `spoke`
+// of the way out, a point straight up, as a path's points, fractions of the box it
+// fills: from 3 corners to 64, its spoke from a twentieth to all the way out. The same
+// as the desktop's.
+export function polygonPoints(sides: number, spoke: number, star: boolean): string {
+  const n = Math.min(64, Math.max(3, Math.round(sides))), inner = Math.min(1, Math.max(0.05, spoke));
+  const corners: Point[] = [];
+  for (let i = 0; i < (star ? 2 * n : n); i++) {
+    const turn = (star ? (i * Math.PI) / n : (i * 2 * Math.PI) / n) - Math.PI / 2, r = star && i % 2 ? inner : 1;
+    corners.push({ x: r * Math.cos(turn), y: r * Math.sin(turn) });
+  }
+  // As big as the box it fills, whatever its shape.
+  const left = Math.min(...corners.map((c) => c.x)), right = Math.max(...corners.map((c) => c.x));
+  const top = Math.min(...corners.map((c) => c.y)), bottom = Math.max(...corners.map((c) => c.y));
+  return corners.map((c, i) => `${i === 0 ? "M" : "L"} ${said((c.x - left) / (right - left))} ${said((c.y - top) / (bottom - top))}`).join(" ") + " Z";
 }
 
 // A number as SVG writes it: no more decimals than it needs, up to three.
@@ -886,6 +905,7 @@ export function svgElement(s: Shape, x: number, y: number, w: number, h: number)
   const drawn = `fill="${paint(s.fill)}" stroke="${paint(s.stroke)}" stroke-width="${said(s.strokeWidth)}"`;
   if (s.kind === "ellipse") return `<ellipse cx="${said(x + w / 2)}" cy="${said(y + h / 2)}" rx="${said(w / 2)}" ry="${said(h / 2)}" ${drawn}/>`;
   if (s.kind === "path") return `<path d="${pathIn(s.points, x, y, w, h)}" ${drawn}/>`;
+  if (s.kind === "polygon" || s.kind === "star") return `<path d="${pathIn(polygonPoints(s.sides ?? 5, s.spoke ?? 0.5, s.kind === "star"), x, y, w, h)}" ${drawn}/>`;
   const round = Math.min(Math.max(s.corners, 0), 0.5) * Math.min(w, h);
   return `<rect x="${said(x)}" y="${said(y)}" width="${said(w)}" height="${said(h)}" rx="${said(round)}" ${drawn}/>`;
 }

@@ -321,11 +321,15 @@ namespace one::generators {
                         if (choices_.contains(name)) back += (back.empty() ? "" : ", ") + std::string("{") + str(route_ + " " + name) + ", " + str(choices_.at(name)) + "}";
                     }
                     std::string with;
-                    for (const auto& taken : d.taken) with += (with.empty() ? "" : ", ") + str(taken);
+                    for (const auto& taking : d.takes) {
+                        std::string named;
+                        for (const auto& taken : taking.fields) named += (named.empty() ? "" : ", ") + str(taken);
+                        with += (with.empty() ? "" : ", ") + std::string("collage_taken{{") + named + "}, " + str(screens::full_command(ns, taking.from)) + "}";
+                    }
                     draws += (draws.empty() ? "" : ", ") + std::string("collage_draw{.command = ") + str(screens::full_command(ns, d.command)) +
                              (given.empty() ? "" : ", .fields = value(std::map<std::string, value>{" + given + "})") + (d.when ? ", .when = " + condition(parts, ns, *d.when) : "") +
                              (d.by ? ", .by = " + str(*d.by) : "") + (back.empty() ? "" : ", .back = {" + back + "}") +
-                             (d.taken_from ? ", .with = {" + with + "}, .with_from = " + str(screens::full_command(ns, *d.taken_from)) : "") + "}";
+                             (with.empty() ? "" : ", .with = {" + with + "}") + "}";
                 }
                 out += ", .draws = {" + draws + "}";
             }
@@ -810,7 +814,15 @@ namespace one::generators {
                         if (auto holding = model_.view_holding(ns, entity->name, v.name)) now = "at(" + view_variable(parts, *holding) + ", " + str(v.name) + ")";
                     }
                     std::string by = v.range->by.empty() ? "(" + v.range->to + " - " + v.range->from + ") / 100.0" : v.range->by;
-                    slide = ", .slide = command_slide{.field = " + str(v.name) + ", .from = " + v.range->from + ", .to = " + v.range->to + ", .by = " + by + ", .now = " + now + "}";
+                    // Where it starts with nothing to read: as the field does, when it says.
+                    std::string first;
+                    if (entity) {
+                        for (const auto& f : entity->fields) {
+                            auto* literal = f.name == v.name && f.initial ? std::get_if<language::literal_expression>(&f.initial->node) : nullptr;
+                            if (literal && literal->type == language::literal_expression::kind::number) first = ", .first = value(static_cast<double>(" + literal->value + "))";
+                        }
+                    }
+                    slide = ", .slide = command_slide{.field = " + str(v.name) + ", .from = " + v.range->from + ", .to = " + v.range->to + ", .by = " + by + ", .now = " + now + first + "}";
                     continue;
                 }
                 std::set<std::string> read;
@@ -843,7 +855,9 @@ namespace one::generators {
             std::string shown_when = button.when ? condition(parts, ns, *button.when) : "";
             // One whose values the screen's collage draws with is there with nothing picked
             // too, and then only remembers what it gives.
-            bool remembers = collage_ && std::ranges::any_of(collage_->draws, [&](const auto& d) { return d.taken_from && screens::full_command(ns, *d.taken_from) == command; });
+            bool remembers = collage_ && std::ranges::any_of(collage_->draws, [&](const auto& d) {
+                return std::ranges::any_of(d.takes, [&](const auto& t) { return screens::full_command(ns, t.from) == command; });
+            });
             if (!on_pick.empty() && !remembers) shown_when = shown_when.empty() ? "!none(" + on_pick + ")" : "(!none(" + on_pick + ") && " + shown_when + ")";
             if (!shown_when.empty()) out += ", .when = " + shown_when;
             if (button.icon) out += ", .icon = " + str(*button.icon);

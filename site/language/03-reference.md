@@ -2305,7 +2305,10 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     `turned quarters`, `mirrored flipped`, `around margin`, `rounded roundness`, and `words caption  sized
     letters  colored ink  weighing boldness  slanted lean`. The checker holds each to its type:
     numbers, a file, text, `around` choices from `clear edges color
-    harmonize`, and `shape` choices from `rectangle ellipse path`. Cropping needs the crop's four, and writing needs
+    harmonize`, and `shape` choices from `rectangle ellipse path polygon star`. A
+    polygon or a star fills its box, a corner straight up, its `sides` its corners or
+    points, 5 when it doesn't say, and a star's inner corners `spoke` of the way out,
+    half when it doesn't say; saved as a path. Cropping needs the crop's four, and writing needs
     `words` and `size`. The runtimes know only the parts; which field keeps each
     is handed to them by the compiler.
   - `paste`: pictures dropped on it, or pasted, are made layers by its `add`, each

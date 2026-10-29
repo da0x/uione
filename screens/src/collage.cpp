@@ -7,6 +7,7 @@
 #include <cctype>
 #include <cmath>
 #include <format>
+#include <numbers>
 
 namespace one::screens::collage {
 
@@ -817,8 +818,27 @@ namespace one::screens::collage {
 		return inside;
 	}
 
+	std::string polygon_points(double sides, double spoke, bool star) {
+		int n = static_cast<int>(std::clamp(std::round(sides), 3.0, 64.0));
+		double inner = std::clamp(spoke, 0.05, 1.0);
+		std::vector<point> corners;
+		for (int i = 0; i < (star ? 2 * n : n); ++i) {
+			double turn = (star ? i * std::numbers::pi / n : i * 2 * std::numbers::pi / n) - std::numbers::pi / 2, r = star && i % 2 ? inner : 1;
+			corners.push_back({r * std::cos(turn), r * std::sin(turn)});
+		}
+		// As big as the box it fills, whatever its shape.
+		double left = corners[0].x, top = corners[0].y, right = left, bottom = top;
+		for (const auto& c : corners) left = std::min(left, c.x), top = std::min(top, c.y), right = std::max(right, c.x), bottom = std::max(bottom, c.y);
+		std::string out;
+		for (const auto& c : corners) {
+			out += (out.empty() ? "M " : " L ") + said((c.x - left) / (right - left)) + " " + said((c.y - top) / (bottom - top));
+		}
+		return out + " Z";
+	}
+
 	std::string svg_element(const shape& s, double x, double y, double w, double h) {
 		std::string drawn = std::format(R"(fill="{}" stroke="{}" stroke-width="{}")", paint(s.fill), paint(s.stroke), said(s.stroke_width));
+		if (s.kind == "polygon" || s.kind == "star") return std::format(R"(<path d="{}" {}/>)", path_in(polygon_points(s.sides, s.spoke, s.kind == "star"), x, y, w, h), drawn);
 		if (s.kind == "ellipse") return std::format(R"(<ellipse cx="{}" cy="{}" rx="{}" ry="{}" {}/>)", said(x + w / 2), said(y + h / 2), said(w / 2), said(h / 2), drawn);
 		if (s.kind == "path") return std::format(R"(<path d="{}" {}/>)", path_in(s.points, x, y, w, h), drawn);
 		double round = std::clamp(s.corners, 0.0, 0.5) * std::min(w, h);

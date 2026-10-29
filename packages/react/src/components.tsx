@@ -1071,7 +1071,7 @@ export function Command({
   thenOpen?: string; // a route like /:poster, opened with what it made
   swatch?: string; // in a toolbar, drawn as a circle of this color, like #ffffff
   about?: string; // among a tool's options, what it's for, said beside it
-  slide?: { field: string; from: number; to: number; by: number; now: unknown }; // drawn as a slider from what it is now, run as it's let go
+  slide?: { field: string; from: number; to: number; by: number; now: unknown; first?: number }; // drawn as a slider from what it is now, or `first`, run as it's let go
   color?: { field: string; now: unknown }; // or as a color picker, run with each one chosen
   remembers?: boolean; // what it gives remembered for what's drawn next; with nothing to act on, only that
   picks?: string; // and the pick whose collage says what it acts on, several chosen or a group's all
@@ -1131,7 +1131,7 @@ export function Command({
   // Along a slider, from what it is now, run with where it's let go.
   if (slide) {
     const was = onlyRemembers ? last[slide.field] : slide.now;
-    const now = typeof was === "number" ? Math.min(slide.to, Math.max(slide.from, was)) : slide.to;
+    const now = Math.min(slide.to, Math.max(slide.from, typeof was === "number" ? was : (slide.first ?? slide.to)));
     return (
       <ui.Slider
         label={words}

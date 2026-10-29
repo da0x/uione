@@ -246,7 +246,7 @@ collage_line   ::= ("place" qualified | "reshape" qualified | "group" qualified 
                      by line, a line from where the drag began to where it ended, by hand what it went
                      through, and by points a path node by node, as a pen draws, each kept as a path's points;
                      with stroke from layer::paint: these as that command's buttons last gave them */
-                  | "draw" qualified given? ("by" ("line" | "hand" | "points"))? ("with" NAME+ "from" qualified)? ("when" expression)?
+                  | "draw" qualified given? ("by" ("line" | "hand" | "points"))? ("with" NAME+ "from" qualified)* ("when" expression)?
                   /* pictures dropped or pasted are made by add, in the layer's picture */
                   | "paste"
                   /* the fields playing its parts, each kept in the field named like it unless one of these says another */

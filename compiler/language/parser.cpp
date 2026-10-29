@@ -2463,14 +2463,16 @@ namespace one::language {
                             draw.by_where = peek().where;
                             draw.by = expect(token_kind::identifier, "how it's drawn, like by line").text;
                         }
-                        if (at_word("with")) {
+                        while (at_word("with")) {
                             // with stroke stroke_width from layer::paint: as its buttons last gave them.
-                            draw.taken_where = advance().where;
-                            while (peek().kind == token_kind::identifier && !at_word("from")) draw.taken.push_back(advance().text);
-                            if (draw.taken.empty()) fail(peek().where, "expected the fields it takes, like with stroke from layer::paint");
+                            collage_item::drawing::taking taking;
+                            taking.where = advance().where;
+                            while (peek().kind == token_kind::identifier && !at_word("from")) taking.fields.push_back(advance().text);
+                            if (taking.fields.empty()) fail(peek().where, "expected the fields it takes, like with stroke from layer::paint");
                             if (!at_word("from")) fail(peek().where, "expected 'from' and the command whose buttons last gave them, like from layer::paint");
                             advance();
-                            draw.taken_from = parse_qualified_name("the command whose buttons last gave them, like layer::paint");
+                            taking.from = parse_qualified_name("the command whose buttons last gave them, like layer::paint");
+                            draw.takes.push_back(std::move(taking));
                         }
                         if (at_word("when")) {
                             advance();

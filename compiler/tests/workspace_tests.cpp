@@ -674,10 +674,10 @@ TEST_CASE("a collage draws with what a command's buttons last gave, and those bu
     const std::string& web = files["web/src/screens/main.tsx"];
     const std::string& native = files["desktop/src/screens/main.cpp"];
     CAPTURE(web);
-    CHECK(web.find(R"(with: ["x"], withFrom: "studio::layer::place")") != std::string::npos);
+    CHECK(web.find(R"(with: [{ fields: ["x"], from: "studio::layer::place" }])") != std::string::npos);
     CHECK(web.find(R"( remembers)") != std::string::npos);
     CHECK(web.find(R"(when={layer !== null})") == std::string::npos);
-    CHECK(native.find(R"(.with = {"x"}, .with_from = "studio::layer::place")") != std::string::npos);
+    CHECK(native.find(R"(.with = {collage_taken{{"x"}, "studio::layer::place"}})") != std::string::npos);
     CHECK(native.find(R"(.remembers = true, .picks = "/posters/:poster layer")") != std::string::npos);
     CHECK(web.find(R"( remembers picks="/posters/:poster layer")") != std::string::npos);
     // Only what the command changes.

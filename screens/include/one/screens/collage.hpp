@@ -168,12 +168,17 @@ namespace one::screens::collage {
 	// stroked as it says, a color written #rrggbb or none, its stroke as wide as it says
 	// in the collage's pixels, half of it outside its outline as SVG draws it.
 	struct shape {
-		std::string kind = "rectangle";  // rectangle, ellipse or path
+		std::string kind = "rectangle";  // rectangle, ellipse, path, polygon or star
 		std::string points;
 		std::string fill = "none", stroke = "none";
 		double stroke_width = 0;
 		double corners = 0;
+		double sides = 5, spoke = 0.5;  // a polygon's or a star's corners, and how far in a star's go
 	};
+	// A polygon of `sides` corners, or a star of as many points, its inner corners
+	// `spoke` of the way out, a point straight up, as a path's points, fractions of the
+	// box it fills: from 3 corners to 64, its spoke from a twentieth to all the way out.
+	std::string polygon_points(double sides, double spoke, bool star);
 
 	// A line drawn by a drag from `from` to `to`, as a path: its box, a pixel wide
 	// where it's straight across or down, and its two points in it. With `straight`, it

@@ -16,7 +16,7 @@
 
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
-import { colorShifter, cornerAt, pathIn, cropEdgesAt, cropped, drawn, drawnLine, freehand, halo, penPath, haloInside, haloReach, harmonicFill, matched, matchingCast, matchingStrength, moved, resized, sitting, pathBounds, pathFractions, around, boardOf, carried, zoomed, pathHandleMoved, pathHandles, pathMoved, pathNodes, pathReaches, snapLines, statsOf, svgDocument, wholeOf } from "./collage.js";
+import { colorShifter, cornerAt, pathIn, cropEdgesAt, cropped, drawn, drawnLine, freehand, halo, penPath, haloInside, haloReach, harmonicFill, matched, matchingCast, matchingStrength, moved, resized, sitting, pathBounds, pathFractions, around, boardOf, carried, polygonPoints, zoomed, pathHandleMoved, pathHandles, pathMoved, pathNodes, pathReaches, snapLines, statsOf, svgDocument, wholeOf } from "./collage.js";
 import type { Box, ColorShift, ColorStats, Guided, Lines, PenNode, Point, SavedLayer, ViewAt } from "./collage.js";
 import { useFiles, useRunner } from "./data.js";
 import { pictureSize, svgIn, svgShapes, svgSize } from "./vectors.js";
@@ -68,6 +68,7 @@ function paintShape(c: CanvasRenderingContext2D, l: Row, b: Box, kept: Box) {
   const outline = new Path2D();
   if (kind === "ellipse") outline.ellipse(b.x + b.w / 2, b.y + b.h / 2, b.w / 2, b.h / 2, 0, 0, 2 * Math.PI);
   else if (kind === "path") outline.addPath(new Path2D(pathIn(str(l["points"]), b.x, b.y, b.w, b.h)));
+  else if (kind === "polygon" || kind === "star") outline.addPath(new Path2D(pathIn(polygonPoints(num(l["sides"], 5), num(l["spoke"], 0.5), kind === "star"), b.x, b.y, b.w, b.h)));
   else outline.roundRect(b.x, b.y, b.w, b.h, Math.min(Math.max(num(l["corners"]), 0), 0.5) * Math.min(b.w, b.h));
   c.save();
   c.globalAlpha = opacityOf(l);
@@ -592,7 +593,7 @@ async function svgOf(layers: Row[], W: number, H: number, address: ((path: strin
     if (isWords(l)) {
       saved.push({ kind: "words", at, opacity, words: str(l["words"]), color: str(l["color"]), family: wordsFamily(), size: num(l["size"]), weight: weightOf(l), italic: num(l["italic"]) !== 0 });
     } else if (isShape(l)) {
-      const drawn = { kind: str(l["shape"]) || "rectangle", points: str(l["points"]), fill: str(l["fill"]), stroke: str(l["stroke"]), strokeWidth: str(l["stroke"]) ? num(l["stroke_width"]) : 0, corners: num(l["corners"]) };
+      const drawn = { kind: str(l["shape"]) || "rectangle", points: str(l["points"]), fill: str(l["fill"]), stroke: str(l["stroke"]), strokeWidth: str(l["stroke"]) ? num(l["stroke_width"]) : 0, corners: num(l["corners"]), sides: num(l["sides"], 5), spoke: num(l["spoke"], 0.5) };
       saved.push({ kind: "shape", at, opacity, drawn });
     } else if (address) {
       const path = str(l["picture"]);
@@ -758,8 +759,7 @@ export interface CollageDraw {
   by?: "line" | "hand" | "points";
   back?: [string, string][];
   // with stroke from layer::paint: these as that command's buttons last gave them.
-  with?: string[];
-  withFrom?: string;
+  with?: { fields: string[]; from: string }[];
 }
 
 export function Collage({
@@ -1799,8 +1799,12 @@ export function Collage({
     const top = layers[layers.length - 1];
     if (top && top["depth"] !== undefined) made["depth"] = num(top["depth"]) + 1;
     // And what its buttons last gave, where it takes it.
-    const last = d.withFrom ? lastGiven(d.withFrom) : {};
-    const taken = Object.fromEntries((d.with ?? []).filter((field) => field in last).map((field) => [field, last[field]]));
+    const taken = Object.fromEntries(
+      (d.with ?? []).flatMap((t) => {
+        const last = lastGiven(t.from);
+        return t.fields.filter((field) => field in last).map((field) => [field, last[field]]);
+      }),
+    );
     const reply = await runner.reply(d.command, { ...fieldsOf(made, fields), ...d.given, ...taken });
     if (reply?.id) pickRow(reply.id);
   };

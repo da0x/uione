@@ -904,9 +904,9 @@ namespace one::desktop::runtime {
 			value sent = collage_fields_of(made, spec.fields);
 			for (const auto& [name, given] : d->fields.fields) sent.fields[name] = given;
 			// And what its buttons last gave, where it takes it.
-			if (!d->with_from.empty()) {
-				value last = last_given(p, d->with_from);
-				for (const auto& name : d->with) {
+			for (const auto& taking : d->with) {
+				value last = last_given(p, taking.from);
+				for (const auto& name : taking.fields) {
 					if (auto found = last.fields.find(name); found != last.fields.end()) sent.fields[name] = found->second;
 				}
 			}
@@ -1136,7 +1136,8 @@ namespace one::desktop::runtime {
 		void paint_shape(desktop::canvas& c, desktop::rect on, model::box b, const value& layer) {
 			if (b.w <= 0 && b.h <= 0) return;
 			model::shape s{layer["shape"].as_string().empty() ? "rectangle" : layer["shape"].as_string(), layer["points"].as_string(), layer["fill"].as_string(),
-			               layer["stroke"].as_string(), layer["stroke"].as_string().empty() ? 0 : layer["stroke_width"].as_double(), layer["corners"].as_double()};
+			               layer["stroke"].as_string(), layer["stroke"].as_string().empty() ? 0 : layer["stroke_width"].as_double(), layer["corners"].as_double(),
+			               layer["sides"].is_null() ? 5 : layer["sides"].as_double(), layer["spoke"].is_null() ? 0.5 : layer["spoke"].as_double()};
 			double per = b.w > 0 ? on.width / b.w : on.height / b.h;  // window pixels a collage pixel
 			double reach = s.stroke_width / 2 + 1;
 			double device = per * c.scale();
@@ -1385,7 +1386,8 @@ namespace one::desktop::runtime {
 				} else if (is_shape(l)) {
 					one.kind = "shape";
 					one.drawn = {l["shape"].as_string().empty() ? "rectangle" : l["shape"].as_string(), l["points"].as_string(), l["fill"].as_string(), l["stroke"].as_string(),
-					             l["stroke"].as_string().empty() ? 0 : l["stroke_width"].as_double(), l["corners"].as_double()};
+					             l["stroke"].as_string().empty() ? 0 : l["stroke_width"].as_double(), l["corners"].as_double(),
+					             l["sides"].is_null() ? 5 : l["sides"].as_double(), l["spoke"].is_null() ? 0.5 : l["spoke"].as_double()};
 				} else if (std::string svg = vector_here(p, l); !svg.empty()) {
 					one.kind = "svg", one.svg = svg;
 					if (auto size = desktop::picture::svg_size(svg)) one.natural = {0, 0, size->first, size->second};

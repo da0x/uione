@@ -901,10 +901,14 @@ namespace one::language {
             location by_where;
             expression_ptr when;
             // with stroke stroke_width from layer::paint: these as that command's buttons
-            // last gave them, as a drawing program draws in the colors last chosen.
-            std::vector<std::string> taken;
-            std::optional<qualified_name> taken_from;
-            location taken_where;
+            // last gave them, as a drawing program draws in the colors last chosen; as
+            // many of these as it says.
+            struct taking {
+                std::vector<std::string> fields;
+                qualified_name from;
+                location where;
+            };
+            std::vector<taking> takes;
         };
         std::vector<drawing> draws;
         std::optional<std::string> over;      // over layer { ... }: buttons above the picked layer
@@ -1585,7 +1589,9 @@ namespace one::language {
             {"words", "text"}, {"size", "number"}, {"color", "text"}, {"weight", "number"}, {"italic", "number"},
             // A shape's, when it's neither a picture nor words (decision 0025): what it is, a path's
             // points, its fill and stroke, and how much of it shows.
-            {"shape", "rectangle ellipse path"}, {"points", "text"}, {"fill", "text"}, {"stroke", "text"}, {"stroke_width", "number"}, {"opacity", "number"},
+            {"shape", "rectangle ellipse path polygon star"}, {"points", "text"}, {"fill", "text"}, {"stroke", "text"}, {"stroke_width", "number"}, {"opacity", "number"},
+            // A polygon's or a star's corners, and how far in a star's go, of the way out.
+            {"sides", "number"}, {"spoke", "number"},
             // Whether it's hidden: not drawn, picked or saved while it's anything but 0.
             {"hidden", "number"},
             // What it's called in a list of the layers, in place of what it is.
