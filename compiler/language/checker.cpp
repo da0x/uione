@@ -201,6 +201,7 @@ namespace one::language {
         std::map<std::string, std::set<std::string>> choices_;  // and those over an enum, each choice pressed
         std::map<std::string, const view_each*> picks_;  // and its picks, each the list it picks a row of
         std::vector<const collage_item*> collages_;      // and its collages, which its collage buttons act on
+        bool alone_ = false;                             // and whether it's only its picture, which its zoom buttons act on too
         std::vector<const paper_item*> papers_;          // and its papers, which its insert buttons act on
         std::vector<const cards_item*> cards_;           // and its cards, which its paste and add pictures buttons may go into
         bool in_toolbar_ = false;        // whether what's being checked is in a workspace's toolbar
@@ -2775,6 +2776,24 @@ namespace one::language {
                     }
                 }
             }
+            // A picture alone is all of a workspace's screen, its bars over it, so it's
+            // the only line of main, and shown whole.
+            alone_ = false;
+            std::function<void(const std::vector<screen_item>&, const content_block*)> alone = [&](const std::vector<screen_item>& inside, const content_block* in) {
+                for (const auto& item : inside) {
+                    if (auto* block = std::get_if<content_block>(&item.node)) alone(block->items, block);
+                    auto* picture = std::get_if<picture_item>(&item.node);
+                    if (!picture || !picture->alone) continue;
+                    alone_ = true;
+                    if (layout != "workspace") {
+                        error(picture->alone_where, "a picture alone is all of a workspace's screen, its bars drawn over it, so its screen says layout workspace");
+                    } else if (!in || in->type != content_block::kind::region || in->title != "main" || in->items.size() != 1) {
+                        error(picture->alone_where, "a picture alone is all of its screen, so it's the only line in main, as in main { picture clipping_page.image fit alone }");
+                    }
+                    if (!picture->fit) error(picture->alone_where, "a picture alone is shown whole, fitted in, so it says fit alone");
+                }
+            };
+            alone(s.items, nullptr);
             // Its toggles, each named once, so its whens can read them wherever they are.
             toggles_.clear();
             choices_.clear();
@@ -3717,14 +3736,16 @@ namespace one::language {
                     // A picture pasted or chosen can go into the screen's paper or cards too, when they say paste.
                     bool into_paper = (does->does == kind::paste || does->does == kind::add_pictures) &&
                                       (std::ranges::any_of(papers_, [](const paper_item* p) { return p->paste; }) || std::ranges::any_of(cards_, [](const cards_item* c) { return c->paste; }));
-                    bool can = does->of.has_value() || into_paper || std::ranges::any_of(collages_, [&](const collage_item* c) {
-                        bool zooms = does->does == kind::zoom_in || does->does == kind::zoom_out || does->does == kind::zoom_fit;
+                    bool zooms = does->does == kind::zoom_in || does->does == kind::zoom_out || does->does == kind::zoom_fit;
+                    bool can = does->of.has_value() || into_paper || (zooms && alone_) || std::ranges::any_of(collages_, [&](const collage_item* c) {
                         return zooms || (does->does == kind::crop ? c->crop.has_value() : does->does == kind::edit_words ? c->write.has_value() : does->does == kind::ungroup ? c->group.has_value() : does->does == kind::group_picked ? c->group.has_value() && c->add.has_value() : does->does == kind::raise || does->does == kind::lower ? c->order.has_value() : takes_pictures ? c->paste : c->add.has_value());
                     });
                     if (!can) {
                         std::string needs = does->does == kind::crop ? "crop layer::crop" : does->does == kind::edit_words ? "write layer::write" : does->does == kind::ungroup ? "group layer::group" : does->does == kind::group_picked ? "group layer::group and add layer::create" : does->does == kind::raise || does->does == kind::lower ? "order layer::update" : takes_pictures ? "paste" : "add layer::create";
                         bool pictures = does->does == kind::paste || does->does == kind::add_pictures;
-                        error(item.where, pictures ? "this screen has no collage, paper or cards that say paste for this button to use" : "this screen has no collage that says " + needs + " for this button to use");
+                        error(item.where, pictures ? "this screen has no collage, paper or cards that say paste for this button to use"
+                                          : zooms  ? "this screen has no collage, nor a picture alone, for this button to zoom"
+                                                   : "this screen has no collage that says " + needs + " for this button to use");
                     }
                 } else if (auto* opening = std::get_if<on_open_item>(&item.node)) {
                     verify_on_open(ns, *opening, item.where, route);

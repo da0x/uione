@@ -994,10 +994,13 @@ namespace one::language {
     // row of a view's list the condition holds for, the row named by what it's of; the
     // other runs a command, as its button would.
     // picture poster.preview fit: the file a view's value, or a field of what's picked,
-    // holds, as wide as its place, all of it fitted in or filling it.
+    // holds, as wide as its place, all of it fitted in or filling it. Alone, it's all of
+    // a workspace's screen, its bars drawn over it, as a photo's own screen is.
     struct picture_item {
         expression_ptr source;
         bool fit = false;
+        bool alone = false;
+        location alone_where;
     };
 
     struct on_open_item {

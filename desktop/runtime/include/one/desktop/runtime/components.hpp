@@ -239,6 +239,27 @@ namespace one::desktop::runtime {
 	// thread, and a copy no longer on its longer side than `longest` where that's given,
 	// as for a card, where the whole of a large one would be wasted.
 	desktop::view picture_of(page& p, const std::string& kept, bool fit, float height, int longest = 0);
+	// A file's picture alone, the whole of the screen, as a photo's own screen is: all of
+	// it fitted in on black, edge to edge, the workspace's bars drawn over it. Zoomed by
+	// the screen's zoom buttons, by Ctrl and =, - or 0, by the wheel with Ctrl held or a
+	// pinch about where they point, and to 100% and back by a double click; dragged, or
+	// scrolled, to move about it once it's larger than fits.
+	desktop::view picture_alone(page& p, const std::string& kept, const std::string& key);
+	// Whether a screen that's only its picture shows its bars and the pointer: for two
+	// seconds after the pointer moves or a key is pressed, then not until either is
+	// again. wake() is told of the pointer's moves, and rest() is the two seconds over,
+	// as a test says without waiting.
+	bool awake();
+	void wake();
+	void rest();
+	// A key pressed, before anything hears it, which wakes them unless it's one held
+	// for another, like Ctrl; and one that, as it turned out, only stepped to the next
+	// picture, which leaves them as they were.
+	void key_down(const key_event& e);
+	void stepped();
+	// A screen is about to be built, which says again whether it's one; one that comes
+	// from another screen wakes them.
+	void screen_begun();
 	// A file's picture as the window draws it, the same way: nothing until it's read,
 	// and an empty one when there's no such file or it isn't a picture.
 	std::optional<desktop::picture> picture_soon(page& p, const std::string& kept, int longest = 0);

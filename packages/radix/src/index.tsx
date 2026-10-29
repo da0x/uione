@@ -2379,39 +2379,64 @@ export const radix: ComponentSet = {
   // A workspace, filling the window: its bar along the top, its toolbar under it,
   // its tools down the left, the work beside what's at its side, and a status line
   // along the bottom.
-  Layout: ({ name, regions, site }) =>
-    name === "workspace" ? (
-      <div className="fixed inset-0 flex min-h-0 flex-col bg-sunken text-ink">
-        {regions.bar && (
-          // The app's name in the middle, in the theme's heading font, as a window's
-          // title is; the bar's lines at the start and light and dark at the end, each
-          // side as wide as the other so the name stays centered.
-          <div className="grid h-11 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 border-b border-line bg-surface px-3">
-            <div className="flex min-w-0 items-center gap-2">{regions.bar}</div>
-            <span className="text-lg leading-none font-semibold" style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}>
-              {site}
-            </span>
-            <span className="flex justify-end">
-              <ThemeToggle />
-            </span>
-          </div>
-        )}
-        {regions.toolbar && (
-          <div role="toolbar" className="flex shrink-0 items-stretch gap-1 overflow-x-auto border-b border-line bg-surface px-2 py-1 [&>[data-at-end]]:ml-auto [&>[data-at-end]~[data-at-end]]:ml-0">
-            {regions.toolbar}
-          </div>
-        )}
-        <div className="flex min-h-0 flex-1">
-          {regions.tools && (
-            // Its tools in a column down its left side, as a drawing app's are.
-            <div role="toolbar" aria-orientation="vertical" className="flex w-12 shrink-0 flex-col items-center gap-0.5 overflow-y-auto border-r border-line bg-surface py-2">
-              {regions.tools}
+  Layout: ({ name, regions, site, alone }) => {
+    // Its bar and toolbar, in their place or, see through, over a picture alone.
+    const over = alone ? "pointer-events-auto bg-surface/85 backdrop-blur" : "bg-surface";
+    const bar = regions.bar && (
+      // The app's name in the middle, in the theme's heading font, as a window's
+      // title is; the bar's lines at the start and light and dark at the end, each
+      // side as wide as the other so the name stays centered.
+      <div className={`grid h-11 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 border-b border-line px-3 ${over}`}>
+        <div className="flex min-w-0 items-center gap-2">{regions.bar}</div>
+        <span className="text-lg leading-none font-semibold" style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}>
+          {site}
+        </span>
+        <span className="flex justify-end">
+          <ThemeToggle />
+        </span>
+      </div>
+    );
+    const toolbar = regions.toolbar && (
+      <div role="toolbar" className={`flex shrink-0 items-stretch gap-1 overflow-x-auto border-b border-line px-2 py-1 [&>[data-at-end]]:ml-auto [&>[data-at-end]~[data-at-end]]:ml-0 ${over}`}>
+        {regions.toolbar}
+      </div>
+    );
+    const tools = regions.tools && (
+      // Its tools in a column down its left side, as a drawing app's are.
+      <div role="toolbar" aria-orientation="vertical" className={`flex w-12 shrink-0 flex-col items-center gap-0.5 overflow-y-auto border-r border-line py-2 ${over}`}>
+        {regions.tools}
+      </div>
+    );
+    const side = regions.side && <aside className={`w-72 shrink-0 overflow-y-auto border-l border-line p-3 ${over}`}>{regions.side}</aside>;
+    const status = regions.status && <div className={`flex shrink-0 items-center gap-4 overflow-hidden whitespace-nowrap border-t border-line px-3 py-1 text-xs text-muted ${over}`}>{regions.status}</div>;
+    // Only its picture, all of the window on black, the rest over it while it's awake:
+    // what's between them is the picture's to point at.
+    if (name === "workspace" && alone) {
+      return (
+        <div className="fixed inset-0 bg-black text-ink" style={alone.awake ? undefined : { cursor: "none" }}>
+          <main className="absolute inset-0">{regions.main}</main>
+          <div className={`pointer-events-none absolute inset-0 flex flex-col ${alone.awake ? "" : "invisible"}`}>
+            {bar}
+            {toolbar}
+            <div className="flex min-h-0 flex-1 justify-between">
+              {tools ?? <span />}
+              {side}
             </div>
-          )}
-          <main className="relative flex min-w-0 flex-1 flex-col gap-4 overflow-auto p-3">{regions.main}</main>
-          {regions.side && <aside className="w-72 shrink-0 overflow-y-auto border-l border-line bg-surface p-3">{regions.side}</aside>}
+            {status}
+          </div>
         </div>
-        {regions.status && <div className="flex shrink-0 items-center gap-4 overflow-hidden whitespace-nowrap border-t border-line bg-surface px-3 py-1 text-xs text-muted">{regions.status}</div>}
+      );
+    }
+    return name === "workspace" ? (
+      <div className="fixed inset-0 flex min-h-0 flex-col bg-sunken text-ink">
+        {bar}
+        {toolbar}
+        <div className="flex min-h-0 flex-1">
+          {tools}
+          <main className="relative flex min-w-0 flex-1 flex-col gap-4 overflow-auto p-3">{regions.main}</main>
+          {side}
+        </div>
+        {status}
       </div>
     ) : name === "two_columns" ? (
       <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
@@ -2428,7 +2453,8 @@ export const radix: ComponentSet = {
           </div>
         ))}
       </div>
-    ),
+    );
+  },
 
   // A toolbar's group: its tools, then its name under them, and a line after it; a
   // small one's tools in rows as long as it says, or two rows, read a row at a time,

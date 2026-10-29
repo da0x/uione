@@ -193,10 +193,11 @@ export const plain: ComponentSet = {
     </span>
   ),
 
-  Layout: ({ name, regions, site }) => (
+  // Only its picture, its other regions hidden while they're not awake.
+  Layout: ({ name, regions, site, alone }) => (
     <>
       {Object.entries(regions).map(([region, content]) => (
-        <div key={region} data-region={region}>
+        <div key={region} data-region={region} hidden={alone && !alone.awake && region !== "main"}>
           {name === "workspace" && region === "bar" && site && <strong>{site} </strong>}
           {content}
         </div>

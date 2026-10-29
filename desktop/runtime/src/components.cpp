@@ -341,8 +341,12 @@ namespace one::desktop::runtime {
 		auto go = [&p, to] {
 			if (!to.empty()) p.open_instead(to);
 		};
+		// By its key, it leaves a picture's bars hidden, as they were.
 		if (!off) {
-			for (const auto& k : keys) p.on_key(k, go);
+			for (const auto& k : keys) p.on_key(k, [go] {
+				go();
+				stepped();
+			});
 		}
 		std::string drawn = desktop::has_icon(icon) ? icon : "";
 		if (auto small = p.in_group()) return desktop::tool_button(drawn, *small ? hint_of(words, keys) : words, std::move(go), {.large = !*small, .off = off});

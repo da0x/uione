@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <map>
 #include <thread>
 
@@ -93,6 +94,112 @@ namespace one::desktop::runtime {
 		return desktop::row(std::move(all)).spacing(6).align(align::center);
 	}
 
+	namespace {
+		// Whether a screen that's only its picture shows its bars and the pointer, until
+		// when, and whether a wait to see is on its way: one at a time, however often
+		// the pointer moves.
+		state<bool> woken_now(true);
+		std::chrono::steady_clock::time_point woken_until;
+		bool waiting = false;
+		// Whether the screen shown is one, which is all the wait is for, and whether the
+		// one built before it was.
+		bool shown_alone = false, was_alone = false;
+		bool awake_before = true;  // as they were before the key being heard
+
+		void wait_out() {
+			if (waiting || !shown_alone || !posting()) return;
+			waiting = true;
+			std::thread([until = woken_until] {
+				std::this_thread::sleep_until(until);
+				post([] {
+					waiting = false;
+					if (std::chrono::steady_clock::now() >= woken_until) rest();
+					else wait_out();
+				});
+			}).detach();
+		}
+
+		// What's over a picture alone: its bars at the top, its tools down the left, its
+		// side down the right and its status line along the bottom, each as tall or wide
+		// as it is, the picture under them all, filling the screen whether they're shown
+		// or not, so it doesn't move when they come and go. What's pointed at between
+		// them is the picture.
+		class alone_element : public desktop::element {
+		public:
+			enum class edge { top, left, right, bottom };
+			alone_element(desktop::view picture, std::vector<std::pair<edge, desktop::view>> over) {
+				children.push_back(std::move(picture).take());
+				for (auto& [at, v] : over) {
+					edges_.push_back(at);
+					children.push_back(std::move(v).take());
+				}
+				for (auto& c : children) c->parent = this;
+			}
+			void place_content(const desktop::rect& a) override {
+				children[0]->place(a);
+				float top = a.y, bottom = a.y + a.height;
+				for (std::size_t i = 1; i < children.size(); ++i) {
+					auto& c = *children[i];
+					if (edges_[i - 1] == edge::top) {
+						float h = c.measure(a.width).height;
+						c.place({a.x, top, a.width, h});
+						top += h;
+					}
+				}
+				for (std::size_t i = children.size(); i-- > 1;) {
+					auto& c = *children[i];
+					if (edges_[i - 1] == edge::bottom) {
+						float h = c.measure(a.width).height;
+						bottom -= h;
+						c.place({a.x, bottom, a.width, h});
+					}
+				}
+				for (std::size_t i = 1; i < children.size(); ++i) {
+					auto& c = *children[i];
+					edge at = edges_[i - 1];
+					if (at != edge::left && at != edge::right) continue;
+					float w = std::min(a.width, c.measure(a.width).width);
+					c.place({at == edge::left ? a.x : a.x + a.width - w, top, w, std::max(0.f, bottom - top)});
+				}
+			}
+			desktop::element* hit(desktop::point at) override {
+				if (!frame.contains(at)) return nullptr;
+				for (std::size_t i = children.size(); i-- > 0;) {
+					if (auto* found = children[i]->hit(at)) return found;
+				}
+				return nullptr;
+			}
+
+		private:
+			std::vector<edge> edges_;
+		};
+	}  // namespace
+
+	bool awake() { return woken_now.get(); }
+
+	void wake() {
+		woken_until = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+		if (!woken_now.peek()) woken_now.set(true);
+		wait_out();
+	}
+
+	void rest() {
+		if (woken_now.peek()) woken_now.set(false);
+	}
+
+	void key_down(const key_event& e) {
+		// A key held for another, like Ctrl for the wheel, isn't one pressed.
+		if (e.symbol >= 0xffe1 && e.symbol <= 0xffee) return;
+		awake_before = woken_now.peek();
+		wake();
+	}
+
+	void stepped() {
+		if (!awake_before) rest();
+	}
+
+	void screen_begun() { was_alone = std::exchange(shown_alone, false); }
+
 	desktop::view workspace(page& p, std::vector<region> regions) {
 		p.fill();
 		const auto& t = current_theme();
@@ -104,39 +211,63 @@ namespace one::desktop::runtime {
 			auto found = by.find(name);
 			return found == by.end() ? desktop::view() : std::move(found->second);
 		};
+		// A bar or a toolbar as it's drawn, in its place or over a picture.
+		auto drawn_across = [&](const char* across, desktop::view v) {
+			// Filling the window, its bar says the app's name in the middle, in the theme's
+			// heading font, as a window's title is, and switches light and dark at its end,
+			// as the site's would: its lines and the switch each on a side as wide as the
+			// other, so the name stays centered.
+			if (std::string_view(across) == "bar") {
+				auto mark = t.heading(20);
+				mark.line_height = 1.1f;
+				std::vector<desktop::view> start, end;
+				start.push_back(std::move(v));
+				start.push_back(desktop::spacer());
+				end.push_back(desktop::spacer());
+				if (offers_dark()) end.push_back(desktop::tool_button(dark() ? "sun" : "moon", dark() ? "Light" : "Dark", [] { dark(!dark()); }));
+				std::vector<desktop::view> bar;
+				bar.push_back(desktop::row(std::move(start)).spacing(6).align(align::center).width(0).grow());
+				if (std::string name = app_name(); !name.empty()) bar.push_back(desktop::text(std::move(name), mark));
+				bar.push_back(desktop::row(std::move(end)).spacing(6).align(align::center).width(0).grow());
+				v = desktop::row(std::move(bar)).spacing(6).align(align::center);
+			}
+			// A toolbar's groups with a line between each and the next, as the web draws them.
+			if (std::string_view(across) == "toolbar") {
+				auto groups = std::move(v).take();
+				std::vector<desktop::view> lined;
+				for (auto& g : groups->children) {
+					if (!lined.empty()) lined.push_back(desktop::spacer().grow(0).width(1).background({.fill = t.line}));
+					lined.push_back(desktop::view(std::move(g)));
+				}
+				v = desktop::row(std::move(lined)).align(align::stretch);
+			}
+			return v;
+		};
+		// Only its picture: its bars over it, while the pointer's moved lately, and not
+		// at all while it fills the screen.
+		bool alone = p.take_alone();
+		shown_alone = alone;
+		if (alone && !was_alone) wake();
+		if (alone) {
+			std::vector<std::pair<alone_element::edge, desktop::view>> over;
+			if (awake() && !fullscreen()) {
+				desktop::color veiled = t.surface;
+				veiled.alpha = 0.86f;
+				for (const char* across : {"bar", "toolbar"}) {
+					if (auto v = taken(across); v.get()) over.emplace_back(alone_element::edge::top, drawn_across(across, std::move(v)).padding(edges(6, 12)).background({.fill = veiled}));
+				}
+				if (auto tools = taken("tools"); tools.get()) over.emplace_back(alone_element::edge::left, std::move(tools).padding(edges(8, 6)).background({.fill = veiled}));
+				if (auto side = taken("side"); side.get()) over.emplace_back(alone_element::edge::right, desktop::scroll(std::move(side).padding(edges(12, 12))).width(288).background({.fill = veiled}));
+				if (auto status = taken("status"); status.get()) over.emplace_back(alone_element::edge::bottom, std::move(status).padding(edges(4, 12)).background({.fill = veiled}));
+			}
+			return desktop::view(std::make_unique<alone_element>(taken("main").grow(), std::move(over))).grow();
+		}
 		// Filling the screen, it's only its work, like a picture on a wall.
 		if (fullscreen()) return taken("main").grow();
 		std::vector<desktop::view> parts;
 		for (const char* across : {"bar", "toolbar"}) {
 			if (auto v = taken(across); v.get()) {
-				// Filling the window, its bar says the app's name in the middle, in the theme's
-				// heading font, as a window's title is, and switches light and dark at its end,
-				// as the site's would: its lines and the switch each on a side as wide as the
-				// other, so the name stays centered.
-				if (std::string_view(across) == "bar") {
-					auto mark = t.heading(20);
-					mark.line_height = 1.1f;
-					std::vector<desktop::view> start, end;
-					start.push_back(std::move(v));
-					start.push_back(desktop::spacer());
-					end.push_back(desktop::spacer());
-					if (offers_dark()) end.push_back(desktop::tool_button(dark() ? "sun" : "moon", dark() ? "Light" : "Dark", [] { dark(!dark()); }));
-					std::vector<desktop::view> bar;
-					bar.push_back(desktop::row(std::move(start)).spacing(6).align(align::center).width(0).grow());
-					if (std::string name = app_name(); !name.empty()) bar.push_back(desktop::text(std::move(name), mark));
-					bar.push_back(desktop::row(std::move(end)).spacing(6).align(align::center).width(0).grow());
-					v = desktop::row(std::move(bar)).spacing(6).align(align::center);
-				}
-				// A toolbar's groups with a line between each and the next, as the web draws them.
-				if (std::string_view(across) == "toolbar") {
-					auto groups = std::move(v).take();
-					std::vector<desktop::view> lined;
-					for (auto& g : groups->children) {
-						if (!lined.empty()) lined.push_back(desktop::spacer().grow(0).width(1).background({.fill = t.line}));
-						lined.push_back(desktop::view(std::move(g)));
-					}
-					v = desktop::row(std::move(lined)).align(align::stretch);
-				}
+				v = drawn_across(across, std::move(v));
 				parts.push_back(std::move(v).padding(edges(6, 12)).background({.fill = t.surface}));
 				parts.push_back(desktop::divider());
 			}

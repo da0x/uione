@@ -1687,15 +1687,173 @@ namespace one::desktop::runtime {
 		return file ? read_soon(*file, longest) : std::optional(desktop::picture());
 	}
 
+	namespace {
+		// A file's picture to draw now: the whole of it, wanted for as long as the page
+		// is open, or a copy no longer than `longest`; until it's read, the copy a card
+		// drew of it, when there's one.
+		desktop::picture shown_now(page& p, const std::string& kept, int longest) {
+			auto file = kept.empty() ? std::nullopt : p.file_here(kept);
+			std::optional<std::weak_ptr<void>> wanted;
+			if (longest <= 0) wanted = p.kept<std::shared_ptr<void>>("pictures wanted", std::make_shared<bool>()).peek();
+			auto read = file ? read_soon(*file, longest, wanted) : std::optional(desktop::picture());
+			if (!read && longest <= 0) read = pictures_kept(640).peek(std::format("{} {}", file->string(), 640));
+			return read.value_or(desktop::picture());
+		}
+
+		// How a picture alone is looked at: how many times larger than fitted, the point
+		// of it in the middle of the screen, in fractions of its width and height, and
+		// where it was last drawn, as large as it was then, for what the pointer does.
+		struct looked_at {
+			float times = 1;
+			float x = 0.5f, y = 0.5f;
+			desktop::rect area;
+			float wide = 0, high = 0;
+			double scale = 1;
+			std::optional<desktop::point> held;  // where a drag is, while one is
+		};
+
+		// Where it's drawn: fitted, then as many times larger as it's zoomed, its point in
+		// the middle, but never past its edges once it's larger than the screen.
+		desktop::rect drawn_at(const looked_at& l) {
+			const desktop::rect& a = l.area;
+			if (l.wide <= 0 || l.high <= 0) return a;
+			float s = std::min(a.width / l.wide, a.height / l.high) * l.times;
+			float w = l.wide * s, h = l.high * s;
+			float x = a.x + a.width / 2 - l.x * w, y = a.y + a.height / 2 - l.y * h;
+			x = w <= a.width ? a.x + (a.width - w) / 2 : std::clamp(x, a.x + a.width - w, a.x);
+			y = h <= a.height ? a.y + (a.height - h) / 2 : std::clamp(y, a.y + a.height - h, a.y);
+			return {x, y, w, h};
+		}
+
+		// Its point in the middle, as it's drawn, so a drag past an edge doesn't build up.
+		void settled(looked_at& l) {
+			desktop::rect r = drawn_at(l);
+			if (r.width <= 0 || r.height <= 0) return;
+			l.x = (l.area.x + l.area.width / 2 - r.x) / r.width;
+			l.y = (l.area.y + l.area.height / 2 - r.y) / r.height;
+		}
+
+		// How many times larger than fitted it's drawn at 100%, a pixel of it a pixel of
+		// the screen's.
+		float actual(const looked_at& l) {
+			if (l.wide <= 0 || l.high <= 0 || l.area.width <= 0 || l.area.height <= 0) return 1;
+			return static_cast<float>(1 / (std::min(l.area.width / l.wide, l.area.height / l.high) * l.scale));
+		}
+
+		// Zoomed by `by` about a point, which stays where it is: never smaller than fitted,
+		// nor larger than eight times 100%.
+		void zoomed(looked_at& l, float by, desktop::point at) {
+			desktop::rect before = drawn_at(l);
+			if (before.width <= 0 || before.height <= 0) return;
+			float fx = (at.x - before.x) / before.width, fy = (at.y - before.y) / before.height;
+			l.times = std::clamp(l.times * by, 1.f, std::max(4.f, 8 * actual(l)));
+			if (l.times <= 1.0001f) {
+				l.times = 1, l.x = l.y = 0.5f;
+				return;
+			}
+			float s = std::min(l.area.width / l.wide, l.area.height / l.high) * l.times;
+			l.x = fx + (l.area.x + l.area.width / 2 - at.x) / (l.wide * s);
+			l.y = fy + (l.area.y + l.area.height / 2 - at.y) / (l.high * s);
+			settled(l);
+		}
+
+		void moved(looked_at& l, float dx, float dy) {
+			desktop::rect r = drawn_at(l);
+			if (r.width <= 0 || r.height <= 0) return;
+			l.x += dx / r.width, l.y += dy / r.height;
+			settled(l);
+		}
+
+		desktop::point middle(const looked_at& l) { return {l.area.x + l.area.width / 2, l.area.y + l.area.height / 2}; }
+	}  // namespace
+
+	desktop::view picture_alone(page& p, const std::string& kept, const std::string& key) {
+		p.alone();
+		// Kept per page, so the next picture stepped to is fitted again; what's done to
+		// it is drawn as the window is next, which what's done asks for.
+		auto l = p.kept<std::shared_ptr<looked_at>>("alone " + key, std::make_shared<looked_at>()).peek();
+		auto zoom = [l](float by) { zoomed(*l, by, middle(*l)); };
+		auto fit = [l] { l->times = 1, l->x = l->y = 0.5f; };
+		for (const char* k : {"ctrl+equal", "ctrl+plus"}) p.on_key(k, [zoom] { zoom(1.25f); });
+		p.on_key("ctrl+minus", [zoom] { zoom(0.8f); });
+		p.on_key("ctrl+0", fit);
+		// What the screen's zoom buttons asked of it.
+		if (auto asked = p.kept<std::string>("collage do " + key); !asked.get().empty()) {
+			std::string does = asked.peek();
+			asked.set("");
+			if (does == "zoom in") zoomed(*l, 1.25f, middle(*l));
+			else if (does == "zoom out") zoomed(*l, 0.8f, middle(*l));
+			else if (does == "zoom to fit") fit();
+		}
+		desktop::picture shown = shown_now(p, kept, 0);
+		bool shows_pointer = awake();
+		return desktop::drawing(
+		           [shown, l](desktop::canvas& c, desktop::rect area) {
+			           // On black, as a photo is looked at, whatever the theme.
+			           c.box(area, {.fill = desktop::color::hex(0x000000)});
+			           l->area = area;
+			           l->scale = c.scale();
+			           if (!shown || area.width <= 0 || area.height <= 0) return;
+			           l->wide = static_cast<float>(shown.width()), l->high = static_cast<float>(shown.height());
+			           auto inside = c.clip(area);
+			           c.picture(shown, drawn_at(*l));
+		           },
+		           {.on_press =
+		                [l](desktop::point at, int clicks) {
+			                // Twice, to 100% about where it's pressed, or back to fitted.
+			                if (clicks == 2) {
+				                if (l->times > 1.0001f) {
+					                l->times = 1, l->x = l->y = 0.5f;
+				                } else {
+					                float to = actual(*l);
+					                zoomed(*l, to > 1.01f ? to : 2.f, at);
+				                }
+				                return true;
+			                }
+			                if (l->times <= 1.0001f) return false;
+			                l->held = at;
+			                return true;
+		                },
+		            .on_drag =
+		                [l](desktop::point at) {
+			                if (!l->held) return;
+			                moved(*l, l->held->x - at.x, l->held->y - at.y);
+			                l->held = at;
+			                desktop::runtime::redraw();
+		                },
+		            .on_release =
+		                [l](desktop::point) {
+			                l->held.reset();
+		                },
+		            // With Ctrl, the wheel zooms about the pointer, as a collage's does; without,
+		            // it moves about a picture larger than fits, as a touchpad's two fingers do.
+		            .on_wheel =
+		                [l](desktop::point at, float dx, float dy) {
+			                if (desktop::held().control) {
+				                zoomed(*l, std::exp(-dy * 0.01f), at);
+				                return true;
+			                }
+			                if (l->times <= 1.0001f) return false;
+			                if (desktop::held().shift) std::swap(dx, dy);
+			                moved(*l, dx, dy);
+			                return true;
+		                },
+		            .on_pinch =
+		                [l](desktop::point at, float by) {
+			                zoomed(*l, by, at);
+			                return true;
+		                },
+		            .cursor =
+		                [l, shows_pointer](desktop::point) {
+			                if (!shows_pointer) return desktop::cursor::hidden;
+			                if (l->held) return desktop::cursor::grabbing;
+			                return l->times > 1.0001f ? desktop::cursor::grab : desktop::cursor::normal;
+		                }})
+		    .grow();
+	}
+
 	desktop::view picture_of(page& p, const std::string& kept, bool fit, float height, int longest) {
-		auto file = kept.empty() ? std::nullopt : p.file_here(kept);
-		// The whole of one is wanted for as long as the page is open.
-		std::optional<std::weak_ptr<void>> wanted;
-		if (longest <= 0) wanted = p.kept<std::shared_ptr<void>>("pictures wanted", std::make_shared<bool>()).peek();
-		auto read = file ? read_soon(*file, longest, wanted) : std::optional(desktop::picture());
-		// Until it's read, the copy a card drew of it, when there's one.
-		if (!read && longest <= 0) read = pictures_kept(640).peek(std::format("{} {}", file->string(), 640));
-		desktop::picture shown = read.value_or(desktop::picture());
+		desktop::picture shown = shown_now(p, kept, longest);
 		return desktop::drawing([shown, fit](desktop::canvas& c, desktop::rect area) {
 			       const auto& t = current_theme();
 			       c.box(area, {.fill = t.sunken});

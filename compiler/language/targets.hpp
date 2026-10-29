@@ -129,6 +129,7 @@ namespace one::language {
         drawn_by{"table.reorder", "reordering a table", everywhere},
         drawn_by{"table.picture", "a picture on each table row", "web desktop"},
         drawn_by{"picture", "a picture of a file a value holds", "web desktop"},
+        drawn_by{"picture.alone", "a picture alone on its screen, zoomed as it's looked at", "web desktop"},
         drawn_by{"table.hide", "a table's hide when empty", everywhere},
         drawn_by{"table.only", "a table's only", everywhere},
         drawn_by{"table.color", "a table's color", everywhere},
@@ -403,6 +404,7 @@ namespace one::language {
                         if (n.match_colors) use("collage.match_colors");
                     } else if constexpr (std::is_same_v<T, picture_item>) {
                         use("picture");
+                        if (n.alone) use("picture.alone");
                     } else if constexpr (std::is_same_v<T, paper_item>) {
                         use("paper");
                         if (n.outline) use("paper.outline");

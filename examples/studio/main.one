@@ -193,6 +193,10 @@ namespace studio at / {
 		size = sum(clippings).picture_bytes
 	}
 
+	view clipping_page per clipping {
+		name  image  picture_bytes
+	}
+
 	view notes_page per poster {
 		title
 		passages = each passage in poster {
@@ -309,7 +313,7 @@ namespace studio at / {
 			}
 		}
 		main {
-			cards clippings_page.clippings mosaic {
+			cards clippings_page.clippings mosaic link /clippings/:clipping {
 				picture image
 				name
 				add clipping::create
@@ -319,6 +323,33 @@ namespace studio at / {
 		status {
 			text "{clippings_page.total} clippings, {clippings_page.size} bytes"
 			messages
+		}
+	}
+
+	// A clipping on its own, all of the screen, stepped through as they're set out, its
+	// bars over it until the pointer's still.
+	screen "{clipping_page.name}" /clippings/:clipping {
+		layout workspace
+		bar {
+			link /clippings "Clippings" icon gallery key escape
+		}
+		toolbar {
+			group "Clipping" {
+				link previous in clippings_page.clippings "Previous" icon previous key left
+				link next in clippings_page.clippings "Next" icon next key right
+			}
+			group "View" small at end {
+				zoom out "Smaller" icon zoom_out
+				zoom in "Larger" icon zoom_in
+				zoom to fit "Fit" icon zoom_fit
+				full screen "Full screen" icon fullscreen key f11
+			}
+		}
+		main {
+			picture clipping_page.image fit alone
+		}
+		status {
+			text "{clipping_page.name}, {clipping_page.picture_bytes} bytes"
 		}
 	}
 

@@ -998,6 +998,68 @@ TEST_CASE("a record's screen steps to the one before or after it in a list's own
     CHECK(messages(nameless) == std::vector<std::string>{"44: a link next steps from one record to another, so its screen's address names one, like /things/:thing"});
 }
 
+TEST_CASE("a picture alone is all of a workspace's screen, its bars over it, zoomed by the screen's zoom buttons") {
+    const std::string pieces = R"(namespace studio at / {
+	entity clipping {
+		name   text
+		image  file
+	}
+
+	view archive {
+		clippings = each clipping {
+			order by name
+			name
+		}
+	}
+
+	view clipping_page per clipping {
+		name  image
+	}
+
+	screen "{clipping_page.name}" /clippings/:clipping {
+		layout workspace
+		toolbar {
+			link next in archive.clippings "Next" icon next key right
+			zoom in "Larger" icon zoom_in
+			zoom to fit "Fit" icon zoom_fit
+		}
+		main {
+			picture clipping_page.image fit alone
+		}
+		status {
+			text "{clipping_page.name}"
+		}
+	}
+}
+)";
+    CHECK(messages(project + pieces).empty());
+    auto files = built(project + pieces);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    CHECK(native.find(R"(region{"main", items(picture_alone(p, at(clipping_page, "image").as_string(), "/clippings/:clipping collage"))})") != std::string::npos);
+    CHECK(native.find(R"(collage_button(p, {.key = "/clippings/:clipping collage", .does = "zoom in", .label = "Larger", .icon = "zoom_in"}))") != std::string::npos);
+    CHECK(web.find(R"(<Layout name="workspace" alone>)") != std::string::npos);
+    CHECK(web.find(R"(<Picture source={(clippingPage.data?.["image"] ?? null)} fit alone zoom="/clippings/:clipping collage" />)") != std::string::npos);
+    CHECK(web.find(R"(<CollageButton collage="/clippings/:clipping collage" does="zoom to fit" label="Fit" icon="zoom_fit" />)") != std::string::npos);
+    auto changed = [&](const std::string& from, const std::string& to) {
+        std::string source = project + pieces;
+        source.replace(source.find(from), from.size(), to);
+        return messages(source);
+    };
+    // Shown whole, the only line of main, on a workspace's screen.
+    CHECK(changed("image fit alone", "image fill alone") == std::vector<std::string>{"33: a picture alone is shown whole, fitted in, so it says fit alone"});
+    CHECK(changed("\t\t\tpicture clipping_page.image fit alone\n", "\t\t\tpicture clipping_page.image fit alone\n\t\t\ttext \"{clipping_page.name}\"\n") ==
+          std::vector<std::string>{"33: a picture alone is all of its screen, so it's the only line in main, as in main { picture clipping_page.image fit alone }"});
+    CHECK(changed("\t\tlayout workspace\n", "\t\tlayout two_columns\n") ==
+          std::vector<std::string>{"27: layout two_columns has no region toolbar; its regions are main and side", "35: layout two_columns has no region status; its regions are main and side",
+                                   "33: a picture alone is all of a workspace's screen, its bars drawn over it, so its screen says layout workspace"});
+    // Without it, there's nothing for a zoom button to zoom.
+    CHECK(changed("image fit alone", "image fit") == std::vector<std::string>{"29: this screen has no collage, nor a picture alone, for this button to zoom",
+                                                                            "30: this screen has no collage, nor a picture alone, for this button to zoom"});
+}
+
 TEST_CASE("a collage reads each part from the field named like it, or from the one it says, and hands its runtimes which") {
     const std::string noted = R"(namespace studio at / {
 	entity poster {

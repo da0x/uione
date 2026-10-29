@@ -164,6 +164,7 @@ namespace one::desktop::runtime {
 		// Keyed by where it is, so a page keeps nothing of the one before it.
 		std::string key = std::format("{}#{}", here.address(), nav.depth());
 		bool alone = false;
+		screen_begun();
 		desktop::view shown = page_view(nav, here, &alone).key(key).grow();
 		if (alone) return shown;
 		auto brand = t.strong();
@@ -454,7 +455,11 @@ namespace one::desktop::runtime {
 			return shown;
 		});
 		window.on_key = [&](const key_event& e) { return key(nav, e); };
-		window.on_key_first = [](const key_event& e) { return typed_into && typed_into(e); };
+		window.on_key_first = [](const key_event& e) {
+			key_down(e);
+			return typed_into && typed_into(e);
+		};
+		window.on_pointer = [] { wake(); };
 		// Started with agents that stop when it quits, as publish starts its own, it asks
 		// before closing while they're working on something.
 		const char* stops = std::getenv("ONE_QUIT_STOPS_AGENTS");

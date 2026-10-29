@@ -179,7 +179,12 @@ namespace one::desktop {
 			w.placed_scale = w.scale;
 			w.needs_placing = false;
 			auto& input = w.owner->input;
-			if (input && input->pointer_over == &w) point_to(w, input->pointer_at);
+			if (input && input->pointer_over == &w) {
+				point_to(w, input->pointer_at);
+				// What it's over now may look otherwise, as a picture's pointer hides once
+				// it's been still.
+				point_again(w);
+			}
 		}
 	}
 
@@ -223,6 +228,7 @@ namespace one::desktop {
 		in_window context(w);
 		if (w.dragging) w.dragging->drag(at);
 		point_to(w, at);
+		if (w.outside && w.outside->on_pointer) w.outside->on_pointer();
 		w.redraw();
 	}
 
@@ -280,6 +286,18 @@ namespace one::desktop {
 		for (element* e = w.root->hit(at); e; e = e->parent) {
 			if (e->wheel(at, dx, dy)) {
 				point_to(w, at);
+				w.redraw();
+				return;
+			}
+		}
+	}
+
+	void deliver_pinch(window::state& w, one::desktop::point at, float by) {
+		bring_up_to_date(w);
+		in_window context(w);
+		if (!w.root) return;
+		for (element* e = w.root->hit(at); e; e = e->parent) {
+			if (e->pinch(at, by)) {
 				w.redraw();
 				return;
 			}

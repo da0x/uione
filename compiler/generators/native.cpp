@@ -1883,9 +1883,12 @@ namespace one::generators {
                 } else if (auto* paper_item = std::get_if<language::paper_item>(&item.node)) {
                     code = paper(parts, ns, *paper_item);
                 } else if (auto* picture = std::get_if<language::picture_item>(&item.node)) {
-                    // picture poster.preview fit: as wide as its place, 320 tall.
+                    // picture poster.preview fit: as wide as its place, 320 tall; alone, all of
+                    // its screen, zoomed by the screen's zoom buttons.
                     std::set<std::string> read;
-                    code = "picture_of(p, " + condition_of(parts, ns, *picture->source, read) + ".as_string(), " + (picture->fit ? "true" : "false") + ", 320)";
+                    std::string source = condition_of(parts, ns, *picture->source, read) + ".as_string()";
+                    if (picture->alone) code = "picture_alone(p, " + source + ", " + str(collage_key_) + ")";
+                    else code = "picture_of(p, " + source + ", " + (picture->fit ? "true" : "false") + ", 320)";
                 } else if (auto* insert = std::get_if<language::paper_insert>(&item.node)) {
                     // A block made after the caret's, by the screen's paper.
                     std::string given;

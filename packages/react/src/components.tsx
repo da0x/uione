@@ -13,6 +13,7 @@ import { partsOf } from "./keys.js";
 import { ShownPath, fill, useConfirmContext, useFill, usePageTitle, useSignIn, useSite } from "./app.js";
 import { hintOf, rememberGiven, setPicked as pickRow, useInGroup, useInOptions, useLastGiven, useOverRun, usePicturesHanded, useStyled, takeInTurn, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
 import { useSaying } from "./said.js";
+import { PictureAlone, stepped, useAwakeOn } from "./alone.js";
 import { pictureSize } from "./vectors.js";
 import type { BoardCard, CanvasRegion, ChartProps, FieldProps, Filtered, Hue, LandingFeature, LandingProps, LinkProps, PipelineRow, TrackStep } from "./contract.js";
 import { readValue, scaleTop, seriesOf, toneOfState, valueAt, type ChartUnit } from "./series.js";
@@ -95,7 +96,15 @@ export function StepLink({
   const go = () => {
     if (target) void navigate(target, { replace: true });
   };
-  useKeys(keys, go, !off && target !== undefined);
+  // By its key, it leaves a picture's bars hidden, as they were.
+  useKeys(
+    keys,
+    () => {
+      go();
+      stepped();
+    },
+    !off && target !== undefined,
+  );
   return (
     <ui.Button kind="secondary" icon={icon} tool={tool} disabled={off || target === undefined} hint={hintOf(typeof children === "string" ? children : "", keys)} onClick={go}>
       {children}
@@ -403,11 +412,14 @@ export function Region({ children }: { name: string; children?: ReactNode }) {
 // A screen laid out in regions, gathered from the Regions inside it by name. A
 // workspace fills the window, with nothing of the site around it, so its bar says
 // the app's name and switches light and dark, as the site's would.
-export function Layout({ name, children }: { name: string; children?: ReactNode }) {
+export function Layout({ name, alone = false, children }: { name: string; alone?: boolean; children?: ReactNode }) {
   const ui = useUI();
   const site = useSite();
   useFill(name === "workspace");
-  // Filling the screen, a workspace is only its work, like a picture on a wall.
+  // Only its picture: its bars over it while the pointer's moved lately.
+  const awake = useAwakeOn(alone);
+  // Filling the screen, a workspace is only its work, like a picture on a wall; a
+  // picture alone keeps its bars, hidden, for their keys.
   const full = useSyncExternalStore(
     (changed) => {
       if (typeof document === "undefined") return () => {};
@@ -419,11 +431,11 @@ export function Layout({ name, children }: { name: string; children?: ReactNode 
   );
   const regions: Record<string, ReactNode> = {};
   Children.forEach(children, (child) => {
-    if (isValidElement<{ name: string; children?: ReactNode }>(child) && child.type === Region && (!full || name !== "workspace" || child.props.name === "main")) {
+    if (isValidElement<{ name: string; children?: ReactNode }>(child) && child.type === Region && (!full || name !== "workspace" || alone || child.props.name === "main")) {
       regions[child.props.name] = child.props.children;
     }
   });
-  return <ui.Layout name={name} regions={regions} site={site.name} />;
+  return <ui.Layout name={name} regions={regions} site={site.name} alone={alone ? { awake: awake && !full } : undefined} />;
 }
 
 // Buttons one after another, in a row.
@@ -2767,11 +2779,13 @@ function useAddresses(rows: Row[], field: string | undefined, longest?: number):
 }
 
 // picture poster.preview fit: the file a value holds, as wide as its place and 320
-// tall, all of it fitted in or filling it.
-export function Picture({ source, fit = false }: { source: unknown; fit?: boolean }) {
+// tall, all of it fitted in or filling it; alone, all of its screen, zoomed by the
+// screen's zoom buttons, asked by `zoom`.
+export function Picture({ source, fit = false, alone = false, zoom = "" }: { source: unknown; fit?: boolean; alone?: boolean; zoom?: string }) {
   const ui = useUI();
   const path = typeof source === "string" ? source : "";
   const addresses = useAddresses(path ? [{ id: path, path }] : [], "path");
+  if (alone) return <PictureAlone source={addresses[path]} zoom={zoom} />;
   return <ui.FilePicture source={addresses[path]} fit={fit} />;
 }
 

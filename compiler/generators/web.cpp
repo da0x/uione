@@ -437,7 +437,15 @@ namespace one::generators {
                     if (opens && !regions.empty()) on_open(items, parts, ns, s->items);
                     parts.components.insert("Layout");
                     parts.components.insert("Region");
-                    items.open("<Layout name=" + web_detail::js_string(layout) + ">");
+                    // Only its picture, its bars drawn over it while the pointer's moved lately.
+                    bool alone = std::ranges::any_of(regions, [](const language::screen_item* r) {
+                        const auto& inside = std::get<language::content_block>(r->node).items;
+                        return std::ranges::any_of(inside, [](const language::screen_item& i) {
+                            auto* picture = std::get_if<language::picture_item>(&i.node);
+                            return picture && picture->alone;
+                        });
+                    });
+                    items.open("<Layout name=" + web_detail::js_string(layout) + (alone ? " alone" : "") + ">");
                     if (regions.empty()) {
                         items.open("<Region name=\"main\">");
                         screen_items(items, parts, ns, s->items, s->items);
@@ -1608,11 +1616,13 @@ namespace one::generators {
                                                   [](const language::screen_item& it) { return std::holds_alternative<language::on_open_item>(it.node); });
                     if (first_one) on_open(out, parts, ns, items);
                 } else if (auto* picture = std::get_if<language::picture_item>(&item.node)) {
-                    // picture poster.preview fit: as wide as its place, 320 tall.
+                    // picture poster.preview fit: as wide as its place, 320 tall; alone, all of
+                    // its screen, zoomed by the screen's zoom buttons.
                     parts.components.insert("Picture");
                     shown_while(out, parts, ns, item, [&] {
                         std::set<std::string> read;
-                        out.line("<Picture source={" + condition_of(parts, ns, *picture->source, read) + "}" + (picture->fit ? " fit" : "") + " />");
+                        std::string alone = picture->alone ? " alone zoom=" + web_detail::js_string(collage_key_) : "";
+                        out.line("<Picture source={" + condition_of(parts, ns, *picture->source, read) + "}" + (picture->fit ? " fit" : "") + alone + " />");
                     });
                 } else if (auto* insert = std::get_if<language::paper_insert>(&item.node)) {
                     // A block made after the caret's, by the screen's paper.

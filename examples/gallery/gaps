@@ -16,6 +16,7 @@ terminal cards.picture
 terminal cards.paste
 terminal cards.mosaic
 terminal picture
+terminal picture.alone
 terminal collage.copy
 terminal collage.crop
 terminal collage.draw

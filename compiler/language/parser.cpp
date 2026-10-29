@@ -2420,12 +2420,13 @@ namespace one::language {
                 return {where, std::move(pipeline), std::move(shown_when)};
             }
             // collage poster_page.layers size width height { ... }: a picture made of layers.
-            // picture poster.preview fit: the file a value holds, shown.
+            // picture poster.preview fit: the file a value holds, shown; alone, all of its screen.
             if (at_word("picture") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::dot) {
                 advance();
                 picture_item picture;
                 picture.source = parse_expression();
                 if (at_word("fit") || at_word("fill")) picture.fit = advance().text == "fit";
+                if (at_word("alone")) picture.alone_where = advance().where, picture.alone = true;
                 expression_ptr shown_when = shown_while();
                 end_line();
                 return {where, std::move(picture), std::move(shown_when)};

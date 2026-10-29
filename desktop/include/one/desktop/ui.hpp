@@ -53,7 +53,9 @@ namespace one::desktop {
 
 	enum class align { start, center, end, stretch };
 
-	enum class cursor { normal, pointer, text, grab, grabbing, resize_across, resize_up_down, move, resize_falling, resize_rising, crosshair };
+	// What the pointer looks like; hidden, it's not drawn at all, as over a picture
+	// looked at while it's still.
+	enum class cursor { normal, pointer, text, grab, grabbing, resize_across, resize_up_down, move, resize_falling, resize_rising, crosshair, hidden };
 
 	// What an element typed into tells an input method, the way a language like
 	// Japanese is typed: the text around the caret and where the caret is; and what
@@ -112,6 +114,9 @@ namespace one::desktop {
 		// The button let go after a press it took, with what's under the pointer then.
 		virtual void release(point, element*) {}
 		virtual bool wheel(point at, float dx, float dy);
+		// Two fingers pinched on a touchpad over it, apart or together: how many times
+		// larger what's under them would be since it was last told.
+		virtual bool pinch(point, float) { return false; }
 		virtual element* hit(point at);
 		virtual bool focusable() const { return false; }
 		// Whether a press gives it the keyboard; a toolbar's button acts on what's being
@@ -314,6 +319,8 @@ namespace one::desktop {
 		// The wheel turned over it, across and down, as a trackpad's two fingers move too:
 		// whether it took it.
 		std::function<bool(point at, float dx, float dy)> on_wheel = {};
+		// Pinched on a touchpad, by how many times larger: whether it took it.
+		std::function<bool(point at, float by)> on_pinch = {};
 		std::function<one::desktop::cursor(point at)> cursor = {};
 	};
 	// Painted by the app itself into all the space it's given, as a drawing app's

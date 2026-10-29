@@ -206,6 +206,9 @@ namespace one::screens {
 		// margin, only what the page is made of.
 		void fill() { fill_ = true; }
 		bool take_fill() { return std::exchange(fill_, false); }
+		// Only its picture, edge to edge, its bars drawn over it, as a photo's own screen is.
+		void alone() { alone_ = true; }
+		bool take_alone() { return std::exchange(alone_, false); }
 
 		// The keys its lines are run by, like ctrl+z, gathered each time it's built,
 		// while they're shown: the first said for a key takes it.
@@ -278,6 +281,7 @@ namespace one::screens {
 		std::vector<part> title_;
 		bool wide_ = false;
 		bool fill_ = false;
+		bool alone_ = false;
 		std::vector<std::pair<std::string, std::function<void()>>> keys_;
 		std::optional<bool> in_group_;
 		std::optional<state<bool>> in_options_;

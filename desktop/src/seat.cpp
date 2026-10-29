@@ -30,6 +30,12 @@ namespace one::desktop {
 		}
 
 		void set_cursor(seat& s, one::desktop::cursor c) {
+			// Hidden, the pointer has no picture, which any compositor takes.
+			if (c == cursor::hidden) {
+				if (s.shape != -2 && s.pointer) wl_pointer_set_cursor(s.pointer, s.pointer_serial, nullptr, 0, 0);
+				s.shape = -2;
+				return;
+			}
 			if (!s.cursor) return;
 			int shape = c == cursor::pointer    ? WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_POINTER
 			            : c == cursor::text     ? WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_TEXT
@@ -46,6 +52,22 @@ namespace one::desktop {
 			s.shape = shape;
 			wp_cursor_shape_device_v1_set_shape(s.cursor, s.pointer_serial, static_cast<std::uint32_t>(shape));
 		}
+
+		// Two fingers on a touchpad pinched, as the compositor tells it: each change from
+		// the last, over the window it began on.
+		const zwp_pointer_gesture_pinch_v1_listener pinch_listener{
+		    .begin = [](void*, zwp_pointer_gesture_pinch_v1*, std::uint32_t, std::uint32_t, wl_surface*, std::uint32_t) { owning->input->pinched = 1; },
+		    .update =
+		        [](void*, zwp_pointer_gesture_pinch_v1*, std::uint32_t, wl_fixed_t, wl_fixed_t, wl_fixed_t scale, wl_fixed_t) {
+			        auto& s = *owning->input;
+			        double now = wl_fixed_to_double(scale);
+			        if (now <= 0 || s.pinched <= 0) return;
+			        float by = static_cast<float>(now / s.pinched);
+			        s.pinched = now;
+			        if (s.pointer_over) deliver_pinch(*s.pointer_over, s.pointer_at, by);
+		        },
+		    .end = [](void*, zwp_pointer_gesture_pinch_v1*, std::uint32_t, std::uint32_t, std::int32_t) { owning->input->pinched = 1; },
+		};
 
 		key_event event_for(seat& s, std::uint32_t code) {
 			key_event e;
@@ -201,6 +223,10 @@ namespace one::desktop {
 				        s.pointer = wl_seat_get_pointer(handle);
 				        wl_pointer_add_listener(s.pointer, &pointer_listener, nullptr);
 				        if (owning->cursors) s.cursor = wp_cursor_shape_manager_v1_get_pointer(owning->cursors, s.pointer);
+				        if (owning->gestures) {
+					        s.pinch = zwp_pointer_gestures_v1_get_pinch_gesture(owning->gestures, s.pointer);
+					        zwp_pointer_gesture_pinch_v1_add_listener(s.pinch, &pinch_listener, nullptr);
+				        }
 			        }
 			        if (typing && !s.keyboard) {
 				        s.keyboard = wl_seat_get_keyboard(handle);
@@ -228,6 +254,11 @@ namespace one::desktop {
 		(void)!read(s.repeat_timer.get(), &times, sizeof times);
 		if (!s.repeating || !s.keyboard_in || !s.key_state) return;
 		for (std::uint64_t i = 0; i < std::min<std::uint64_t>(times, 4); ++i) deliver_key(*s.keyboard_in, event_for(s, s.repeating));
+	}
+
+	void point_again(window::state& w) {
+		if (!owning || !owning->input || owning->input->pointer_over != &w) return;
+		set_cursor(*owning->input, cursor_at(w, owning->input->pointer_at));
 	}
 
 	held_keys held() {

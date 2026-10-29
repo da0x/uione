@@ -2101,6 +2101,20 @@ form step::update "Save" {
   something, like `poster_page.preview`. All of it is fitted in, or, with `fill` or
   nothing said, it fills its place; `when` shows it only while that holds. A
   terminal draws no pictures, so it can't show one.
+- `picture clipping_page.image fit alone`, the only line of a workspace's `main`, is
+  all of its screen, as a photo's own screen is: the whole picture fitted in on
+  black, edge to edge. The workspace's bar, toolbar, tools, side and status are
+  drawn over it, see through, and hidden two seconds after the pointer stops, with
+  the pointer itself; they come back as it moves, or as a key is pressed, but not
+  for a key that only steps to the next picture, like a `link next` line's. They
+  take no room, so the picture never moves as they come and go, and filling the
+  screen they stay hidden. Ctrl and `=`, `-` or `0`, the screen's `zoom in`, `zoom
+  out` and `zoom to fit` buttons, and the wheel with Ctrl or a touchpad's pinch
+  zoom it, from fitted to eight times its own size; a double click goes to 100%, a
+  pixel of it a pixel of the screen, about where it's clicked, and back. Larger than
+  fits, it's dragged, or the wheel moves it, as far as its edges. Each picture
+  stepped to is fitted again. A terminal draws no pictures, so its screen is its
+  bars.
 - `chart agent_page.stats.cpu "CPU" percent` draws a run of numbers over time, newest
   at the right, as btop draws one: a line over a soft fill in the accent, its title,
   its latest value, and the top of its scale. Its numbers are a field of the view, or

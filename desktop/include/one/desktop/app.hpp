@@ -102,6 +102,10 @@ namespace one::desktop {
 		// written, which a focused button would otherwise take.
 		std::function<bool(const key_event&)> on_key_first;
 
+		// The pointer moved over the window, whatever it's over, as what hides while
+		// it's still hears.
+		std::function<void()> on_pointer;
+
 		// Draws in the window, over its background and any view, each time it's drawn.
 		std::function<void(canvas&)> on_draw;
 

@@ -128,6 +128,11 @@ export interface LayoutProps {
   regions: Record<string, ReactNode>;
   // The app's own name, which a workspace's bar starts with, as a site's bar does.
   site?: string;
+  // Only its picture, a workspace's main all of it: its other regions over it, see
+  // through, while they're awake, as they are for a moment after the pointer moves;
+  // while they're not, hidden but still there, so their keys still work, and the
+  // pointer hidden too. The picture never moves for them.
+  alone?: { awake: boolean };
 }
 
 // Buttons that sit together in a row, like Edit and Close issue.

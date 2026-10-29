@@ -228,6 +228,24 @@ describe("cards", () => {
   });
 });
 
+describe("a workspace that's only its picture", () => {
+  it("draws its picture on black across all of the window, its bars over it while they're awake, and hidden but there while they're not, nor the pointer", () => {
+    const Layout = radix.Layout;
+    const regions = { main: <p>The picture</p>, toolbar: <button type="button">Next</button>, status: <span>Harbor</span> };
+    const drawn = render(<Layout name="workspace" regions={regions} alone={{ awake: true }} />);
+    const window = drawn.container.firstElementChild as HTMLElement;
+    expect(window.className.split(" ")).toContain("bg-black");
+    expect(screen.getByText("The picture").closest("main")!.className).toContain("absolute inset-0");
+    const bars = screen.getByRole("toolbar").parentElement!;
+    expect(bars.className.split(" ")).not.toContain("invisible");
+    expect(screen.getByRole("toolbar").className).toContain("bg-surface/85");
+    drawn.rerender(<Layout name="workspace" regions={regions} alone={{ awake: false }} />);
+    expect(screen.getByRole("toolbar", { hidden: true }).parentElement!.className.split(" ")).toContain("invisible");
+    expect(screen.getByText("Next")).toBeTruthy();
+    expect(window.style.cursor).toBe("none");
+  });
+});
+
 describe("tables and live values", () => {
   function Shelf() {
     const shelf = useView("library::shelf");

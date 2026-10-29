@@ -646,6 +646,26 @@ function ask(name: string, does: string) {
   askListeners.forEach((changed) => changed());
 }
 
+// What's asked of something else a screen's buttons act on, like a picture alone zoomed,
+// by the name they ask it by: told it once, as a collage is.
+export function useAsked(name: string, run: (does: string) => void): void {
+  const asking = useSyncExternalStore(
+    (changed) => {
+      askListeners.add(changed);
+      return () => askListeners.delete(changed);
+    },
+    () => asked.get(name),
+    () => undefined,
+  );
+  const latest = useRef(run);
+  latest.current = run;
+  useEffect(() => {
+    if (!asking) return;
+    asked.delete(name);
+    latest.current(asking);
+  }, [asking, name]);
+}
+
 // What a Paste line's ctrl+v pasted, or an add pictures button chose, handed to its
 // collage as it came: a browser gives a paste's pictures with the paste itself,
 // without asking to read the clipboard.

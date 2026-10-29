@@ -25,6 +25,7 @@
 #include "one/desktop/state.hpp"
 #include "one/desktop/theme.hpp"
 #include "one/desktop/ui.hpp"
+#include "pointer-gestures-unstable-v1-client-protocol.h"
 #include "renderer.hpp"
 #include "text-input-unstable-v3-client-protocol.h"
 #include "viewporter-client-protocol.h"
@@ -54,6 +55,8 @@ namespace one::desktop {
 		inline void wl_keyboard_release(wl_keyboard* held) { ::wl_keyboard_release(held); }
 		inline void wl_pointer_release(wl_pointer* held) { ::wl_pointer_release(held); }
 		inline void wp_cursor_shape_device_v1_destroy(wp_cursor_shape_device_v1* held) { ::wp_cursor_shape_device_v1_destroy(held); }
+		inline void zwp_pointer_gestures_v1_destroy(zwp_pointer_gestures_v1* held) { ::zwp_pointer_gestures_v1_destroy(held); }
+		inline void zwp_pointer_gesture_pinch_v1_destroy(zwp_pointer_gesture_pinch_v1* held) { ::zwp_pointer_gesture_pinch_v1_destroy(held); }
 		inline void wl_data_device_manager_destroy(wl_data_device_manager* held) { ::wl_data_device_manager_destroy(held); }
 		inline void wl_data_device_release(wl_data_device* held) { ::wl_data_device_release(held); }
 		inline void wl_data_offer_destroy(wl_data_offer* held) { ::wl_data_offer_destroy(held); }
@@ -135,6 +138,7 @@ namespace one::desktop {
 		owned<wl_keyboard, released::wl_keyboard_release> keyboard;
 		owned<wl_pointer, released::wl_pointer_release> pointer;
 		owned<wp_cursor_shape_device_v1, released::wp_cursor_shape_device_v1_destroy> cursor;
+		owned<zwp_pointer_gesture_pinch_v1, released::zwp_pointer_gesture_pinch_v1_destroy> pinch;
 		one::desktop::clipboard clipboard;
 		one::desktop::typing typing;
 		std::uint32_t input_serial = 0;  // the last key's or button's, which the clipboard is set with
@@ -146,6 +150,7 @@ namespace one::desktop {
 		window::state* keyboard_in = nullptr;
 		point pointer_at;
 		float wheel_x = 0, wheel_y = 0;  // since the last frame of pointer events
+		double pinched = 1;              // how far a pinch had gone when it was last told
 		int shape = -1;                  // the cursor shape last set
 		int repeat_rate = 25, repeat_delay = 600;  // per second, and milliseconds before
 		std::uint32_t repeating = 0;               // the key held, or 0
@@ -164,6 +169,7 @@ namespace one::desktop {
 		owned<wp_fractional_scale_manager_v1, released::wp_fractional_scale_manager_v1_destroy> fractional;
 		owned<wp_viewporter, released::wp_viewporter_destroy> viewporter;
 		owned<wp_cursor_shape_manager_v1, released::wp_cursor_shape_manager_v1_destroy> cursors;
+		owned<zwp_pointer_gestures_v1, released::zwp_pointer_gestures_v1_destroy> gestures;
 		owned<wl_data_device_manager, released::wl_data_device_manager_destroy> data_devices;
 		owned<zwp_text_input_manager_v3, released::zwp_text_input_manager_v3_destroy> text_inputs;
 		std::optional<gpu::device> gpu;
@@ -229,11 +235,14 @@ namespace one::desktop {
 	void deliver_release(window::state& w, point at);
 	void deliver_wheel(window::state& w, point at, float dx, float dy);
 	void deliver_leave(window::state& w);
+	void deliver_pinch(window::state& w, point at, float by);
 	one::desktop::cursor cursor_at(window::state& w, point at);
 
 	// The seat's part of the app, in seat.cpp.
 	void bind_seat(app::state& a, wl_registry* registry, std::uint32_t name, std::uint32_t version);
 	void repeat_key(app::state& a);
+	// The pointer's look set again for what it's over in a window, as it is when it moves.
+	void point_again(window::state& w);
 
 	// The clipboard's part, in clipboard.cpp: its device, once both the seat and the
 	// data device manager are bound.

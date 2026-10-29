@@ -3278,3 +3278,198 @@ TEST("holding the arrow through records with large pictures keeps the window's l
 	one::desktop::runtime::hold_posted(false);
 	std::filesystem::remove_all(folder);
 }
+
+namespace {
+
+	// A picture 1800 × 1000, red on its left, blue on its right, a green band across its
+	// top: fitted in a window 900 × 600, it's 900 × 500, black above and under it.
+	std::filesystem::path banded_picture(const std::filesystem::path& folder) {
+		std::vector<std::uint8_t> pixels(std::size_t{1800} * 1000 * 4, 255);
+		for (int y = 0; y < 1000; ++y) {
+			for (int x = 0; x < 1800; ++x) {
+				std::uint8_t* at = &pixels[(std::size_t(y) * 1800 + std::size_t(x)) * 4];
+				bool green = y < 100;
+				at[0] = !green && x < 900 ? 255 : 0;
+				at[1] = green ? 255 : 0;
+				at[2] = !green && x >= 900 ? 255 : 0;
+			}
+		}
+		std::filesystem::create_directories(folder / "files");
+		one::desktop::offscreen::write_png(folder / "files" / "banded.png", {1800, 1000, std::move(pixels)});
+		return folder;
+	}
+
+	// The window as it's drawn now, and what color it is at a place in it.
+	struct seen {
+		one::desktop::offscreen::image drawn;
+		std::array<int, 3> at(int x, int y) const {
+			const std::uint8_t* p = &drawn.rgba[(std::size_t(y) * std::size_t(drawn.width) + std::size_t(x)) * 4];
+			return {p[0], p[1], p[2]};
+		}
+	};
+	seen looked(one::desktop::window::state& w) {
+		return {one::desktop::offscreen::draw(w.size, 1, tested_theme().page, [&](one::desktop::canvas& c) {
+			one::desktop::detail::theme_in_use() = &tested_theme();
+			w.root->paint(c);
+		})};
+	}
+	const std::array<int, 3> black{0, 0, 0}, red{255, 0, 0}, blue{0, 0, 255}, green{0, 255, 0};
+
+}  // namespace
+
+TEST("a picture alone is all of its screen, fitted on black, its bars over it until it's been still, then hidden with the pointer, and a step leaves them so") {
+	auto folder = banded_picture(std::filesystem::temp_directory_path() / "uione-alone");
+	struct kept_there : memory_source {
+		std::filesystem::path in;
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return in / kept; }
+	} data;
+	data.in = folder;
+	auto s = archive_of(3, data, {.view = {}, .list = "posters", .columns = {{"title", "Title"}}, .link = "/posters/:poster"});
+	s.screens.back().build = [](page& p) {
+		auto archive = p.view("studio::archive");
+		return items(workspace(p, region{"toolbar", along(step(p, {.view = archive, .list = "posters", .route = "/posters/:poster"}, "Previous", "previous", {"left"}),
+		                                                  step(p, {.view = archive, .list = "posters", .route = "/posters/:poster", .next = true}, "Next", "next", {"right"}))},
+		                          region{"main", items(picture_alone(p, "files/banded.png", "/posters/:poster collage"))}, region{"status", along(text({words("Banded")}))}));
+	};
+	navigator nav(s, data);
+	nav.open("/posters");
+	nav.open("/posters/p0");
+	kept_window window(nav);
+	window.update();
+	window.update();
+	// Just opened, its bars are over it, the picture where it is without them.
+	CHECK(awake());
+	auto shown = looked(window.w);
+	CHECK(shown.at(450, 20) != black);
+	CHECK(shown.at(450, 590) != black);
+	CHECK(shown.at(200, 300) == red);
+	CHECK(shown.at(700, 300) == blue);
+	CHECK(one::desktop::cursor_at(window.w, {450, 300}) == one::desktop::cursor::normal);
+	std::size_t with_bars = focusable_in(*window.w.root).size();
+	// Still for long enough, they're gone, and so is the pointer; the picture hasn't moved.
+	rest();
+	window.update();
+	shown = looked(window.w);
+	CHECK(shown.at(450, 20) == black);
+	CHECK(shown.at(450, 590) == black);
+	CHECK(shown.at(450, 48) == black);
+	CHECK(shown.at(200, 52) == green);
+	CHECK(shown.at(200, 300) == red);
+	CHECK(focusable_in(*window.w.root).size() < with_bars);
+	CHECK(one::desktop::cursor_at(window.w, {450, 300}) == one::desktop::cursor::hidden);
+	// A step by its key leaves them hidden, the next picture fitted.
+	key_down(right_key);
+	CHECK(key(nav, right_key));
+	window.update();
+	CHECK(nav.current().address() == "/posters/p1");
+	CHECK(!awake());
+	CHECK(looked(window.w).at(450, 20) == black);
+	// Ctrl alone, as for the wheel, doesn't bring them back; another key does, and so
+	// does the pointer moving.
+	key_down({.symbol = 0xffe3, .text = "", .control = true});
+	CHECK(!awake());
+	key_down({.symbol = 'a', .text = "a"});
+	CHECK(awake());
+	window.update();
+	CHECK(looked(window.w).at(450, 20) != black);
+	rest();
+	wake();
+	CHECK(awake());
+	// Gone back to them all, and opened again, they're shown.
+	rest();
+	CHECK(key(nav, escape_key));
+	window.update();
+	nav.open("/posters/p2");
+	window.update();
+	CHECK(awake());
+	std::filesystem::remove_all(folder);
+}
+
+TEST("a picture alone is zoomed by Ctrl and its keys, its zoom buttons and a pinch, to 100% and back by a double click, and dragged about once it's larger, and stepping fits the next") {
+	auto folder = banded_picture(std::filesystem::temp_directory_path() / "uione-alone-zoomed");
+	struct kept_there : memory_source {
+		std::filesystem::path in;
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return in / kept; }
+	} data;
+	data.in = folder;
+	auto s = archive_of(3, data, {.view = {}, .list = "posters", .columns = {{"title", "Title"}}, .link = "/posters/:poster"});
+	s.screens.back().build = [](page& p) {
+		auto archive = p.view("studio::archive");
+		return items(workspace(p, region{"toolbar", along(step(p, {.view = archive, .list = "posters", .route = "/posters/:poster", .next = true}, "Next", "next", {"right"}))},
+		                          region{"main", items(picture_alone(p, "files/banded.png", "/posters/:poster collage"))}));
+	};
+	navigator nav(s, data);
+	nav.open("/posters");
+	nav.open("/posters/p0");
+	kept_window window(nav);
+	window.update();
+	window.update();
+	rest();
+	window.update();
+	const one::desktop::key_event larger{.symbol = '=', .text = "=", .control = true}, smaller{.symbol = '-', .text = "-", .control = true},
+	    fitted{.symbol = '0', .text = "0", .control = true};
+	// Fitted, a drag doesn't take it: there's nowhere to move it to.
+	CHECK(looked(window.w).at(450, 40) == black);
+	one::desktop::deliver_press(window.w, {450, 300}, 1);
+	CHECK(window.w.dragging == nullptr);
+	one::desktop::deliver_release(window.w, {450, 300});
+	// Larger by a quarter about its middle: 1125 × 625, past the window's top and foot.
+	CHECK(key(nav, larger));
+	CHECK(looked(window.w).at(450, 40) == green);
+	CHECK(looked(window.w).at(450, 590) != black);
+	CHECK(key(nav, smaller));
+	CHECK(looked(window.w).at(450, 40) == black);
+	// Smaller than fitted it doesn't go.
+	CHECK(key(nav, smaller));
+	CHECK(looked(window.w).at(450, 40) == black);
+	CHECK(looked(window.w).at(200, 300) == red);
+	// A zoom button asks it, as a collage is asked.
+	nav.current().kept<std::string>("collage do /posters/:poster collage").set("zoom in");
+	window.update();
+	CHECK(looked(window.w).at(450, 40) == green);
+	CHECK(key(nav, fitted));
+	CHECK(looked(window.w).at(450, 40) == black);
+	// Twice pressed, it's 100%, a pixel of it a pixel of the screen, about where it was
+	// pressed: what's under the pointer stays, and the green band's above the window.
+	one::desktop::deliver_press(window.w, {200, 300}, 1);
+	one::desktop::deliver_release(window.w, {200, 300});
+	one::desktop::deliver_press(window.w, {200, 300}, 2);
+	one::desktop::deliver_release(window.w, {200, 300});
+	auto shown = looked(window.w);
+	CHECK(shown.at(200, 300) == red);
+	CHECK(shown.at(450, 20) == red);
+	CHECK(shown.at(850, 300) == blue);
+	CHECK(shown.at(450, 590) != black);
+	// Larger than fits, it's dragged about: down, so its top comes into view, and no
+	// further than its edge however far it's dragged.
+	CHECK(one::desktop::cursor_at(window.w, {450, 300}) == one::desktop::cursor::hidden);
+	wake();
+	window.update();
+	CHECK(one::desktop::cursor_at(window.w, {450, 300}) == one::desktop::cursor::grab);
+	one::desktop::deliver_press(window.w, {450, 300}, 1);
+	CHECK(window.w.dragging != nullptr);
+	CHECK(one::desktop::cursor_at(window.w, {450, 300}) == one::desktop::cursor::grabbing);
+	one::desktop::deliver_pointer(window.w, {450, 500});
+	one::desktop::deliver_pointer(window.w, {450, 900});
+	one::desktop::deliver_release(window.w, {450, 900});
+	rest();
+	window.update();
+	shown = looked(window.w);
+	CHECK(shown.at(450, 50) == green);
+	CHECK(shown.at(450, 110) == red);
+	// Twice pressed again, it's fitted.
+	one::desktop::deliver_press(window.w, {450, 300}, 2);
+	one::desktop::deliver_release(window.w, {450, 300});
+	CHECK(looked(window.w).at(450, 40) == black);
+	// Pinched apart, larger, about where the fingers are.
+	one::desktop::deliver_pinch(window.w, {200, 300}, 1.5f);
+	shown = looked(window.w);
+	CHECK(shown.at(450, 40) != black);
+	CHECK(shown.at(200, 300) == red);
+	// Stepped on to the next picture, it's fitted, as one's first shown.
+	CHECK(key(nav, right_key));
+	window.update();
+	CHECK(nav.current().address() == "/posters/p1");
+	CHECK(looked(window.w).at(450, 40) == black);
+	std::filesystem::remove_all(folder);
+}

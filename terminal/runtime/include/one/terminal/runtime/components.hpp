@@ -128,6 +128,8 @@ namespace one::terminal::runtime {
 	terminal::view collage_button(page& p, collage_ask ask);
 	// picture poster.preview fit: a terminal draws no pictures, so it shows none.
 	terminal::view picture_of(page& p, const std::string& kept, bool fit, float height);
+	// picture clipping_page.image fit alone: nor alone, so its screen is its bars.
+	terminal::view picture_alone(page& p, const std::string& kept, const std::string& key);
 	// on open: what the screen does as it's opened, and "Opening…" while it decides.
 	terminal::view on_open(page& p, bool ready, std::vector<opening> lines);
 	// A terminal has no screen of its own to measure, so screen.width and

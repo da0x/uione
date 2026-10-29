@@ -275,6 +275,27 @@ TEST("a drawing hears a press it takes, the moves while it's held, and the relea
 	CHECK(!one::desktop::drawing([](one::desktop::canvas&, one::desktop::rect) {}).take()->focusable());
 }
 
+TEST("a drawing hears two fingers pinched over it, by how many times larger, and may hide the pointer there") {
+	std::vector<float> pinched;
+	auto root = one::desktop::column(one::desktop::drawing([](one::desktop::canvas&, one::desktop::rect) {},
+	                                                       {.on_pinch =
+	                                                            [&](one::desktop::point at, float by) {
+		                                                            pinched.push_back(by);
+		                                                            return at.x < 100;
+	                                                            },
+	                                                        .cursor = [](one::desktop::point) { return one::desktop::cursor::hidden; }})
+	                                    .grow())
+	                .take();
+	root->place({0, 0, 200, 100});
+	one::desktop::element* found = root->hit({40, 50});
+	CHECK(found->pinch({40, 50}, 1.5f));
+	CHECK(!found->pinch({150, 50}, 0.5f));  // one it doesn't take
+	CHECK((pinched == std::vector<float>{1.5f, 0.5f}));
+	CHECK(found->cursor() == one::desktop::cursor::hidden);
+	// One that doesn't hear them leaves them to what it's in.
+	CHECK(!one::desktop::drawing([](one::desktop::canvas&, one::desktop::rect) {}).take()->pinch({0, 0}, 2));
+}
+
 TEST("a color picker tells the color chosen as it's let go, from its shades and its hues") {
 	one::screens::state<std::string> held("#ff0000");
 	std::vector<std::string> settled;
