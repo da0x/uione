@@ -899,6 +899,11 @@ namespace one::language {
             std::optional<std::string> by;
             location by_where;
             expression_ptr when;
+            // with stroke stroke_width from layer::paint: these as that command's buttons
+            // last gave them, as a drawing program draws in the colors last chosen.
+            std::vector<std::string> taken;
+            std::optional<qualified_name> taken_from;
+            location taken_where;
         };
         std::vector<drawing> draws;
         std::optional<std::string> over;      // over layer { ... }: buttons above the picked layer

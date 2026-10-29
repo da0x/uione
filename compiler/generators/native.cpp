@@ -319,9 +319,12 @@ namespace one::generators {
                     for (const auto& name : names) {
                         if (choices_.contains(name)) back += (back.empty() ? "" : ", ") + std::string("{") + str(route_ + " " + name) + ", " + str(choices_.at(name)) + "}";
                     }
+                    std::string with;
+                    for (const auto& taken : d.taken) with += (with.empty() ? "" : ", ") + str(taken);
                     draws += (draws.empty() ? "" : ", ") + std::string("collage_draw{.command = ") + str(screens::full_command(ns, d.command)) +
                              (given.empty() ? "" : ", .fields = value(std::map<std::string, value>{" + given + "})") + (d.when ? ", .when = " + condition(parts, ns, *d.when) : "") +
-                             (d.by ? ", .by = " + str(*d.by) : "") + (back.empty() ? "" : ", .back = {" + back + "}") + "}";
+                             (d.by ? ", .by = " + str(*d.by) : "") + (back.empty() ? "" : ", .back = {" + back + "}") +
+                             (d.taken_from ? ", .with = {" + with + "}, .with_from = " + str(screens::full_command(ns, *d.taken_from)) : "") + "}";
                 }
                 out += ", .draws = {" + draws + "}";
             }
@@ -836,7 +839,10 @@ namespace one::generators {
             if (named) out += ", .id = " + id_of(parts, entity->name);
             if (!on_pick.empty()) out += ", .id = " + on_pick + "[\"id\"].as_string()";
             std::string shown_when = button.when ? condition(parts, ns, *button.when) : "";
-            if (!on_pick.empty()) shown_when = shown_when.empty() ? "!none(" + on_pick + ")" : "(!none(" + on_pick + ") && " + shown_when + ")";
+            // One whose values the screen's collage draws with is there with nothing picked
+            // too, and then only remembers what it gives.
+            bool remembers = collage_ && std::ranges::any_of(collage_->draws, [&](const auto& d) { return d.taken_from && screens::full_command(ns, *d.taken_from) == command; });
+            if (!on_pick.empty() && !remembers) shown_when = shown_when.empty() ? "!none(" + on_pick + ")" : "(!none(" + on_pick + ") && " + shown_when + ")";
             if (!shown_when.empty()) out += ", .when = " + shown_when;
             if (button.icon) out += ", .icon = " + str(*button.icon);
             if (std::string swatch = screens::swatch_of(button, collage_colors(ns)); !swatch.empty()) out += ", .swatch = " + str(swatch);
@@ -846,6 +852,7 @@ namespace one::generators {
             if (button.then_open) out += ", .then_open = " + str(model_.full_route(ns, *button.then_open));
             if (button.about) out += ", .about = " + str(*button.about);
             out += slide;
+            if (remembers) out += ", .remembers = true";
             return out + "})";
         }
 
@@ -1697,7 +1704,8 @@ namespace one::generators {
                     bool alone = std::exchange(each_alone_, true);
                     auto inside = alternatives(items(parts, ns, o->items, screen));
                     each_alone_ = alone;
-                    code = "options(p, " + str(o->title) + ", " + str(o->icon.value_or("")) + ", [&] { return tools(" + joined_items(inside) + "); })";
+                    // Kept open by where it's written, apart from others of the same words.
+                    code = "options(p, " + str(o->title) + ", " + str(o->icon.value_or("")) + ", " + str(o->title + " " + std::to_string(item.where.line)) + ", [&] { return tools(" + joined_items(inside) + "); })";
                 } else if (auto* g = std::get_if<language::content_block>(&item.node); g && g->type == language::content_block::kind::group) {
                     // A toolbar's group: its lines built as tools; the first at its end
                     // takes the toolbar's far end.
@@ -1709,7 +1717,8 @@ namespace one::generators {
                     bool end_here = g->at_end && !at_end_said_;
                     at_end_said_ = at_end_said_ || g->at_end;
                     code = "group(p, " + str(g->title) + ", " + (g->small ? "true" : "false") + ", " + (end_here ? "true" : "false") +
-                           ", [&] { return tools(" + joined_items(inside) + "); }" + (g->across ? ", " + std::to_string(g->across) : "") + ")";
+                           ", [&] { return tools(" + joined_items(inside) + "); }" +
+                           (screens::named_by_its_tool(*g) ? ", " + std::to_string(g->across) + ", false" : g->across ? ", " + std::to_string(g->across) : "") + ")";
                 } else if (auto* block = std::get_if<language::content_block>(&item.node)) {
                     using kind = language::content_block::kind;
                     if (block->type == kind::heading || block->type == kind::region) continue;  // drawn on the title's row, or by the layout

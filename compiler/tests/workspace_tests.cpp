@@ -609,9 +609,12 @@ TEST_CASE("a tool's options open its lines, each a choice with what it's for, a 
     CHECK(web.find(R"(<Options label="Page" icon="fit">)") != std::string::npos);
     CHECK(web.find(R"(label="Wide" swatch="page 1920 1080")") != std::string::npos);
     CHECK(web.find(R"(about="16:9, for screens")") != std::string::npos);
-    CHECK(native.find(R"(options(p, "Page", "fit", [&] { return tools()") != std::string::npos);
+    CHECK(native.find(R"(options(p, "Page", "fit", "Page 50", [&] { return tools()") != std::string::npos);
     CHECK(native.find(R"(.swatch = "page 1080 1920")") != std::string::npos);
     CHECK(native.find(R"(.about = "16:9, for screens")") != std::string::npos);
+    // Its group holds it alone, by its own name, so the name isn't said twice.
+    CHECK(web.find(R"(<Group name="Page" unsaid>)") != std::string::npos);
+    CHECK(native.find(R"(); }, 0, false))") != std::string::npos);
     // In a toolbar, and only buttons.
     std::string outside = collage_screen("\t\toptions \"Page\" {\n\t\t\ttext \"Hi\"\n\t\t}\n");
     CHECK(messages(outside) == std::vector<std::string>{"44: options are a tool in a workspace's toolbar, so they go in one of its groups",
@@ -649,6 +652,37 @@ TEST_CASE("a button's value along a slider, from what it is on the picked row, i
     wrong.replace(wrong.find("{ x from 0 to 1 }"), std::string("{ x from 0 to 1 }").size(), "{ x from 1 to 0  y from 0 to 1 }");
     CHECK(messages(collage_screen(wrong)) == std::vector<std::string>{"48: a slider goes from the least to the most, like from 0 to 1",
                                                                         "48: a button is one slider or color picker, so only one of its values is chosen"});
+}
+
+TEST_CASE("a collage draws with what a command's buttons last gave, and those buttons stay on with nothing picked") {
+    std::string body = R"(		layout workspace
+		toolbar {
+			group "Look" {
+				layer::place "Far" { x = 10 }
+			}
+		}
+		main {
+			pick layer from poster_page.layers
+			collage poster_page.layers size width height {
+				draw layer::create { y = 0 } with x from layer::place
+			}
+		}
+)";
+    std::string source = collage_screen(body);
+    CHECK(messages(source).empty());
+    auto files = built(source);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CHECK(web.find(R"(with: ["x"], withFrom: "studio::layer::place")") != std::string::npos);
+    CHECK(web.find(R"( remembers)") != std::string::npos);
+    CHECK(web.find(R"(when={layer !== null})") == std::string::npos);
+    CHECK(native.find(R"(.with = {"x"}, .with_from = "studio::layer::place")") != std::string::npos);
+    CHECK(native.find(R"(.remembers = true)") != std::string::npos);
+    // Only what the command changes.
+    std::string wrong = body;
+    wrong.replace(wrong.find("with x from"), std::string("with x from").size(), "with depth from");
+    CHECK(messages(collage_screen(wrong)) == std::vector<std::string>{"53: layer::place doesn't change depth, so it's never given it to take"});
 }
 
 TEST_CASE("a button's value any color, from a color picker, from what it is on the picked row") {

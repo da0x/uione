@@ -56,11 +56,11 @@ export function Either({ children }: { children?: ReactNode }) {
   return <>{holds ?? ways[0]}</>;
 }
 
-export function Group({ name, small = false, across, atEnd = false, children }: { name: string; small?: boolean; across?: number; atEnd?: boolean; children?: ReactNode }) {
+export function Group({ name, small = false, across, atEnd = false, unsaid = false, children }: { name: string; small?: boolean; across?: number; atEnd?: boolean; unsaid?: boolean; children?: ReactNode }) {
   const ui = useUI();
   return (
     <InGroup.Provider value={{ small }}>
-      <ui.Group name={name} small={small} across={across} atEnd={atEnd}>
+      <ui.Group name={name} small={small} across={across} atEnd={atEnd} unsaid={unsaid}>
         {children}
       </ui.Group>
     </InGroup.Provider>
@@ -234,6 +234,31 @@ export function useChosen(name: string, first: string): string {
 export function setChosen(name: string, choice: string) {
   chosenNow.set(name, choice);
   choosing.forEach((changed) => changed());
+}
+
+// What a command's buttons last gave, kept for what's drawn next, as a drawing program
+// draws in the colors last chosen: each value as the last one to give it gave it. The
+// same as the desktop's.
+const givenNow = new Map<string, Record<string, unknown>>();
+const giving = new Set<() => void>();
+const noneGiven: Record<string, unknown> = {};
+export function lastGiven(command: string): Record<string, unknown> {
+  return givenNow.get(command) ?? noneGiven;
+}
+export function useLastGiven(command: string): Record<string, unknown> {
+  return useSyncExternalStore(
+    (changed) => {
+      giving.add(changed);
+      return () => giving.delete(changed);
+    },
+    () => lastGiven(command),
+    () => noneGiven,
+  );
+}
+export function rememberGiven(command: string, given: Record<string, unknown>) {
+  const kept = Object.fromEntries(Object.entries(given).filter(([name]) => name !== "id" && !name.startsWith("one:")));
+  givenNow.set(command, { ...lastGiven(command), ...kept });
+  giving.forEach((changed) => changed());
 }
 
 export function Choose({ name, choice, first, label, icon, keys }: { name: string; choice: string; first: string; label: string; icon?: string; keys?: string[] }) {

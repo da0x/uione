@@ -24,7 +24,7 @@ import type { ViewState } from "./data.js";
 import { useUI } from "./ui.js";
 import { useSaying } from "./said.js";
 import { useSite } from "./app.js";
-import { OverLayer, OverRun, choosePictures, hintOf, setChosen, setPicked, typing, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
+import { OverLayer, OverRun, choosePictures, lastGiven, hintOf, setChosen, setPicked, typing, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
 
 type Row = Record<string, unknown>;
 
@@ -743,6 +743,9 @@ export interface CollageDraw {
   // through; by points, a path node by node, as a pen draws; each kept as a path.
   by?: "line" | "hand" | "points";
   back?: [string, string][];
+  // with stroke from layer::paint: these as that command's buttons last gave them.
+  with?: string[];
+  withFrom?: string;
 }
 
 export function Collage({
@@ -1646,7 +1649,10 @@ export function Collage({
     if (parent) made[parent] = subject;
     const top = layers[layers.length - 1];
     if (top && top["depth"] !== undefined) made["depth"] = num(top["depth"]) + 1;
-    const reply = await runner.reply(d.command, { ...fieldsOf(made, fields), ...d.given });
+    // And what its buttons last gave, where it takes it.
+    const last = d.withFrom ? lastGiven(d.withFrom) : {};
+    const taken = Object.fromEntries((d.with ?? []).filter((field) => field in last).map((field) => [field, last[field]]));
+    const reply = await runner.reply(d.command, { ...fieldsOf(made, fields), ...d.given, ...taken });
     if (reply?.id) pickRow(reply.id);
   };
   const keepCrop = () => {

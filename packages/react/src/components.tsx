@@ -11,7 +11,7 @@ import type { ReactElement, ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { partsOf } from "./keys.js";
 import { ShownPath, fill, useConfirmContext, useFill, usePageTitle, useSignIn, useSite } from "./app.js";
-import { hintOf, setPicked as pickRow, useInGroup, useInOptions, useOverRun, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
+import { hintOf, rememberGiven, setPicked as pickRow, useInGroup, useInOptions, useLastGiven, useOverRun, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
 import type { BoardCard, CanvasRegion, ChartProps, FieldProps, Filtered, Hue, LandingFeature, LandingProps, LinkProps, PipelineRow, TrackStep } from "./contract.js";
 import { readValue, scaleTop, seriesOf, toneOfState, valueAt, type ChartUnit } from "./series.js";
 import { calendarGo, calendarOf, dateOf, dayOf, movedTo } from "./calendar.js";
@@ -1056,6 +1056,7 @@ export function Command({
   about,
   slide,
   color,
+  remembers = false,
 }: {
   name: string;
   id?: string;
@@ -1071,6 +1072,7 @@ export function Command({
   about?: string; // among a tool's options, what it's for, said beside it
   slide?: { field: string; from: number; to: number; by: number; now: unknown }; // drawn as a slider from what it is now, run as it's let go
   color?: { field: string; now: unknown }; // or as a color picker, run with each one chosen
+  remembers?: boolean; // what it gives remembered for what's drawn next; with nothing to act on, only that
 }) {
   const ui = useUI();
   const runner = useConfirmedRunner();
@@ -1085,7 +1087,18 @@ export function Command({
   const shown = (when || inGroup) && allowed;
   const sent = { ...(given ?? {}), ...(id === undefined ? {} : { id }) };
   const overRun = useOverRun();
+  // With nothing to act on, one whose values are remembered for what's drawn next only
+  // remembers them, pressed while they're what's remembered.
+  const onlyRemembers = remembers && !id;
+  const last = useLastGiven(name);
+  if (onlyRemembers) pressed = Object.keys(given ?? {}).length > 0 && Object.entries(given ?? {}).every(([field, v]) => sameValue(last[field] ?? null, v));
+  const settle = (input: Record<string, unknown>) => {
+    if (remembers) rememberGiven(name, input);
+    if (!onlyRemembers) void runner.run(name, input);
+  };
   const run = () => {
+    if (remembers) rememberGiven(name, sent);
+    if (onlyRemembers) return;
     if (overRun?.(name, sent)) return;
     if (!thenOpen) return void runner.run(name, sent);
     // What it made, opened: its id in the route's last parameter.
@@ -1099,12 +1112,14 @@ export function Command({
   const words = says ?? label(action(name));
   // Any color, from a color picker, run with each one chosen.
   if (color) {
-    const now = typeof color.now === "string" && /^#[0-9a-fA-F]{6}$/.test(color.now) ? color.now : "#000000";
-    return <ui.ColorPicker label={words} value={now} disabled={off || runner.busy(name)} onSettle={(hex) => void runner.run(name, { ...sent, [color.field]: hex })} />;
+    const was = onlyRemembers ? last[color.field] : color.now;
+    const now = typeof was === "string" && /^#[0-9a-fA-F]{6}$/.test(was) ? was : "#000000";
+    return <ui.ColorPicker label={words} value={now} disabled={off || runner.busy(name)} onSettle={(hex) => settle({ ...sent, [color.field]: hex })} />;
   }
   // Along a slider, from what it is now, run with where it's let go.
   if (slide) {
-    const now = typeof slide.now === "number" ? Math.min(slide.to, Math.max(slide.from, slide.now)) : slide.to;
+    const was = onlyRemembers ? last[slide.field] : slide.now;
+    const now = typeof was === "number" ? Math.min(slide.to, Math.max(slide.from, was)) : slide.to;
     return (
       <ui.Slider
         label={words}
@@ -1114,7 +1129,7 @@ export function Command({
         by={slide.by}
         percent={slide.from === 0 && slide.to === 1}
         disabled={off || runner.busy(name)}
-        onSettle={(n) => void runner.run(name, { ...sent, [slide.field]: n })}
+        onSettle={(n) => settle({ ...sent, [slide.field]: n })}
       />
     );
   }

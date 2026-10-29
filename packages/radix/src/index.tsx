@@ -2398,7 +2398,7 @@ export const radix: ComponentSet = {
   Slider,
   ColorPicker,
 
-  Group: ({ name, small, across, atEnd, children }) => (
+  Group: ({ name, small, across, atEnd, unsaid, children }) => (
     <div role="group" aria-label={name} data-at-end={atEnd ? "" : undefined} className="flex flex-col items-center justify-between gap-0.5 border-r border-line px-2 last:border-r-0 [&:has(>div:empty)]:hidden">
       <div
         className={small ? "grid gap-0.5" : "flex items-start gap-0.5"}
@@ -2406,7 +2406,8 @@ export const radix: ComponentSet = {
       >
         {children}
       </div>
-      <span className="text-[0.6875rem] leading-tight text-muted">{name}</span>
+      {/* Unsaid, as tall as a name still, so it lines up with every other group. */}
+      <span aria-hidden={unsaid || undefined} className="text-[0.6875rem] leading-tight text-muted">{unsaid ? "\u00a0" : name}</span>
     </div>
   ),
 

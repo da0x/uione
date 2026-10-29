@@ -9,7 +9,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useLocation } from "react-router";
 import { App, Choose, Command, Form, Group, History, Layout, Live, Messages, OnOpen, Region, Table, Options, Toggle, Tools, keyShown, memorySource, screen as defineScreen, useChosen, useToggled, useView } from "../src/index.js";
-import { usePicked } from "../src/workspace.js";
+import { lastGiven, usePicked } from "../src/workspace.js";
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
 
@@ -172,6 +172,23 @@ describe("a workspace", () => {
     fireEvent.change(picker, { target: { value: "#ff0000" } });
     await waitFor(() => expect(source.runs.length).toBe(1));
     expect(source.runs[0]).toMatchObject({ command: "studio::layer::paint", input: { id: "l1", fill: "#ff0000" } });
+  });
+
+  it("remembers what a button gives for what's drawn next, only that with nothing to act on, and changes what's picked too", async () => {
+    const source = memorySource({ commands: { "studio::layer::paint": () => ({ id: "l1" }) } });
+    renderScreen(source, () => (
+      <>
+        <Command name="studio::layer::paint" label="Red" given={{ stroke: "#e4572e" }} remembers />
+        <Command name="studio::layer::paint" id="l1" label="Ink" given={{ stroke: "#1d1d1f" }} remembers />
+      </>
+    ));
+    fireEvent.click(screen.getByRole("button", { name: "Red" }));
+    expect(lastGiven("studio::layer::paint")).toEqual({ stroke: "#e4572e" });
+    expect(source.runs.length).toBe(0);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Red" }).getAttribute("aria-pressed")).toBe("true"));
+    fireEvent.click(screen.getByRole("button", { name: "Ink" }));
+    await waitFor(() => expect(source.runs.length).toBe(1));
+    expect(lastGiven("studio::layer::paint")).toEqual({ stroke: "#1d1d1f" });
   });
 
   it("says what an undo took back, and why a command was turned down", async () => {

@@ -385,6 +385,35 @@ export const buttonIcons: Record<string, ReactNode> = {
       <path d="M2 2.5h6v6H2zM8 7.5h6v6H8z" />
     </svg>
   ),
+  // Any color: a ring of every hue, in its colors.
+  spectrum: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" strokeWidth="3" aria-hidden="true">
+      <path d="M8.0 3.0A5 5 0 0 1 9.36 3.19" stroke="hsl(0 100% 50%)" />
+      <path d="M9.29 3.17A5 5 0 0 1 10.56 3.7" stroke="hsl(15 100% 50%)" />
+      <path d="M10.5 3.67A5 5 0 0 1 11.58 4.51" stroke="hsl(30 100% 50%)" />
+      <path d="M11.54 4.46A5 5 0 0 1 12.36 5.56" stroke="hsl(45 100% 50%)" />
+      <path d="M12.33 5.5A5 5 0 0 1 12.85 6.77" stroke="hsl(60 100% 50%)" />
+      <path d="M12.83 6.71A5 5 0 0 1 13.0 8.07" stroke="hsl(75 100% 50%)" />
+      <path d="M13.0 8.0A5 5 0 0 1 12.81 9.36" stroke="hsl(90 100% 50%)" />
+      <path d="M12.83 9.29A5 5 0 0 1 12.3 10.56" stroke="hsl(105 100% 50%)" />
+      <path d="M12.33 10.5A5 5 0 0 1 11.49 11.58" stroke="hsl(120 100% 50%)" />
+      <path d="M11.54 11.54A5 5 0 0 1 10.44 12.36" stroke="hsl(135 100% 50%)" />
+      <path d="M10.5 12.33A5 5 0 0 1 9.23 12.85" stroke="hsl(150 100% 50%)" />
+      <path d="M9.29 12.83A5 5 0 0 1 7.93 13.0" stroke="hsl(165 100% 50%)" />
+      <path d="M8.0 13.0A5 5 0 0 1 6.64 12.81" stroke="hsl(180 100% 50%)" />
+      <path d="M6.71 12.83A5 5 0 0 1 5.44 12.3" stroke="hsl(195 100% 50%)" />
+      <path d="M5.5 12.33A5 5 0 0 1 4.42 11.49" stroke="hsl(210 100% 50%)" />
+      <path d="M4.46 11.54A5 5 0 0 1 3.64 10.44" stroke="hsl(225 100% 50%)" />
+      <path d="M3.67 10.5A5 5 0 0 1 3.15 9.23" stroke="hsl(240 100% 50%)" />
+      <path d="M3.17 9.29A5 5 0 0 1 3.0 7.93" stroke="hsl(255 100% 50%)" />
+      <path d="M3.0 8.0A5 5 0 0 1 3.19 6.64" stroke="hsl(270 100% 50%)" />
+      <path d="M3.17 6.71A5 5 0 0 1 3.7 5.44" stroke="hsl(285 100% 50%)" />
+      <path d="M3.67 5.5A5 5 0 0 1 4.51 4.42" stroke="hsl(300 100% 50%)" />
+      <path d="M4.46 4.46A5 5 0 0 1 5.56 3.64" stroke="hsl(315 100% 50%)" />
+      <path d="M5.5 3.67A5 5 0 0 1 6.77 3.15" stroke="hsl(330 100% 50%)" />
+      <path d="M6.71 3.17A5 5 0 0 1 8.07 3.0" stroke="hsl(345 100% 50%)" />
+    </svg>
+  ),
   opacity: (
     <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M14 8A6 6 0 1 1 2 8 6 6 0 1 1 14 8zM8 2v12M8 6l4.5-2.6M8 9.5l5.6-3.2M8 13l4.4-2.5" />

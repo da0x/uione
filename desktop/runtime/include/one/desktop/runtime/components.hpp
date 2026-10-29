@@ -130,10 +130,13 @@ namespace one::desktop::runtime {
 	// small, two rows of icons; at its end, at the toolbar's far end.
 	// A small one's tools are laid in rows `across` long, or, when it's 0, in two rows, the
 	// first the longer.
-	desktop::view group(page& p, std::string name, bool small, bool at_end, std::function<std::vector<desktop::view>()> build, int across = 0);
+	// `said`: its name written under it, unless its one tool says it already.
+	desktop::view group(page& p, std::string name, bool small, bool at_end, std::function<std::vector<desktop::view>()> build, int across = 0, bool said = true);
 	// A tool that opens its lines, each a choice drawn with what it's for, over
 	// everything until one's chosen.
 	desktop::view options(page& p, std::string label, std::string icon, std::function<std::vector<desktop::view>()> build);
+	// And kept open or closed by `key`, apart from others of the same words.
+	desktop::view options(page& p, std::string label, std::string icon, std::string key, std::function<std::vector<desktop::view>()> build);
 	// A workspace's tools, a column down its left side, each a small tool, its words its hint.
 	desktop::view tool_column(page& p, std::function<std::vector<desktop::view>()> build);
 	// A group's lines, each its own.

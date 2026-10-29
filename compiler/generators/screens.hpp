@@ -96,6 +96,17 @@ namespace one::generators::screens {
         std::string width, height;  // and the view's values it's as big as
     };
 
+    // Whether a toolbar's group holds one tool alone, whose words are its own name, like
+    // Opacity's: its name isn't said again under it.
+    inline bool named_by_its_tool(const language::content_block& group) {
+        if (group.items.size() != 1) return false;
+        const auto& only = group.items.front().node;
+        if (auto* b = std::get_if<language::button_item>(&only)) return b->label && *b->label == group.title;
+        if (auto* o = std::get_if<language::content_block>(&only)) return o->type == language::content_block::kind::options && o->title == group.title;
+        if (auto* t = std::get_if<language::toggle_item>(&only)) return t->label == group.title;
+        return false;
+    }
+
     // What a button is drawn as in a toolbar, when it has no icon and gives a color: a
     // circle of it, like White's { color = "#ffffff" }, its first given value a color
     // written #rrggbb; or a line of it, "line #rrggbb", where it's a collage's stroke; or

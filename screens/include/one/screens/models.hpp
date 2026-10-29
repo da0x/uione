@@ -97,6 +97,13 @@ namespace one::screens {
 		value fields;
 	};
 	std::optional<command_model> command_of(page_base& p, const command_button& b);
+	// What a command's buttons last gave, kept by the screen for what's drawn next, as
+	// a drawing program draws in the colors last chosen: each value as the last one to
+	// give it gave it.
+	value last_given(page_base& p, const std::string& command);
+	void remember_given(page_base& p, const std::string& command, const value& given);
+	// Whether what a button gives is what's remembered, so it's drawn pressed.
+	bool holds_last_given(page_base& p, const command_button& b);
 	// What a screen does as it's opened, once a visit, the first of its lines that
 	// applies, decided once every view they read is there: whether it's still deciding.
 	bool opening_now(page_base& p, bool ready, const std::vector<opening>& lines);

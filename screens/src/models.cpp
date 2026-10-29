@@ -456,6 +456,30 @@ namespace one::screens {
 		return command_model{busy ? b.label + "…" : b.label, busy, std::move(fields)};
 	}
 
+	value last_given(page_base& p, const std::string& command) {
+		value kept = p.kept<value>("given " + command).get();
+		return kept.is_map() ? kept : value::map();
+	}
+
+	void remember_given(page_base& p, const std::string& command, const value& given) {
+		auto kept = p.kept<value>("given " + command);
+		value now = kept.peek().is_map() ? kept.peek() : value::map();
+		for (const auto& [name, v] : given.as_map()) {
+			if (name != "id" && !name.starts_with("one:")) now.fields[name] = v;
+		}
+		kept.set(std::move(now));
+	}
+
+	bool holds_last_given(page_base& p, const command_button& b) {
+		value kept = last_given(p, b.command);
+		if (!b.fields.is_map() || b.fields.as_map().empty()) return false;
+		for (const auto& [name, v] : b.fields.as_map()) {
+			auto now = kept.fields.find(name);
+			if (now == kept.fields.end() || !same(now->second, v)) return false;
+		}
+		return true;
+	}
+
 	bool opening_now(page_base& p, bool ready, const std::vector<opening>& lines) {
 		auto opened = p.kept<bool>("opened");
 		if (opened.peek()) return false;

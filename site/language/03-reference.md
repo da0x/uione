@@ -2244,6 +2244,12 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     undo. Pressed twice, what's under the pointer is picked on its own. An SVG
     brought in comes in as one group of its shapes, named for it. A list of the
     layers shows what a group holds under it, opened by its caret.
+  - `draw layer::create { stroke = "#1d1d1f" } by hand with stroke stroke_width from
+    layer::paint`: what's drawn takes those fields as that command's buttons last gave
+    them, as a drawing program draws in the colors last chosen, or else as the draw
+    gives them. Those buttons stay on with nothing picked, and then only remember what
+    they give, pressed while it's what's remembered; with a layer picked they change it
+    and remember too. The command is one on the collage's layers that changes each.
   - `group layer::group`: what puts a layer in a group or takes it out, sent its
     `group`. An `ungroup "Ungroup" icon ungroup` button over the picked group sends
     each it holds with no group and deletes the group by the collage's `delete`.

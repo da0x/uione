@@ -852,6 +852,13 @@ namespace one::desktop::runtime {
 			if (!all.empty() && !all.back()["depth"].is_null()) made.fields["depth"] = value(all.back()["depth"].as_double() + 1);
 			value sent = collage_fields_of(made, spec.fields);
 			for (const auto& [name, given] : d->fields.fields) sent.fields[name] = given;
+			// And what its buttons last gave, where it takes it.
+			if (!d->with_from.empty()) {
+				value last = last_given(p, d->with_from);
+				for (const auto& name : d->with) {
+					if (auto found = last.fields.find(name); found != last.fields.end()) sent.fields[name] = found->second;
+				}
+			}
 			p.run(d->command, sent, [&p, pick = spec.pick](const answer& a) {
 				if (a && !pick.empty()) p.pick(pick, *a);
 			});

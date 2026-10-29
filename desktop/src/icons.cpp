@@ -5,6 +5,7 @@
 // grid, its paths, rectangles and circles stroked 1.5 wide with round ends and
 // joins, and filled where the web fills them, scaled to the size it's drawn at.
 
+#include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
@@ -122,6 +123,8 @@ namespace one::desktop {
 			    {"group", {path("M1.5 1.5h13v13h-13zM4 4h5v5H4zM7 7h5v5H7z")}},
 			    {"ungroup", {path("M2 2.5h6v6H2zM8 7.5h6v6H8z")}},
 			    // How see-through: a circle, half of it shaded.
+			    // Any color: a ring of every hue, drawn in its colors, whatever it's tinted.
+			    {"spectrum", {path("M14 8A6 6 0 1 1 2 8 6 6 0 1 1 14 8z")}},
 			    {"opacity", {path("M14 8A6 6 0 1 1 2 8 6 6 0 1 1 14 8zM8 2v12M8 6l4.5-2.6M8 9.5l5.6-3.2M8 13l4.4-2.5")}},
 			    {"spread", {path("M1.5 3.5h5.5v9h-5.5zM9 3.5h5.5v9H9z")}},
 			    // A warm reading mode: a cup of coffee.
@@ -263,9 +266,48 @@ namespace one::desktop {
 
 	bool has_icon(const std::string& name) { return icons().contains(name); }
 
+	namespace {
+		// A ring of every hue, round the way the clock goes from red at its top, made
+		// once, larger than it's drawn so it stays smooth.
+		const picture& spectrum() {
+			static const picture made = [] {
+				constexpr int side = 96;
+				std::vector<std::uint8_t> rgba(side * side * 4, 0);
+				for (int y = 0; y < side; ++y) {
+					for (int x = 0; x < side; ++x) {
+						double dx = x + 0.5 - side / 2.0, dy = y + 0.5 - side / 2.0, r = std::hypot(dx, dy);
+						double outer = side * 6.5 / 16, inner = side * 3.5 / 16;
+						double coverage = std::clamp(std::min(outer - r, r - inner) + 0.5, 0.0, 1.0);
+						if (coverage <= 0) continue;
+						double h = std::fmod(std::atan2(dx, -dy) * 180 / std::numbers::pi + 360, 360), f = h / 60 - std::floor(h / 60);
+						double rgb[3];
+						switch (static_cast<int>(h / 60)) {
+							case 0: rgb[0] = 1, rgb[1] = f, rgb[2] = 0; break;
+							case 1: rgb[0] = 1 - f, rgb[1] = 1, rgb[2] = 0; break;
+							case 2: rgb[0] = 0, rgb[1] = 1, rgb[2] = f; break;
+							case 3: rgb[0] = 0, rgb[1] = 1 - f, rgb[2] = 1; break;
+							case 4: rgb[0] = f, rgb[1] = 0, rgb[2] = 1; break;
+							default: rgb[0] = 1, rgb[1] = 0, rgb[2] = 1 - f; break;
+						}
+						std::size_t at = (static_cast<std::size_t>(y) * side + x) * 4;
+						for (int i = 0; i < 3; ++i) rgba[at + i] = static_cast<std::uint8_t>(std::lround(rgb[i] * 255));
+						rgba[at + 3] = static_cast<std::uint8_t>(std::lround(coverage * 255));
+					}
+				}
+				return picture::of(side, side, std::move(rgba));
+			}();
+			return made;
+		}
+	}  // namespace
+
 	void draw_icon(canvas& c, const std::string& name, rect area, color tint) {
 		auto found = icons().find(name);
 		if (found == icons().end()) return;
+		if (name == "spectrum") {
+			float side = std::min(area.width, area.height);
+			c.picture(spectrum(), {area.x + (area.width - side) / 2, area.y + (area.height - side) / 2, side, side});
+			return;
+		}
 		float s = std::min(area.width, area.height) / 16;
 		point origin{area.x + (area.width - 16 * s) / 2, area.y + (area.height - 16 * s) / 2};
 		auto at = [&](point p) { return point{origin.x + p.x * s, origin.y + p.y * s}; };

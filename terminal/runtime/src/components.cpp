@@ -192,8 +192,12 @@ namespace one::terminal::runtime {
 		auto shown = command_of(p, b);
 		if (!shown) return {};
 		if (off) return terminal::text(shown->label, terminal::dim());
-		auto run = [&p, name = b.command, fields = shown->fields, busy = shown->busy, then = b.then_open] {
+		// With nothing to act on, one whose values are remembered only remembers them.
+		bool only_remembers = b.remembers && b.id.empty();
+		auto run = [&p, name = b.command, fields = shown->fields, busy = shown->busy, then = b.then_open, remembers = b.remembers, only_remembers] {
 			if (busy) return;
+			if (remembers) remember_given(p, name, fields);
+			if (only_remembers) return;
 			if (then.empty()) return p.run(name, fields);
 			p.run(name, fields, [&p, then](const answer& made) {
 				if (made) p.open(then.substr(0, then.rfind(':')) + *made);
@@ -208,10 +212,11 @@ namespace one::terminal::runtime {
 			const command_slide& s = *b.slide;
 			double now = s.now.is_null() ? s.to : std::clamp(s.now.as_double(), s.from, s.to);
 			state<std::string> held(std::format("{}", now));
-			auto settled = [&p, name = b.command, fields = shown->fields, field = s.field](const std::string& text) {
+			auto settled = [&p, name = b.command, fields = shown->fields, field = s.field, remembers = b.remembers, only_remembers](const std::string& text) {
 				value sent = fields.is_null() ? value::map() : fields;
 				sent.fields[field] = value(std::strtod(text.c_str(), nullptr));
-				p.run(name, sent);
+				if (remembers) remember_given(p, name, sent);
+				if (!only_remembers) p.run(name, sent);
 			};
 			return terminal::row(terminal::text(shown->label), terminal::slider(held, {.from = s.from, .to = s.to, .by = s.by, .percent = s.from == 0 && s.to == 1}, std::move(settled)));
 		}

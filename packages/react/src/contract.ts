@@ -677,6 +677,7 @@ export interface GroupProps {
   small?: boolean;
   across?: number; // a small one's tools in rows this long, rather than two rows, the first the longer
   atEnd?: boolean;
+  unsaid?: boolean; // its name not written under it, as its one tool says it already
   children: ReactNode;
 }
 

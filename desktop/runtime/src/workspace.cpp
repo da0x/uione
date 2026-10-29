@@ -170,7 +170,9 @@ namespace one::desktop::runtime {
 		return desktop::column(std::move(parts)).background({.fill = t.sunken}).grow();
 	}
 
-	desktop::view group(page& p, std::string name, bool small, bool at_end, std::function<std::vector<desktop::view>()> build, int across_said) {
+	desktop::view group(page& p, std::string name, bool small, bool at_end, std::function<std::vector<desktop::view>()> build, int across_said, bool said) {
+		// Unsaid, as tall as a name still, so it lines up with every other group.
+		if (!said) name = " ";
 		const auto& t = current_theme();
 		auto was = p.in_group();
 		p.in_group(small);
@@ -205,7 +207,12 @@ namespace one::desktop::runtime {
 	}
 
 	desktop::view options(page& p, std::string label, std::string icon, std::function<std::vector<desktop::view>()> build) {
-		auto open = p.kept<bool>("options " + label);
+		std::string key = label;
+		return options(p, std::move(label), std::move(icon), std::move(key), std::move(build));
+	}
+
+	desktop::view options(page& p, std::string label, std::string icon, std::string key, std::function<std::vector<desktop::view>()> build) {
+		auto open = p.kept<bool>("options " + key);
 		// Its lines built as choices, closing it once one's chosen.
 		auto was = p.in_options();
 		auto in_group = p.in_group();

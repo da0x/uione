@@ -197,11 +197,17 @@ namespace one::desktop::runtime {
 		// its shape.
 		bool off = p.in_group() && (p.off() || !b.when);
 		if (p.in_group()) b.when = true;
+		// With nothing to act on, one whose values are remembered for what's drawn next is
+		// pressed while they're what's remembered.
+		bool only_remembers = b.remembers && b.id.empty();
+		if (only_remembers) b.pressed = holds_last_given(p, b);
 		auto shown = command_of(p, b);
 		if (!shown) return {};
 		std::string label_now = shown->label;
-		auto run = [&p, name = b.command, fields = shown->fields, busy = shown->busy, then = b.then_open] {
+		auto run = [&p, name = b.command, fields = shown->fields, busy = shown->busy, then = b.then_open, remembers = b.remembers, only_remembers] {
 			if (busy) return;
+			if (remembers) remember_given(p, name, fields);
+			if (only_remembers) return;
 			if (then.empty()) return p.run(name, fields);
 			// What it made, opened: its id in the route's last parameter.
 			p.run(name, fields, [&p, then](const answer& made) {
@@ -215,13 +221,15 @@ namespace one::desktop::runtime {
 		// with where it's let go.
 		if (b.slide) {
 			const command_slide& s = *b.slide;
-			double now = s.now.is_null() ? s.to : std::clamp(s.now.as_double(), s.from, s.to);
+			value was = only_remembers ? last_given(p, b.command).fields[s.field] : s.now;
+			double now = was.is_null() ? s.to : std::clamp(was.as_double(), s.from, s.to);
 			state<std::string> held(std::format("{}", now));
-			auto settled = [&p, name = b.command, fields = shown->fields, field = s.field, off](const std::string& text) {
+			auto settled = [&p, name = b.command, fields = shown->fields, field = s.field, off, remembers = b.remembers, only_remembers](const std::string& text) {
 				if (off) return;
 				value sent = fields.is_null() ? value::map() : fields;
 				sent.fields[field] = value(std::strtod(text.c_str(), nullptr));
-				p.run(name, sent);
+				if (remembers) remember_given(p, name, sent);
+				if (!only_remembers) p.run(name, sent);
 			};
 			desktop::view slid = desktop::slider(held, {.from = s.from, .to = s.to, .by = s.by, .percent = s.from == 0 && s.to == 1}, std::move(settled));
 			auto words = current_theme().quiet();
@@ -230,13 +238,14 @@ namespace one::desktop::runtime {
 		// Any color: its words over a color picker, from what it is now, the command run
 		// with each one chosen.
 		if (b.color) {
-			std::string now = b.color->now.as_string();
+			std::string now = only_remembers ? last_given(p, b.command).fields[b.color->field].as_string() : b.color->now.as_string();
 			state<std::string> held(now.size() == 7 && now[0] == '#' ? now : std::string("#000000"));
-			auto settled = [&p, name = b.command, fields = shown->fields, field = b.color->field, off](const std::string& hex) {
+			auto settled = [&p, name = b.command, fields = shown->fields, field = b.color->field, off, remembers = b.remembers, only_remembers](const std::string& hex) {
 				if (off) return;
 				value sent = fields.is_null() ? value::map() : fields;
 				sent.fields[field] = value(hex);
-				p.run(name, sent);
+				if (remembers) remember_given(p, name, sent);
+				if (!only_remembers) p.run(name, sent);
 			};
 			return desktop::column(desktop::text(label_now, current_theme().quiet()), desktop::color_picker(held, std::move(settled))).spacing(6).padding(edges(6, 8)).width(240);
 		}

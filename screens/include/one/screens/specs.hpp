@@ -88,6 +88,7 @@ namespace one::screens {
 		std::string about = "";              // among options, what it's for, said beside it
 		std::optional<command_slide> slide = std::nullopt;  // drawn as a slider, run as it's let go
 		std::optional<command_color> color = std::nullopt;  // or as a color picker, run as one's chosen
+		bool remembers = false;  // what it gives remembered for what's drawn next; with nothing to act on, only that
 	};
 
 	// Links down the side to a part's pages, like a project's settings, beside what
@@ -388,6 +389,9 @@ namespace one::screens {
 		bool when = true;
 		std::string by = "";
 		std::vector<std::pair<std::string, std::string>> back = {};
+		// with stroke from layer::paint: these fields as that command's buttons last gave them.
+		std::vector<std::string> with = {};
+		std::string with_from = "";
 	};
 
 	// A picture made of layers, as big as two of the view's values say, in its own

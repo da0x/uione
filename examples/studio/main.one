@@ -343,7 +343,7 @@ namespace studio at / {
 				add layer::create
 				draw layer::create { fill = "#2e86de" } when tool == tool::box
 				draw layer::create { shape = shape::path  stroke = "#1d1d1f"  stroke_width = 6 } by line when tool == tool::line
-				draw layer::create { shape = shape::path  stroke = "#1d1d1f"  stroke_width = 4 } by hand when tool == tool::pencil
+				draw layer::create { shape = shape::path  stroke = "#1d1d1f"  stroke_width = 4 } by hand with stroke from layer::paint when tool == tool::pencil
 				draw layer::create { shape = shape::path  stroke = "#1d1d1f"  stroke_width = 4 } by points when tool == tool::pen
 				place layer::place
 				reshape layer::reshape

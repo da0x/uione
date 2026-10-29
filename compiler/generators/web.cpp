@@ -1143,7 +1143,7 @@ namespace one::generators {
                     parts.components.insert("Group");
                     shown_while(out, parts, ns, item, [&] {
                         out.open("<Group name=" + web_detail::js_string(group->title) + (group->small ? " small" : "") + (group->across ? " across={" + std::to_string(group->across) + "}" : "") +
-                                 (group->at_end ? " atEnd" : "") + ">");
+                                 (group->at_end ? " atEnd" : "") + (screens::named_by_its_tool(*group) ? " unsaid" : "") + ">");
                         bool was = std::exchange(in_group_, true);
                         screen_items(out, parts, ns, group->items, screen);
                         in_group_ = was;
@@ -1329,7 +1329,10 @@ namespace one::generators {
                     }
                     std::string label = button->label ? " label=" + web_detail::js_string(*button->label) : "";
                     std::string shown_when = button->when ? condition(parts, ns, *button->when) : "";
-                    if (!on_pick.empty()) shown_when = shown_when.empty() ? on_pick + " !== null" : on_pick + " !== null && " + shown_when;
+                    // One whose values the screen's collage draws with is there with nothing
+                    // picked too, and then only remembers what it gives.
+                    bool remembers = collage_ && std::ranges::any_of(collage_->draws, [&](const auto& d) { return d.taken_from && full_command(ns, *d.taken_from) == command; });
+                    if (!on_pick.empty() && !remembers) shown_when = shown_when.empty() ? on_pick + " !== null" : on_pick + " !== null && " + shown_when;
                     std::string when = shown_when.empty() ? "" : " when={" + shown_when + "}";
                     // What it's sent, worked out as the screen's drawn, and pressed while
                     // what it would set is already so: on the picked row, or the entity the
@@ -1392,6 +1395,7 @@ namespace one::generators {
                                                                           : "";
                     std::string then = button->then_open ? " thenOpen=" + web_detail::js_string(full_route(ns, *button->then_open)) : "";
                     if (button->about) then += " about=" + web_detail::js_string(*button->about);
+                    if (remembers) then += " remembers";
                     std::string icon = button->icon ? " icon=" + web_detail::js_string(*button->icon) : "";
                     if (std::string swatch = screens::swatch_of(*button, collage_colors(ns)); !swatch.empty()) icon += " swatch=" + web_detail::js_string(swatch);
                     out.line("<Command name=" + web_detail::js_string(command) + id + label + icon + keys_of(button->keys) + given + slide + pressed + then + when + allowed(parts, ns, command) + " />");
@@ -1516,7 +1520,11 @@ namespace one::generators {
                             }
                             draws += (draws.empty() ? "" : ", ") + std::string("{ command: ") + web_detail::js_string(full_command(ns, d.command)) + ", given: { " + given + " }" +
                                      (d.when ? ", when: " + condition(parts, ns, *d.when) : "") + (d.by ? ", by: " + web_detail::js_string(*d.by) : "") +
-                                     (back.empty() ? "" : ", back: [" + back + "]") + " }";
+                                     (back.empty() ? "" : ", back: [" + back + "]") + (d.taken_from ? ", with: [" + [&] {
+                                         std::string with;
+                                         for (const auto& taken : d.taken) with += (with.empty() ? "" : ", ") + web_detail::js_string(taken);
+                                         return with;
+                                     }() + "], withFrom: " + web_detail::js_string(full_command(ns, *d.taken_from)) : "") + " }";
                         }
                         line += " draws={[" + draws + "]}";
                     }
