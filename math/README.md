@@ -23,7 +23,9 @@ one shared file of cases, so a window and a web page set every equation alike.
 ### Numbers and names
 
 - Numbers are written as usual: `2`, `0.5`, `6.02e23`. A number followed by `%` is a
-  percent: `6.5%` is 0.065.
+  percent: `6.5%` is 0.065. A whole number's thousands may be set apart by commas,
+  `299,792,458`, a comma with three digits after it and no more, so `f(1,2)` is
+  still two things.
 - A name of one letter is set in italic: `x`, `n`.
 - A Greek letter is written by its name and set as the letter: `alpha`, `zeta`, `pi`,
   `Omega` (capital first for the capital).

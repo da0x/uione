@@ -109,6 +109,10 @@ class Reader {
     if (isDigit(c) || (c === "." && isDigit(s[this.at + 1]))) {
       const from = this.at;
       while (this.at < s.length && (isDigit(s[this.at]) || s[this.at] === ".")) this.at++;
+      // Its thousands set apart by commas, 299,792,458, while it's a whole number: a
+      // comma with three digits after it and no fourth.
+      while (s[this.at] === "," && !s.slice(from, this.at).includes(".") && /^\d{3}(?!\d)/.test(s.slice(this.at + 1))) this.at += 4;
+      if (s[this.at] === "." && isDigit(s[this.at + 1])) for (this.at++; isDigit(s[this.at]); ) this.at++;
       // An exponent, 6.02e23, only when digits follow the e.
       if (this.at + 1 < s.length && (s[this.at] === "e" || s[this.at] === "E")) {
         let e = this.at + 1;
