@@ -160,24 +160,24 @@ namespace one::desktop {
 		// A circle of no color, as a toolbar's swatch shows clear: a checkerboard of these
 		// two shades, four squares across, its edge smooth; made larger than it's drawn
 		// so it stays sharp.
-		picture clear_circle_of(std::uint8_t light, std::uint8_t dark) {
+		picture clear_circle_of(std::uint32_t light, std::uint32_t dark) {
 			constexpr int side = 64;
 			std::vector<std::uint8_t> rgba(side * side * 4, 0);
 			for (int y = 0; y < side; ++y) {
 				for (int x = 0; x < side; ++x) {
 					float dx = x + 0.5f - side / 2.f, dy = y + 0.5f - side / 2.f;
 					float coverage = std::clamp(side / 2.f - std::sqrt(dx * dx + dy * dy) + 0.5f, 0.f, 1.f);
-					std::uint8_t shade = ((x / 16 + y / 16) % 2) ? dark : light;
+					std::uint32_t shade = ((x / 16 + y / 16) % 2) ? dark : light;
 					std::size_t at = (static_cast<std::size_t>(y) * side + x) * 4;
-					rgba[at] = rgba[at + 1] = rgba[at + 2] = shade;
+					rgba[at] = static_cast<std::uint8_t>(shade >> 16), rgba[at + 1] = static_cast<std::uint8_t>(shade >> 8), rgba[at + 2] = static_cast<std::uint8_t>(shade);
 					rgba[at + 3] = static_cast<std::uint8_t>(coverage * 255);
 				}
 			}
 			return picture::of(side, side, std::move(rgba));
 		}
-		// White and gray, or in a dark theme, gray and black; each made once.
+		// White and gray, or in a dark theme, its own blue-grays; each made once.
 		const picture& clear_circle(bool dark) {
-			static const picture light = clear_circle_of(0xff, 0xcc), shaded = clear_circle_of(0x3d, 0x1a);
+			static const picture light = clear_circle_of(0xffffff, 0xcccccc), shaded = clear_circle_of(0x2b3242, 0x1a1f2b);
 			return dark ? shaded : light;
 		}
 

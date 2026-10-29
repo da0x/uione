@@ -136,7 +136,7 @@ function measured(words: string, size: number, face: string): { w: number; h: nu
 }
 
 // Where a clear collage has nothing, a checkerboard, as drawing programs show what's
-// clear: white and gray, or in the dark, gray and black, as the theme says; squares 8
+// clear: white and gray, or in the dark, the theme's own blue-grays; squares 8
 // pixels on a side. The same as the desktop's.
 function checkers(c: CanvasRenderingContext2D): CanvasPattern | string {
   const style = getComputedStyle(c.canvas);

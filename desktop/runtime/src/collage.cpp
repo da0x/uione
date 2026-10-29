@@ -1092,25 +1092,22 @@ namespace one::desktop::runtime {
 		}
 
 		// Where a clear collage has nothing, a checkerboard, as drawing programs show
-		// what's clear: white and gray, or in a dark theme, gray and black; squares 8
-		// window pixels on a side, made once for each size.
+		// what's clear: white and gray, or in a dark theme, the theme's own blue-grays;
+		// squares 8 window pixels on a side, each on whole pixels so its edges are sharp.
 		void paint_checkers(desktop::canvas& c, desktop::rect on) {
-			int w = std::max(1, static_cast<int>(std::lround(on.width * c.scale()))), h = std::max(1, static_cast<int>(std::lround(on.height * c.scale())));
-			int side = std::max(1, static_cast<int>(std::lround(8 * c.scale())));
 			bool dark = desktop::dark(current_theme());
-			std::uint8_t light_shade = dark ? 0x3d : 0xff, dark_shade = dark ? 0x1a : 0xcc;
-			static kept_by<desktop::picture> made(4);
-			desktop::picture drawn = made.get(std::format("{} {} {} {}", w, h, side, dark), [&] {
-				std::vector<std::uint8_t> rgba(static_cast<std::size_t>(w) * h * 4, 255);
-				for (int y = 0; y < h; ++y) {
-					for (int x = 0; x < w; ++x) {
-						std::size_t at = (static_cast<std::size_t>(y) * w + x) * 4;
-						rgba[at] = rgba[at + 1] = rgba[at + 2] = (x / side + y / side) % 2 == 0 ? light_shade : dark_shade;
-					}
+			desktop::color light = desktop::color::hex(dark ? 0x2b3242 : 0xffffff), shade = desktop::color::hex(dark ? 0x1a1f2b : 0xcccccc);
+			auto kept = c.clip(on);
+			c.box(on, {.fill = light});
+			float s = static_cast<float>(c.scale());
+			int side = std::max(1, static_cast<int>(std::lround(8 * s)));
+			int left = static_cast<int>(std::floor(on.x * s)), top = static_cast<int>(std::floor(on.y * s));
+			int right = static_cast<int>(std::ceil(on.right() * s)), bottom = static_cast<int>(std::ceil(on.bottom() * s));
+			for (int y = top, row = 0; y < bottom; y += side, ++row) {
+				for (int x = left + (row % 2 ? 0 : side); x < right; x += 2 * side) {
+					c.box({x / s, y / s, side / s, side / s}, {.fill = shade});
 				}
-				return desktop::picture::of(w, h, std::move(rgba));
-			});
-			c.picture(drawn, on, {0, 0, 1, 1});
+			}
 		}
 
 		// An SVG layer drawn at `on`, from its vectors, by the pinned nanosvg, as many

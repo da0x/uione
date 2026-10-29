@@ -77,7 +77,7 @@
  */
 :root {
   /* What's clear is shown as a checkerboard of these: white and gray, or in the dark,
-     gray and black. */
+     the theme's own blue-grays. */
   --checker-light: #ffffff;
   --checker-dark: #cccccc;
   --hue-blue: #2457d6;
@@ -101,8 +101,8 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --checker-light: #3d3d3d;
-    --checker-dark: #1a1a1a;
+    --checker-light: #2b3242;
+    --checker-dark: #1a1f2b;
     --hue-blue: #7ea6ff;
     --hue-blue-hover: #a3c0ff;
     --hue-blue-soft: #16244a;
@@ -124,8 +124,8 @@
   }
 }
 :root[data-theme="dark"] {
-  --checker-light: #3d3d3d;
-  --checker-dark: #1a1a1a;
+  --checker-light: #2b3242;
+  --checker-dark: #1a1f2b;
   --hue-blue: #7ea6ff;
   --hue-blue-hover: #a3c0ff;
   --hue-blue-soft: #16244a;
