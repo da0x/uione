@@ -11,7 +11,7 @@ import type { ReactElement, ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { partsOf } from "./keys.js";
 import { ShownPath, fill, useConfirmContext, useFill, usePageTitle, useSignIn, useSite } from "./app.js";
-import { hintOf, rememberGiven, setPicked as pickRow, useInGroup, useInOptions, useLastGiven, useOverRun, usePicturesHanded, useStyled, takeInTurn, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
+import { hintOf, rememberGiven, setPicked as pickRow, useInGroup, useInOptions, useLastGiven, useOverRun, usePicturesHanded, useStyled, takeInTurn, alreadyIn, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
 import { useSaying } from "./said.js";
 import { PictureAlone, stepped, useAwakeOn, useSwipeStep } from "./alone.js";
 import { pictureSize } from "./vectors.js";
@@ -2847,7 +2847,7 @@ export function Cards({
   const listed = view.data?.[list];
   const rows = rowsOf(listed);
   const addresses = useAddresses(rows, picture, 640);
-  const taking = useTakingPictures(paste, name);
+  const taking = useTakingPictures(paste, name, () => rowsOf(view.data?.[list]).map((row) => String((picture && row[picture]) ?? "")));
   // Its headings, worked out once each time the list changes.
   const groups = useMemo(() => (by ? timeGroups(rowsOf(listed), by.field, by.unit) : undefined), [listed, by?.field, by?.unit]);
   useDatedInView(name ?? "", groups);
@@ -2999,18 +2999,26 @@ export function DatedTimeline({ view, list, by, unit = "month", cards }: { view:
 // bytes, date and camera where the cards keep them; all one step to undo. The same as the
 // desktop's. What it gives is the cards wrapped in what takes them, a drop target even
 // while there are none.
-function useTakingPictures(paste: { command: string; fields: Record<string, string>; given?: Record<string, unknown> } | undefined, name: string | undefined) {
+function useTakingPictures(paste: { command: string; fields: Record<string, string>; given?: Record<string, unknown> } | undefined, name: string | undefined, held: () => string[]) {
   const ui = useUI();
   const files = useFiles();
   const runner = useRunner();
   const { say } = useSaying();
   const [dropping, setDropping] = useState(false);
+  const latest = useRef(held);
+  latest.current = held;
   const add = async (given: File[]) => {
     if (!paste || !files || !paste.fields["picture"]) return;
     let first = true;
+    // Each picture kept once: the hashes of the files the cards' records name, as a store
+    // that keeps files by their SHA-256 names them, and of those added since.
+    const kept = new Set(latest.current().map((path) => path.slice(path.lastIndexOf("/") + 1)).filter((hash) => /^[0-9a-f]{64}$/.test(hash)));
     await takeInTurn(given, say, async (file) => {
       const size = await pictureSize(file);
       if (!size) return `${file.name} isn't a picture this can read.`;
+      const hash = await sha256(file);
+      if (kept.has(hash)) return alreadyIn;
+      kept.add(hash);
       const made: CommandInput = { ...(paste.given ?? {}) };
       const keep = (part: string, held: unknown) => {
         const field = paste.fields[part];
@@ -3058,6 +3066,21 @@ function useTakingPictures(paste: { command: string; fields: Record<string, stri
       {empty && <ui.Text>Nothing here yet. Drop pictures here to add them.</ui.Text>}
     </div>
   );
+}
+
+// A file's SHA-256, in hex, as a store keeping files by their content names it.
+async function sha256(file: File): Promise<string> {
+  const bytes =
+    typeof file.arrayBuffer === "function"
+      ? await file.arrayBuffer()
+      : await new Promise<ArrayBuffer>((done, failed) => {
+          const reader = new FileReader();
+          reader.onload = () => done(reader.result as ArrayBuffer);
+          reader.onerror = () => failed(reader.error);
+          reader.readAsArrayBuffer(file);
+        });
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  return [...digest].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 // A command a grid's cell runs: the form it asks with, and whether the person may.

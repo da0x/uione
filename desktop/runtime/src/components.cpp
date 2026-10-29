@@ -15,6 +15,7 @@
 #include <chrono>
 #include <filesystem>
 #include <format>
+#include <set>
 #include <span>
 #include <thread>
 
@@ -772,7 +773,14 @@ namespace one::desktop::runtime {
 		if (spec.paste && !spec.add.empty() && spec.fields.contains("picture")) {
 			auto handed = pictures_handed(p, spec.key);
 			if (handed.empty()) handed = pictures_dropped(p, spec.key);
-			pictures_coming(p, spec.key, std::move(handed));
+			// Each picture kept once: one whose file is a card's already isn't another.
+			if (!handed.empty()) {
+				std::set<std::string> held;
+				for (const auto& row : rows_of(*spec.view, spec.list)) {
+					if (const value& file = field_of(row, spec.picture); file.is_string() && !file.as_string().empty()) held.insert(file.as_string());
+				}
+				pictures_coming(p, spec.key, std::move(handed), std::move(held));
+			}
 			if (auto come = pictures_come(p, spec.key); !come.empty()) add_pictures(p, spec, come);
 			std::string key = spec.key;
 			spec.paste = false;

@@ -6,11 +6,11 @@
 // the fields that keep them; several at once one step to undo, and a drop target while empty.
 
 import { fireEvent, render, waitFor } from "@testing-library/react";
-import { App, Cards, DatedTimeline, Link, PaperButton, StepLink, memorySource, mosaicRows, mosaicTile, screen as defineScreen, timeGroups, useView, within, yearsOf } from "../src/index.js";
+import { App, Cards, DatedTimeline, Link, Messages, PaperButton, StepLink, memorySource, mosaicRows, mosaicTile, screen as defineScreen, timeGroups, useView, within, yearsOf } from "../src/index.js";
 import { useNavigate } from "react-router";
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
-import { takeInTurn } from "../src/workspace.js";
+import { alreadyIn, alreadySaid, takeInTurn } from "../src/workspace.js";
 import { vi } from "vitest";
 import { exif, jpeg } from "./photos.js";
 
@@ -85,6 +85,48 @@ describe("cards that take pictures", () => {
     fireEvent.change(opened!);
     await waitFor(() => expect(source.runs.some((r) => r.command === "studio::piece::create")).toBe(true));
     expect(source.runs.find((r) => r.command === "studio::piece::create")!.input).toMatchObject({ room: "r1", name: "beach", picture_width: 640 });
+  });
+});
+
+describe("cards that keep each picture once", () => {
+  beforeEach(() => {
+    globalThis.createImageBitmap = (async () => ({ width: 640, height: 480, close() {} })) as unknown as typeof createImageBitmap;
+  });
+
+  it("make no record of a picture whose file is a card's already, or one before it in the same batch, and say how many were", async () => {
+    const hex = async (text: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)))].map((b) => b.toString(16).padStart(2, "0")).join("");
+    // Kept by its content, as a local store keeps files.
+    const own = async (file: File) => `files/${await hex(await new Promise<string>((done) => {
+      const reader = new FileReader();
+      reader.onload = () => done(String(reader.result));
+      reader.readAsText(file);
+    }))}`;
+    const source = memorySource({ files: { upload: own }, commands: { "studio::piece::create": () => ({ id: "n1" }) } });
+    source.set("studio::room_page", { pieces: [{ id: "n0", name: "Harbor", image: `files/${await hex("harbor")}` }] }, "r1");
+    function Pieces() {
+      const page = useView("studio::room_page", "r1");
+      return (
+        <>
+          <Cards view={page} list="pieces" columns={{ name: "Name" }} picture="image" paste={paste} name="/ cards pieces" />
+          <Messages />
+        </>
+      );
+    }
+    const only = defineScreen({ title: "Pieces", route: "/" }, () => <Pieces />);
+    const drawn = render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
+    await waitFor(() => expect(drawn.getByText("Harbor")).toBeTruthy());
+    const files = [new File(["harbor"], "harbor.jpg", { type: "image/jpeg" }), new File(["dusk"], "dusk.jpg", { type: "image/jpeg" }), new File(["dusk"], "dusk copy.jpg", { type: "image/jpeg" }), new File(["pier"], "pier.jpg", { type: "image/jpeg" })];
+    fireEvent.drop(drawn.container.querySelector(".one-cards-taking")!, { dataTransfer: { files, getData: () => "", types: ["Files"] } });
+    await waitFor(() => expect(drawn.getByText("Added 2 pictures, 2 were already in.")).toBeTruthy());
+    expect(source.runs.filter((r) => r.command === "studio::piece::create").map((r) => (r.input as Record<string, unknown>).name)).toEqual(["dusk", "pier"]);
+    expect(source.uploads.map((u) => u.file.name)).toEqual(["dusk.jpg", "pier.jpg"]);
+  });
+
+  it("say so whatever came in", async () => {
+    const said: unknown[] = [];
+    await takeInTurn(["harbor", "dusk", "notes.txt"], (s) => said.push(s), async (name) => (name === "harbor" ? alreadyIn : name.endsWith(".txt") ? `${name} isn't a picture this can read.` : undefined));
+    expect(said.at(-1)).toEqual({ text: "Added 1 picture, 1 was already in. notes.txt isn't a picture this can read.", problem: true });
+    expect([alreadySaid(0, 1), alreadySaid(0, 9), alreadySaid(31, 9)]).toEqual(["That picture was already in.", "All 9 pictures were already in.", "Added 31 pictures, 9 were already in."]);
   });
 });
 

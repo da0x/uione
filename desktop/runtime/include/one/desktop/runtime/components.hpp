@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -220,9 +221,14 @@ namespace one::desktop::runtime {
 	// Pictures handed to what `key` names, each measured and kept in turn in the
 	// background, the workspace saying how far it's got while there are several, and,
 	// once they're in, what couldn't be taken; and those come in since it was last
-	// built, in order.
-	void pictures_coming(page& p, const std::string& key, std::vector<std::filesystem::path> files);
+	// built, in order. Given what's `held` already, as the files its records name, a
+	// picture kept as one of them, or as one before it, isn't come in again, and once
+	// they're in the workspace says how many were added and how many were already in.
+	void pictures_coming(page& p, const std::string& key, std::vector<std::filesystem::path> files, std::optional<std::set<std::string>> held = std::nullopt);
 	std::vector<coming_picture> pictures_come(page& p, const std::string& key);
+	// What's said once they're in, when some were already: "Added 31 pictures, 9 were
+	// already in." The same as the web's.
+	std::string pictures_already_said(std::size_t added, std::size_t already);
 	// Runs a command making something of a picture come in, its file in `field`.
 	void run_with_picture(page& p, const std::string& command, value made, const std::string& field, const coming_picture& picture, std::function<void(const answer&)> after);
 	desktop::view paper_button(page& p, paper_ask ask);

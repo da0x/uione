@@ -1075,6 +1075,58 @@ TEST("cards take pictures chosen or dropped, each a record made by their add, it
 	std::filesystem::remove_all(folder);
 }
 
+TEST("cards keep each picture once: one whose file is a card's already, or one before it in the same batch, isn't made again, and they say how many were") {
+	auto folder = std::filesystem::temp_directory_path() / "uione-cards-once";
+	std::filesystem::remove_all(folder);
+	std::filesystem::create_directories(folder);
+	auto picture = [&](const std::string& name, std::uint8_t shade) {
+		one::desktop::offscreen::write_png(folder / name, {6, 4, std::vector<std::uint8_t>(6 * 4 * 4, shade)});
+		return (folder / name).string();
+	};
+	// Kept as its content names it, as a folder keeps files by their hash.
+	struct kept_by_content : memory_source {
+		std::optional<std::expected<std::string, std::string>> keep(const std::filesystem::path& file) override {
+			std::ifstream in(file, std::ios::binary);
+			std::string bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+			return "files/" + std::to_string(std::hash<std::string>{}(bytes));
+		}
+	} data;
+	auto harbor = picture("harbor.png", 200), dusk = picture("dusk.png", 90), pier = picture("pier.png", 30);
+	std::filesystem::copy_file(dusk, folder / "dusk copy.png");
+	data.set("studio::room_page", "r1", value(fields{{"pieces", list{value(fields{{"id", "n0"}, {"name", "harbor"}, {"image", **data.keep(harbor)}})}}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Pieces", "/:room", "", [](page& p) {
+		                     return items(cards(p, {.view = p.view("studio::room_page", p.param("room")),
+		                                            .list = "pieces",
+		                                            .columns = {{"name", "Name"}},
+		                                            .picture = "image",
+		                                            .add = "studio::piece::create",
+		                                            .fields = {{"picture", "image"}, {"name", "name"}},
+		                                            .given = {{"room", p.param("room")}},
+		                                            .key = "/:room cards pieces",
+		                                            .paste = true}));
+	                     }});
+	navigator nav(s, data);
+	nav.open("/r1");
+	built(nav);
+	// Harbor's in already, and the second dusk is the first again, by what's in it, whatever it's called.
+	nav.current().kept<std::vector<std::string>>("pictures chosen /:room cards pieces").set({harbor, dusk, (folder / "dusk copy.png").string(), pier});
+	built(nav);
+	std::vector<std::string> made;
+	for (const auto& run : data.runs()) made.push_back(run.fields["name"].as_string());
+	CHECK((made == std::vector<std::string>{"dusk", "pier"}));
+	CHECK(nav.current().told().peek() == "Added 2 pictures, 2 were already in.");
+	// One alone that's in already.
+	nav.current().kept<std::vector<std::string>>("pictures chosen /:room cards pieces").set({harbor});
+	built(nav);
+	CHECK(data.runs().size() == 2);
+	CHECK(nav.current().told().peek() == "That picture was already in.");
+	CHECK(pictures_already_said(0, 9) == "All 9 pictures were already in.");
+	CHECK(pictures_already_said(1, 1) == "Added 1 picture, 1 was already in.");
+	std::filesystem::remove_all(folder);
+}
+
 TEST("cards take a photo's date and camera as it says them, and its size the way up it was held, and the small copy they draw is that way up too") {
 	auto folder = std::filesystem::temp_directory_path() / "uione-cards-photos";
 	std::filesystem::remove_all(folder);

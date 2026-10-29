@@ -2099,7 +2099,12 @@ form step::update "Save" {
   camera wrote, with its offset from UTC when the camera says one, or else when its
   file was last changed. The camera is its make and model, like `Fujifilm X-T5`,
   the make said once when the model starts with it. Several at once are one
-  step to undo, and cards with none yet still take them. A terminal can't be dropped
+  step to undo, and cards with none yet still take them. Each picture is kept
+  once: one whose content is already the file of one of the cards, or of one
+  before it in the same batch, isn't made a record again, whatever its file is
+  called. Once they're in, the workspace says so: "Added 31 pictures, 9 were
+  already in." It's known by the file's SHA-256, which is what a store that keeps
+  files here names it by; a store that names files otherwise takes every one. A terminal can't be dropped
   on, so it doesn't take them.
 
   Pictures coming in, here or in a collage or paper, are read and kept one at a

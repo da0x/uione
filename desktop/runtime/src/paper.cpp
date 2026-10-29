@@ -1047,7 +1047,9 @@ namespace one::desktop::runtime {
 			state<std::vector<coming_picture>> come;
 			state<std::string> told;
 			screens::source* from;
+			std::optional<std::set<std::string>> held = {};  // the files already in, when each is kept once
 			std::size_t next = 0;
+			std::size_t added = 0, already = 0;
 			bool any = false;
 			std::string wrong = {};  // why the last that couldn't be taken wasn't, said once they're all in
 		};
@@ -1055,8 +1057,9 @@ namespace one::desktop::runtime {
 		void come_in(std::shared_ptr<coming_batch> b) {
 			std::size_t i = b->next++, n = b->files.size();
 			if (i == n) {
-				return handed_back([told = b->told, wrong = b->wrong] {
-					if (!wrong.empty()) told.set(wrong);
+				std::string said = b->already == 0 ? "" : pictures_already_said(b->added, b->already);
+				return handed_back([told = b->told, wrong = b->wrong, said] {
+					if (!said.empty() || !wrong.empty()) told.set(said.empty() ? wrong : wrong.empty() ? said : said + " " + wrong);
 					else if (told.peek().starts_with("Adding ")) told.set("");
 				});
 			}
@@ -1070,6 +1073,12 @@ namespace one::desktop::runtime {
 				b->wrong = !size ? file.filename().string() + " isn't a picture this can read." : kept->error();
 				return in_background([b] { come_in(b); });
 			}
+			// The same picture as one already in, by its content, isn't another.
+			if (kept && b->held && !b->held->insert(**kept).second) {
+				++b->already;
+				return in_background([b] { come_in(b); });
+			}
+			++b->added;
 			std::tie(c.width, c.height) = *size;
 			if (kept) c.kept = **kept;
 			std::error_code failed;
@@ -1101,9 +1110,14 @@ namespace one::desktop::runtime {
 		}
 	}  // namespace
 
-	void pictures_coming(page& p, const std::string& key, std::vector<std::filesystem::path> files) {
+	std::string pictures_already_said(std::size_t added, std::size_t already) {
+		if (added == 0) return already == 1 ? "That picture was already in." : std::format("All {} pictures were already in.", already);
+		return std::format("Added {} picture{}, {} {} already in.", added, added == 1 ? "" : "s", already, already == 1 ? "was" : "were");
+	}
+
+	void pictures_coming(page& p, const std::string& key, std::vector<std::filesystem::path> files, std::optional<std::set<std::string>> held) {
 		if (files.empty()) return;
-		auto b = std::make_shared<coming_batch>(coming_batch{std::move(files), p.kept<std::vector<coming_picture>>("pictures come " + key), p.told(), &p.source()});
+		auto b = std::make_shared<coming_batch>(coming_batch{std::move(files), p.kept<std::vector<coming_picture>>("pictures come " + key), p.told(), &p.source(), std::move(held)});
 		in_background([b] { come_in(b); });
 	}
 

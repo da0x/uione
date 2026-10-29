@@ -452,16 +452,31 @@ export function handPictures(name: string, files: File[] | "paste"): void {
 // Pictures taken one at a time, the page given back to the browser before each, so it
 // draws and can be worked in while many come in; the workspace saying how far they've
 // got while there are several, and, once they're in, what couldn't be taken, as
-// `take` says why. The same as the desktop's.
-export async function takeInTurn<T>(given: T[], say: (said: Said | undefined) => void, take: (item: T, index: number) => Promise<string | void>): Promise<void> {
+// `take` says why, and how many were already in, when `take` says one was. The same
+// as the desktop's.
+export const alreadyIn = Symbol("already in");
+export async function takeInTurn<T>(given: T[], say: (said: Said | undefined) => void, take: (item: T, index: number) => Promise<string | typeof alreadyIn | void>): Promise<void> {
   let wrong: string | undefined;
+  let already = 0;
+  let failed = 0;
   for (const [i, item] of given.entries()) {
     await givenBack();
     if (given.length > 1) say({ text: `Adding ${i + 1} of ${given.length} pictures…` });
-    wrong = (await take(item, i)) || wrong;
+    const taken = await take(item, i);
+    if (taken === alreadyIn) already += 1;
+    else if (taken) (wrong = taken), (failed += 1);
   }
-  if (wrong) say({ text: wrong, problem: true });
+  const said = already > 0 ? alreadySaid(given.length - already - failed, already) : "";
+  if (wrong) say({ text: said ? `${said} ${wrong}` : wrong, problem: true });
+  else if (said) say({ text: said });
   else if (given.length > 1) say(undefined);
+}
+
+// What's said once they're in, when some were already: "Added 31 pictures, 9 were
+// already in." The same as the desktop's.
+export function alreadySaid(added: number, already: number): string {
+  if (added <= 0) return already === 1 ? "That picture was already in." : `All ${already} pictures were already in.`;
+  return `Added ${added} picture${added === 1 ? "" : "s"}, ${already} ${already === 1 ? "was" : "were"} already in.`;
 }
 
 // The page given back to the browser for a moment, to draw and take what's pressed.
