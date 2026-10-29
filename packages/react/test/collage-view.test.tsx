@@ -536,6 +536,40 @@ describe("a layer drawn on a collage", () => {
     expect([closed.includes("C"), closed.endsWith("Z")]).toEqual([true, true]);
   });
 
+  it("makes words by typing where it's pressed, of several lines, once they're kept, and nothing when nothing's typed", async () => {
+    const source = memorySource({ commands: { "studio::layer::create": () => ({ id: "typed" }) } });
+    source.set("studio::poster_page", { width: 1000, height: 500, layers: [] }, "p1");
+    function Poster() {
+      const page = useView("studio::poster_page", "p1");
+      return <Collage view={page} list="layers" width="width" height="height" fields={namedLikeParts} parent="poster" subject="p1" draws={[{ command: "studio::layer::create", given: { size: 48, color: "#1d1d1f" }, by: "typing" }]} />;
+    }
+    const only = defineScreen({ title: "Poster", route: "/" }, () => <Poster />);
+    const drawn = render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
+    await waitFor(() => expect(drawn.container.querySelector("canvas")).toBeTruthy());
+    const canvas = drawn.container.querySelector("canvas")!;
+    await act(async () => {});
+    const click = (x: number, y: number) => {
+      fireEvent.pointerDown(canvas, { clientX: 32 + x, clientY: 32 + y, pointerId: 1 });
+      fireEvent.pointerUp(canvas, { clientX: 32 + x, clientY: 32 + y, pointerId: 1 });
+    };
+    // Pressed, then pressed elsewhere with nothing typed: nothing made.
+    click(400, 400);
+    await act(async () => {});
+    click(100, 100);
+    await act(async () => {});
+    expect(source.runs).toEqual([]);
+    for (const key of ["H", "i"]) fireEvent.keyDown(window, { key });
+    fireEvent.keyDown(window, { key: "Enter", shiftKey: true });
+    for (const key of ["y", "o", "u"]) fireEvent.keyDown(window, { key });
+    expect(source.runs).toEqual([]);
+    fireEvent.keyDown(window, { key: "Enter" });
+    await waitFor(() => expect(source.runs.length).toBe(1));
+    const made = source.runs[0]!.input as Record<string, number | string>;
+    expect(made).toMatchObject({ words: "Hi\nyou", size: 48, color: "#1d1d1f", x: 100, poster: "p1" });
+    expect(made["y"]).toBeLessThan(100);
+    expect(made["w"]).toBeGreaterThan(0);
+  });
+
   it("makes a path by hand of what the drag went through, only as much as keeps its shape, as one curve", async () => {
     const source = memorySource({ commands: { "studio::layer::create": () => ({ id: "drawn" }) } });
     source.set("studio::poster_page", { width: 1000, height: 500, layers: [] }, "p1");

@@ -2028,6 +2028,71 @@ TEST("a collage's path drawn by hand is what the drag went through, only as much
 	CHECK(std::ranges::count(points, 'C') == 2);
 }
 
+TEST("a collage's words made by typing where it's pressed, of several lines, once they're kept, and nothing when nothing's typed") {
+	memory_source data;
+	data.set("studio::poster_page", "p1", value(fields{{"width", 1600}, {"height", 900}, {"layers", list{}}}));
+	data.on("studio::layer::create", [](const value&, memory_source&) -> answer { return "typed"; });
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Poster", "/", "", [](page& p) {
+		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .width = "width", .height = "height",
+		                                                                         .fields = named_like_parts, .fills = true,
+		                                                                         .draws = {collage_draw{.command = "studio::layer::create", .fields = value(fields{{"size", 48}, {"color", "#1d1d1f"}}), .by = "typing"}}}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	std::function<one::desktop::element*(one::desktop::element&)> drawing = [&](one::desktop::element& e) -> one::desktop::element* {
+		if (e.children.empty() && e.frame.width > 400 && e.frame.height > 200) return &e;
+		for (auto& child : e.children) {
+			if (auto* found = drawing(*child)) return found;
+		}
+		return nullptr;
+	};
+	auto root = built(nav);
+	auto* board = drawing(*root);
+	CHECK(board != nullptr);
+	if (!board) return;
+	(void)one::desktop::offscreen::draw({900, 900}, 1, tested_theme().page, [&](one::desktop::canvas& c) { root->paint(c); });
+	auto area = board->frame;
+	float scale = std::min((area.width - 64) / 1600.f, (area.height - 64) / 900.f);
+	one::desktop::point origin{area.x + (area.width - 1600 * scale) / 2, area.y + (area.height - 900 * scale) / 2};
+	auto on = [&](double x, double y) { return one::desktop::point{origin.x + static_cast<float>(x) * scale, origin.y + static_cast<float>(y) * scale}; };
+	auto click = [&](double x, double y) {
+		root = built(nav);
+		board = drawing(*root);
+		(void)one::desktop::offscreen::draw({900, 900}, 1, tested_theme().page, [&](one::desktop::canvas& c) { root->paint(c); });
+		board->press(on(x, y), 1);
+		board->release(on(x, y), board);
+	};
+	auto typed = [&](const std::string& text) {
+		(void)built(nav);
+		return key(nav, one::desktop::key_event{.symbol = static_cast<std::uint32_t>(text[0]), .text = text});
+	};
+	// Pressed, then pressed elsewhere with nothing typed: nothing made.
+	click(800, 600);
+	click(100, 100);
+	CHECK(data.runs().empty());
+	CHECK(typed("H"));
+	CHECK(typed("i"));
+	(void)built(nav);
+	CHECK(key(nav, one::desktop::key_event{.symbol = one::desktop::keys::enter, .text = "", .shift = true}));
+	CHECK(typed("y"));
+	CHECK(typed("o"));
+	CHECK(typed("u"));
+	CHECK(data.runs().empty());
+	(void)built(nav);
+	CHECK(key(nav, one::desktop::key_event{.symbol = one::desktop::keys::enter, .text = ""}));
+	CHECK(data.runs().size() == 1);
+	if (data.runs().empty()) return;
+	const value& made = data.runs().back().fields;
+	CHECK(made["words"].as_string() == "Hi\nyou");
+	CHECK(made["size"].as_double() == 48);
+	CHECK(made["color"].as_string() == "#1d1d1f");
+	CHECK(std::abs(made["x"].as_double() - 100) < 1);
+	CHECK(made["y"].as_double() < 100);
+	CHECK(made["w"].as_double() > 0);
+}
+
 TEST("a collage's path drawn by points, as a pen draws: corners clicked, a smooth node dragged, ended by Enter or closed on its first node") {
 	memory_source data;
 	data.set("studio::poster_page", "p1", value(fields{{"width", 1600}, {"height", 900}, {"layers", list{}}}));

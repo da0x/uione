@@ -4226,10 +4226,13 @@ namespace one::language {
                         if (from && !changed) error(taking.where, taking.from.text() + " doesn't change " + taken + ", so it's never given it to take");
                     }
                 }
-                if (draw.by && *draw.by != "line" && *draw.by != "hand" && *draw.by != "points") {
-                    error(draw.by_where, "a drag draws a box, by line a line, by hand what it goes through, or by points a path node by node; there's no by " + *draw.by);
+                if (draw.by && *draw.by != "line" && *draw.by != "hand" && *draw.by != "points" && *draw.by != "typing") {
+                    error(draw.by_where, "a drag draws a box, by line a line, by hand what it goes through, by points a path node by node, or by typing words where it's pressed; there's no by " + *draw.by);
+                } else if (draw.by == "typing") {
+                    if (!has({"words", "size"})) error(draw.by_where, "words typed are kept in a layer's words and size, which " + layer->name + " doesn't have; add words text and size number to it, or say their fields");
+                } else if (draw.by && !kept.contains("points")) {
+                    error(draw.by_where, "a line is kept as a path's points, which " + layer->name + " doesn't have; add points text to it, or say its field");
                 }
-                if (draw.by && !kept.contains("points")) error(draw.by_where, "a line is kept as a path's points, which " + layer->name + " doesn't have; add points text to it, or say its field");
                 if (!has({"x", "y", "w", "h"})) error(draw.command.where, "a drawn layer is as big as the drag, kept in its x y w h, which " + layer->name + " doesn't have");
             }
             // Held in layers: another list of its view, each object naming its layer by a

@@ -477,6 +477,10 @@ namespace one::desktop::runtime {
 				std::string id, words;
 				bool fresh = false;                     // all chosen, so the first key typed replaces them
 				std::size_t caret = std::string::npos;  // the byte it stands before
+				// Words typed where a draw by typing was pressed, made only once they're
+				// kept: what they'll be made of, by that draw, its parts by name.
+				std::optional<value> unmade = std::nullopt;
+				std::optional<collage_draw> by = std::nullopt;
 			};
 			std::optional<writing> editing;
 			std::optional<model::box> drawing;  // a layer being drawn, as big as the drag so far
@@ -675,10 +679,21 @@ namespace one::desktop::runtime {
 			w.crop.reset();
 		}
 
+		void make_drawn(page& p, const collage_spec& spec, const value& layers, const collage_draw& d, value made);
+
 		// Words written kept, as big as they now are; written away to nothing, gone.
 		void finish_writing(page& p, placed& w, const value& layers, const collage_spec& spec) {
 			if (!w.editing) return;
 			auto e = *std::exchange(w.editing, std::nullopt);
+			if (e.unmade) {
+				// Typed: made now, as big as they are; nothing typed, nothing made.
+				if (e.words.find_first_not_of(" \n\t") == std::string::npos) return;
+				value made = *e.unmade;
+				auto [mw, mh] = measured(e.words, made["size"].as_double(), weight_of(made), italic_of(made));
+				made.fields["words"] = value(e.words), made.fields["w"] = value(mw), made.fields["h"] = value(mh);
+				make_drawn(p, spec, layers, *e.by, made);
+				return;
+			}
 			for (const auto& l : layers.as_array()) {
 				if (l["id"].as_string() != e.id) continue;
 				if (e.words.find_first_not_of(" \n\t") == std::string::npos) {
@@ -964,29 +979,57 @@ namespace one::desktop::runtime {
 		// A layer drawn, on top of the rest, picked once it's made; then the choices its
 		// when read go back to their first, as a tool goes back to Select. The same as
 		// the web's.
-		void draw_layer(page& p, const collage_spec& spec, const value& layers, model::box b, std::optional<std::string> points = std::nullopt) {
-			const collage_draw* d = drawing_now(spec);
-			if (!d) return;
-			if (!layer_ready(p, spec, [&p, spec, layers, b, points] { draw_layer(p, spec, layers, b, points); })) return;
-			value made = value(fields{{"x", b.x}, {"y", b.y}, {"w", b.w}, {"h", b.h}});
+		// What a draw gives what it makes, and what its buttons last gave, where it takes
+		// it, by the fields they're kept in.
+		value given_by(page& p, const collage_draw& d) {
+			value given = d.fields;
+			for (const auto& taking : d.with) {
+				value last = last_given(p, taking.from);
+				for (const auto& name : taking.fields) {
+					if (auto found = last.fields.find(name); found != last.fields.end()) given.fields[name] = found->second;
+				}
+			}
+			return given;
+		}
+
+		// A layer made by a draw, of these parts: in the current layer, on top of the rest,
+		// picked once it's made; then the choices its when read go back to their first, as
+		// a tool goes back to Select. The same as the web's.
+		void make_drawn(page& p, const collage_spec& spec, const value& layers, const collage_draw& d, value made) {
+			if (!layer_ready(p, spec, [&p, spec, layers, d, made] { make_drawn(p, spec, layers, d, made); })) return;
 			in_layer(p, spec, made);
-			if (points) made.fields["points"] = value(*points);
 			if (!spec.parent.empty()) made.fields[spec.parent] = value(spec.subject);
 			const auto& all = layers.as_array();
 			if (!all.empty() && !all.back()["depth"].is_null()) made.fields["depth"] = value(all.back()["depth"].as_double() + 1);
 			value sent = collage_fields_of(made, spec.fields);
-			for (const auto& [name, given] : d->fields.fields) sent.fields[name] = given;
-			// And what its buttons last gave, where it takes it.
-			for (const auto& taking : d->with) {
-				value last = last_given(p, taking.from);
-				for (const auto& name : taking.fields) {
-					if (auto found = last.fields.find(name); found != last.fields.end()) sent.fields[name] = found->second;
-				}
-			}
-			p.run(d->command, sent, [&p, pick = spec.pick](const answer& a) {
+			for (const auto& [name, given] : given_by(p, d).fields) sent.fields[name] = given;
+			p.run(d.command, sent, [&p, pick = spec.pick](const answer& a) {
 				if (a && !pick.empty()) p.pick(pick, *a);
 			});
-			for (const auto& [key, first] : d->back) p.choose(key, first);
+			for (const auto& [key, first] : d.back) p.choose(key, first);
+		}
+
+		// A layer drawn, as big as the drag, or a line's points.
+		void draw_layer(page& p, const collage_spec& spec, const value& layers, model::box b, std::optional<std::string> points = std::nullopt) {
+			const collage_draw* d = drawing_now(spec);
+			if (!d) return;
+			value made = value(fields{{"x", b.x}, {"y", b.y}, {"w", b.w}, {"h", b.h}});
+			if (points) made.fields["points"] = value(*points);
+			make_drawn(p, spec, layers, *d, made);
+		}
+
+		// Words begun where a draw by typing was pressed, a line of them centered there: as
+		// large as it gives, or a twelfth of the collage's height, in what it gives and its
+		// buttons last gave, by their parts' names, so they're drawn as they'll be made.
+		placed::writing typing_at(page& p, const collage_spec& spec, const collage_draw& d, model::point at, double height) {
+			value given = given_by(p, d), made = value::map();
+			for (const auto& [part, field] : spec.fields) {
+				if (auto found = given.fields.find(field); found != given.fields.end()) made.fields[part] = found->second;
+			}
+			if (made["size"].as_double() <= 0) made.fields["size"] = value(std::max(8.0, std::round(height / 12)));
+			auto [mw, mh] = measured("", made["size"].as_double(), weight_of(made), italic_of(made));
+			made.fields["x"] = value(at.x), made.fields["y"] = value(at.y - mh / 2);
+			return placed::writing{.id = "", .words = "", .fresh = false, .caret = 0, .unmade = made, .by = d};
 		}
 
 		// The path a pen drew, ended where it is or closed: made a layer as a line drawn is,
@@ -1823,6 +1866,11 @@ namespace one::desktop::runtime {
 			const collage_draw* d = drawing_now(spec);
 			if (!d || d->by != "points") w->pen.clear(), w->hover.reset();
 		}
+		// Words typed are kept when the tool they're typed by is put away.
+		if (w->editing && w->editing->unmade) {
+			const collage_draw* d = drawing_now(spec);
+			if (!d || d->by != "typing") finish_writing(p, *w, layers, spec);
+		}
 		if (!w->pen.empty()) {
 			typing([&p, w, layers, spec](const key_event& k) {
 				if (w->pen.empty()) return false;
@@ -2070,6 +2118,13 @@ namespace one::desktop::runtime {
 				if (w->guide_x) c.box({board.x + static_cast<float>(*w->guide_x) * scale - 0.5f, board.y, 1, bh}, {.fill = t.accent});
 				if (w->guide_y) c.box({board.x, board.y + static_cast<float>(*w->guide_y) * scale - 0.5f, bw, 1}, {.fill = t.accent});
 			}
+			// Words being typed, not made yet, with their caret.
+			if (w->editing && w->editing->unmade) {
+				const value& made = *w->editing->unmade;
+				desktop::rect on = as_rect(w->on_board({made["x"].as_double(), made["y"].as_double(), 0, 0}));
+				desktop::rect caret = paint_words(c, made, w->editing->words, made["size"].as_double() * scale, {on.x, on.y}, w->editing->caret);
+				c.box(caret, {.fill = t.accent});
+			}
 			// A layer being drawn, as big as the drag so far.
 			if (w->drawing) {
 				model::box d = w->on_board(*w->drawing);
@@ -2100,7 +2155,7 @@ namespace one::desktop::runtime {
 				std::sscanf(w->line->points.c_str(), "M %lf %lf L %lf %lf", &x0, &y0, &x1, &y1);
 				c.line({static_cast<float>(d.x + x0 * d.w), static_cast<float>(d.y + y0 * d.h)}, {static_cast<float>(d.x + x1 * d.w), static_cast<float>(d.y + y1 * d.h)}, 1.5f, t.accent);
 			}
-			if (layers.as_array().empty() && !full && !spec.empty.empty()) {
+			if (layers.as_array().empty() && !full && !spec.empty.empty() && !w->editing) {
 				auto said = desktop::lay_out(desktop::text_span{spec.empty, t.quiet()}, bw - 32, c.scale());
 				c.text(said, {board.x + (bw - said.width()) / 2, board.y + (bh - said.height()) / 2});
 			}
@@ -2212,6 +2267,10 @@ namespace one::desktop::runtime {
 			        // Words being written are kept by a press anywhere but on them.
 			        if (w->editing) {
 				        bool on_them = false;
+				        if (const auto& made = w->editing->unmade) {
+					        auto [mw, mh] = measured(w->editing->words, (*made)["size"].as_double(), weight_of(*made), italic_of(*made));
+					        on_them = w->on_board({(*made)["x"].as_double(), (*made)["y"].as_double(), mw, mh}).contains(on);
+				        }
 				        for (const auto& l : layers.as_array()) {
 					        if (l["id"].as_string() != w->editing->id) continue;
 					        auto [mw, mh] = measured(w->editing->words, l["size"].as_double(), weight_of(l), italic_of(l));
@@ -2256,6 +2315,12 @@ namespace one::desktop::runtime {
 				        model::point on = w->on_collage(at);
 				        w->pen.push_back({on.x, on.y, 0, 0});
 				        w->now = {.what = gesture::drawing, .id = "points", .from = {}, .at = at, .corner = 0, .edges = 0, .kept_from = {}};
+				        return true;
+			        }
+			        // Typing: words begun where it's pressed, nothing picked meanwhile.
+			        if (const collage_draw* d = drawing_now(spec); d && d->by == "typing" && w->board.contains(at) && !desktop::held().space) {
+				        w->editing = typing_at(p, spec, *d, w->on_collage(at), height);
+				        if (!spec.pick.empty()) p.pick(spec.pick, "");
 				        return true;
 			        }
 			        // With Space held, a drag moves what's shown, as a drawing program's hand does.
@@ -2548,7 +2613,7 @@ namespace one::desktop::runtime {
 			        if (desktop::held().space || w->now.what == gesture::panning) return w->now.what == gesture::panning ? desktop::cursor::grabbing : desktop::cursor::grab;
 			        // The next segment of a pen's path follows the pointer.
 			        if (!w->pen.empty()) w->hover = w->on_collage(at);
-			        if (drawing_now(spec) && w->board.contains(at)) return desktop::cursor::crosshair;
+			        if (const collage_draw* d = drawing_now(spec); d && w->board.contains(at)) return d->by == "typing" ? desktop::cursor::text : desktop::cursor::crosshair;
 			        for (const auto& l : layers.as_array()) {
 				        if (l["id"].as_string() != picked || is_words(l) || is_path(l) || spec.place.empty()) continue;
 				        int corner = model::corner_at(w->on_board(where_is(l, *w)), on, handle);

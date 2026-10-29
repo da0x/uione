@@ -443,8 +443,18 @@ TEST_CASE("a collage's layer is drawn by a drag while its draw's when holds, giv
                                    "51: a drag on the collage makes one of its layers, so draw names layer::create",
                                    "52: entity layer has no field tint to be given",
                                    "53: a line is kept as a path's points, which layer doesn't have; add points text to it, or say its field",
-                                   "54: a drag draws a box, by line a line, by hand what it goes through, or by points a path node by node; there's no by curve",
-                                   "54: a line is kept as a path's points, which layer doesn't have; add points text to it, or say its field"});
+                                   "54: a drag draws a box, by line a line, by hand what it goes through, by points a path node by node, or by typing words where it's pressed; there's no by curve"});
+    // By typing: words typed where it's pressed, kept in the layer's words and size.
+    std::string typing = with_tools(collage_screen("\t\ttoggle tool::move \"Move\"\n\t\ttoggle tool::box \"Text\"\n\t\tcollage poster_page.layers size width height {\n"
+                                                   "\t\t\tdraw layer::create { size = 48 } by typing when tool == tool::box\n\t\t}\n"));
+    typing.replace(typing.find("\t\tx        number"), 0, "\t\twords    text\n\t\tsize     number  = 0\n");
+    typing.replace(typing.find("around  x  y  w  h"), 0, "words  size  ");
+    CHECK(messages(typing).empty());
+    auto typed = built(typing);
+    CHECK(typed["web/src/screens/main.tsx"].find(R"(given: { "size": 48 }, when: ((chosenTool === "box")), by: "typing", back:)") != std::string::npos);
+    CHECK(typed["desktop/src/screens/main.cpp"].find(R"(.by = "typing", .back =)") != std::string::npos);
+    std::string unworded = with_tools(collage_screen("\t\tcollage poster_page.layers size width height {\n\t\t\tdraw layer::create by typing\n\t\t}\n"));
+    CHECK(messages(unworded) == std::vector<std::string>{"50: words typed are kept in a layer's words and size, which layer doesn't have; add words text and size number to it, or say their fields"});
 }
 
 TEST_CASE("a clear collage has nothing behind its layers, on the web and the desktop alike") {

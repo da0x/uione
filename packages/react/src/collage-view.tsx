@@ -721,7 +721,9 @@ interface Placed {
   lines: Lines;
   guide?: Guided;
   crop?: { id: string; whole: Box; kept: Box };
-  editing?: { id: string; words: string; caret: number; fresh: boolean };
+  // Words typed where a draw by typing was pressed are made only once they're kept:
+  // what they'll be made of, by that draw, its parts by name.
+  editing?: { id: string; words: string; caret: number; fresh: boolean; unmade?: Row; by?: CollageDraw };
   drawing?: Box; // a layer being drawn, as big as the drag so far
   line?: { at: Box; points: string }; // or a line, as far as the drag has gone
   hand?: Point[]; // or what a drag by hand has gone through
@@ -760,8 +762,9 @@ export interface CollageDraw {
   given?: Record<string, unknown>;
   when?: boolean;
   // By line, a line from where the drag began to where it ended; by hand, what it went
-  // through; by points, a path node by node, as a pen draws; each kept as a path.
-  by?: "line" | "hand" | "points";
+  // through; by points, a path node by node, as a pen draws; each kept as a path. By
+  // typing, words typed where it's pressed, made once they're kept.
+  by?: "line" | "hand" | "points" | "typing";
   back?: [string, string][];
   // with stroke from layer::paint: these as that command's buttons last gave them.
   with?: { fields: string[]; from: string }[];
@@ -1144,6 +1147,12 @@ export function Collage({
     const e = w.editing;
     if (!e) return;
     w.editing = undefined;
+    if (e.unmade && e.by) {
+      // Typed: made now, as big as they are; nothing typed, nothing made.
+      if (!e.words.trim()) return;
+      const m = measured(e.words, num(e.unmade["size"]), faceOf(e.unmade));
+      return void makeDrawn(e.by, { ...e.unmade, words: e.words, w: m.w, h: m.h });
+    }
     const l = layers.find((r) => r["id"] === e.id);
     if (!l) return;
     if (!e.words.trim()) {
@@ -1155,7 +1164,7 @@ export function Collage({
     const m = measured(e.words, num(l["size"]), faceOf(l));
     void send(write, { id: e.id, words: e.words, size: l["size"], x: l["x"], y: l["y"], w: m.w, h: m.h });
   };
-  if (w.editing && w.editing.id !== picked) finishWriting();
+  if (w.editing && !w.editing.unmade && w.editing.id !== picked) finishWriting();
 
   // What its buttons asked of it: a crop begun, words written, or words added.
   const asking = useSyncExternalStore(
@@ -1494,6 +1503,18 @@ export function Collage({
       if (guide.guideX !== undefined) c.fillRect(board.x + guide.guideX * scale - 0.5, board.y, 1, bh);
       if (guide.guideY !== undefined) c.fillRect(board.x, board.y + guide.guideY * scale - 0.5, bw, 1);
     }
+    // Words being typed, not made yet, with their caret.
+    const unmade = w.editing?.unmade;
+    if (unmade) {
+      const at = onBoard({ x: num(unmade["x"]), y: num(unmade["y"]), w: 0, h: 0 });
+      const size = num(unmade["size"]) * scale, said = w.editing!.words;
+      c.font = `${faceOf(unmade)} ${size}px ${wordsFamily()}`;
+      c.textBaseline = "top";
+      paintWords(c, unmade, said, size, at.x, at.y);
+      const before = said.slice(0, w.editing!.caret).split("\n");
+      c.fillStyle = accent;
+      c.fillRect(at.x + c.measureText(before[before.length - 1]!).width, at.y + (before.length - 1) * size * 1.2, 2, size * 1.2);
+    }
     // A layer being drawn, as big as the drag so far.
     if (w.drawing) {
       const d = onBoard(w.drawing);
@@ -1540,7 +1561,7 @@ export function Collage({
       c.lineTo(d.x + x1! * d.w, d.y + y1! * d.h);
       c.stroke();
     }
-    if (layers.length === 0 && !full && empty) {
+    if (layers.length === 0 && !full && empty && !w.editing) {
       c.fillStyle = style.getPropertyValue("--color-muted").trim() || "#5b6577";
       c.font = `13px ${wordsFamily()}`;
       c.textAlign = "center";
@@ -1846,27 +1867,51 @@ export function Collage({
     }
     paint();
   };
-  const drawLayer = async (b: Box, points?: string) => {
-    const d = drawingNow();
-    if (!d) return;
-    for (const [key, first] of d.back ?? []) setChosen(key, first);
-    const inLayer = await layerFor();
-    const made: Row = { x: b.x, y: b.y, w: b.w, h: b.h };
-    if (layerField && inLayer) made[layerField] = inLayer;
-    if (points !== undefined) made["points"] = points;
-    if (parent) made[parent] = subject;
-    const top = layers[layers.length - 1];
-    if (top && top["depth"] !== undefined) made["depth"] = num(top["depth"]) + 1;
-    // And what its buttons last gave, where it takes it.
-    const taken = Object.fromEntries(
+  // What a draw gives what it makes, and what its buttons last gave, where it takes it,
+  // by the fields they're kept in.
+  const givenBy = (d: CollageDraw): Row => ({
+    ...d.given,
+    ...Object.fromEntries(
       (d.with ?? []).flatMap((t) => {
         const last = lastGiven(t.from);
         return t.fields.filter((field) => field in last).map((field) => [field, last[field]]);
       }),
-    );
-    const reply = await runner.reply(d.command, { ...fieldsOf(made, fields), ...d.given, ...taken });
+    ),
+  });
+  // A layer made by a draw, of these parts: in the current layer, on top of the rest,
+  // picked once it's made; then the choices its when read go back to their first.
+  const makeDrawn = async (d: CollageDraw, made: Row) => {
+    for (const [key, first] of d.back ?? []) setChosen(key, first);
+    const inLayer = await layerFor();
+    if (layerField && inLayer) made[layerField] = inLayer;
+    if (parent) made[parent] = subject;
+    const top = layers[layers.length - 1];
+    if (top && top["depth"] !== undefined) made["depth"] = num(top["depth"]) + 1;
+    const reply = await runner.reply(d.command, { ...fieldsOf(made, fields), ...givenBy(d) });
     if (reply?.id) pickRow(reply.id);
   };
+  // A layer drawn, as big as the drag, or a line's points.
+  const drawLayer = async (b: Box, points?: string) => {
+    const d = drawingNow();
+    if (!d) return;
+    const made: Row = { x: b.x, y: b.y, w: b.w, h: b.h };
+    if (points !== undefined) made["points"] = points;
+    await makeDrawn(d, made);
+  };
+  // Words begun where a draw by typing was pressed, a line of them centered there: as
+  // large as it gives, or a twelfth of the collage's height, in what it gives and its
+  // buttons last gave, by their parts' names, so they're drawn as they'll be made.
+  const typingAt = (d: CollageDraw, at: Point): NonNullable<Placed["editing"]> => {
+    const given = givenBy(d), made: Row = {};
+    for (const [part, field] of Object.entries(fields)) if (field in given) made[part] = given[field];
+    if (!(num(made["size"]) > 0)) made["size"] = Math.max(8, Math.round(H / 12));
+    const m = measured("", num(made["size"]), faceOf(made));
+    made["x"] = at.x;
+    made["y"] = at.y - m.h / 2;
+    return { id: "", words: "", caret: 0, fresh: false, unmade: made, by: d };
+  };
+  // Words typed are kept when the tool they're typed by is put away, or another's picked.
+  if (w.editing?.unmade && (picked || drawingNow()?.by !== "typing")) finishWriting();
   const keepCrop = () => {
     const e = w.crop;
     if (!e || !crop) return;
@@ -1904,8 +1949,9 @@ export function Collage({
     }
     // Words being written are kept by a press anywhere but on them.
     if (w.editing) {
-      const l = layers.find((r) => r["id"] === w.editing!.id);
-      if (l && inside(onBoard(whereIs(l)), p)) return;
+      const l = w.editing.unmade ?? layers.find((r) => r["id"] === w.editing!.id);
+      const box = l && (w.editing.unmade ? { ...boxOf(l), ...measured(w.editing.words, num(l["size"]), faceOf(l)) } : whereIs(l));
+      if (box && inside(onBoard(box), p)) return;
       finishWriting();
     }
     // Cropping: its edges and corners trim it, inside moves it, the rest of the
@@ -1921,6 +1967,13 @@ export function Collage({
       w.now = { what: "cropping", id: w.crop.id, from: w.crop.kept, at: p, corner: 0, edges: edgesAt };
       e.currentTarget.setPointerCapture(e.pointerId);
       return;
+    }
+    // Typing: words begun where it's pressed, nothing picked meanwhile.
+    const typing = drawingNow();
+    if (typing?.by === "typing" && !spaceHeld.current && e.button !== 1 && inside(onBoard({ x: 0, y: 0, w: W, h: H }), p)) {
+      w.editing = typingAt(typing, onCollage(p));
+      pickRow("");
+      return redraw((n) => n + 1);
     }
     // A pen puts down a node: a double-click ends its path, and a press on its first
     // node closes it.
@@ -2220,7 +2273,7 @@ export function Collage({
                   ? "ew-resize"
                   : "ns-resize";
     } else if (w.editing) cursor = "text";
-    else if (draws.some((d) => d.when !== false)) cursor = "crosshair";
+    else if (draws.some((d) => d.when !== false)) cursor = drawingNow()?.by === "typing" ? "text" : "crosshair";
     else {
       const corner = chosen && !isPath(chosen) && (isWords(chosen) ? write : place) ? cornerAt(onBoard(whereIs(chosen)), p, handle) : -1;
       if (corner === 0 || corner === 2) cursor = "nwse-resize";

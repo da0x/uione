@@ -2214,6 +2214,15 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     the drag went and coming into it the other. The next segment follows the pointer
     until it's put down. Enter or a double-click ends the path where it is, a click on
     its first node closes it, Backspace takes back the last node, and Esc drops it.
+
+    With `by typing`, as in `draw layer::create { size = 48  color = "#1d1d1f" } by
+    typing when tool == tool::text`, it's words typed where it's pressed, kept in the
+    layer's `words` and `size`: a click puts a caret there, its line centered on it,
+    as large as the draw gives, or a twelfth of the collage's height. Typing writes,
+    Shift+Enter starts a new line, and the arrows, Home and End move the caret.
+    Enter, Esc, or a click elsewhere keeps them, and only then are they made, as big
+    as they are, one step to undo; nothing typed makes nothing. A click elsewhere
+    while it still draws by typing begins the next words there.
   - `in drawing_page.layers by layer`: its rows are objects held in layers, as a
     drawing program's are: the rows of another list of its view, each with its
     `name` and `depth`, each object naming its own by a field that points at one.
