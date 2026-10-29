@@ -14,7 +14,7 @@
 // everything goes is collage.ts, the model the desktop's is held to as well. It's drawn
 // on a canvas, the same in every component set.
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import { colorShifter, cornerAt, pathIn, cropEdgesAt, cropped, drawn, drawnLine, freehand, halo, penPath, haloInside, haloReach, harmonicFill, matched, matchingCast, matchingStrength, moved, resized, sitting, pathBounds, pathFractions, around, carried, pathHandleMoved, pathHandles, pathMoved, pathNodes, pathReaches, snapLines, statsOf, svgDocument, wholeOf } from "./collage.js";
 import type { Box, ColorShift, ColorStats, Guided, Lines, PenNode, Point, SavedLayer } from "./collage.js";
@@ -24,7 +24,7 @@ import type { ViewState } from "./data.js";
 import { useUI } from "./ui.js";
 import { useSaying } from "./said.js";
 import { useSite } from "./app.js";
-import { OverLayer, OverRun, choosePictures, lastGiven, hintOf, setChosen, setPicked, typing, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
+import { OverKind, OverLayer, OverRun, choosePictures, lastGiven, hintOf, setChosen, setPicked, typing, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
 
 type Row = Record<string, unknown>;
 
@@ -678,6 +678,10 @@ export function CollageButton({ collage, does, label, icon, keys }: { collage: s
     document.addEventListener("paste", pasted);
     return () => document.removeEventListener("paste", pasted);
   }, [byPaste, collage]);
+  // Over a picked layer, only what fits it: crop over a picture, edit over words, and
+  // ungroup over a group.
+  const over = useContext(OverKind);
+  if (over && ((does === "crop" && !over.picture) || (does === "edit" && !over.words) || (does === "ungroup" && !over.group))) return null;
   // A screenshot is taken where the browser can share the screen, and only there.
   if (does === "screenshot" && typeof navigator !== "undefined" && typeof navigator.mediaDevices?.getDisplayMedia !== "function") return null;
   return (
@@ -2042,6 +2046,7 @@ export function Collage({
         >
           <OverLayer.Provider value>
             <OverRun.Provider value={deleteGroup}>
+            <OverKind.Provider value={chosen ? { picture: isPicture(chosen) && !vectors.has(str(chosen["picture"])), words: isWords(chosen), group: holdsOthers(chosen) } : undefined}>
             {w.crop ? (
               <CropTools
                 keep={keepCrop}
@@ -2053,6 +2058,7 @@ export function Collage({
             ) : (
               children
             )}
+            </OverKind.Provider>
             </OverRun.Provider>
           </OverLayer.Provider>
         </div>

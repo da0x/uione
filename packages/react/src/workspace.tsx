@@ -17,6 +17,9 @@ import { useUI } from "./ui.js";
 const InGroup = createContext<{ small: boolean } | undefined>(undefined);
 // Buttons over a collage's picked layer, small tools too.
 export const OverLayer = createContext(false);
+// What the layer buttons are over is: a picture, words or a group, so only those that
+// fit it are there, as crop over a picture.
+export const OverKind = createContext<{ picture: boolean; words: boolean; group: boolean } | undefined>(undefined);
 
 // How a button in a toolbar, or over a picked layer, is drawn, if it's in one.
 export function useTool(): "large" | "small" | undefined {
