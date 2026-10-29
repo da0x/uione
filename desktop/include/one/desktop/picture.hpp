@@ -53,6 +53,9 @@ namespace one::desktop {
 		// in words a person can act on, when it can't be.
 		static std::expected<picture, std::string> read(const std::filesystem::path& file);
 		static std::expected<picture, std::string> decode(std::span<const std::uint8_t> bytes);
+		// How big a picture in a file is, as its file says, without reading all of it: what
+		// a picture coming in is measured by. Nothing when it isn't one this can read.
+		static std::optional<std::pair<int, int>> size_of(const std::filesystem::path& file);
 		// Pixels made by the app, `width` × `height`, four bytes each.
 		static picture of(int width, int height, std::vector<std::uint8_t> rgba);
 		// Drawn with no window, as a canvas in one is, `width` × `height` pixels on
@@ -66,6 +69,11 @@ namespace one::desktop {
 		// read as pixels; and its own size, as nanosvg reads it, when it can be.
 		static bool is_svg(std::span<const std::uint8_t> bytes);
 		static std::optional<std::pair<double, double>> svg_size(std::string_view svg);
+
+		// A smaller copy, its longer side at most `longest`, each pixel the average of those
+		// it covers: what's drawn where the whole of a large one would be wasted, like a card.
+		// Itself when it's that small already.
+		picture smaller(int longest) const;
 
 		int width() const { return pixels_ ? pixels_->width : 0; }
 		int height() const { return pixels_ ? pixels_->height : 0; }

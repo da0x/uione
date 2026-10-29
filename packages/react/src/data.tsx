@@ -72,6 +72,10 @@ export interface FileStore {
   // Somewhere to read a file from for a few minutes, for whoever may read its
   // record; with download, a browser saves it rather than showing it.
   address(path: string, download?: boolean): Promise<string>;
+  // Where to read a picture's smaller copy from, no longer on its longer side than
+  // `longest`, for where the whole of a large one would be wasted, like a card; made
+  // once and kept beside it. Where a store can't, the whole picture's address is used.
+  small?(path: string, longest: number): Promise<string>;
 }
 
 // A file's name: the last part of its path.

@@ -24,7 +24,7 @@ import type { ViewState } from "./data.js";
 import { useUI } from "./ui.js";
 import { useSaying } from "./said.js";
 import { useSite } from "./app.js";
-import { OverKind, OverLayer, OverRun, choosePictures, lastGiven, styleThese, hintOf, setChosen, setPicked, typing, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
+import { OverKind, OverLayer, OverRun, choosePictures, lastGiven, styleThese, hintOf, setChosen, setPicked, takeInTurn, typing, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
 
 type Row = Record<string, unknown>;
 
@@ -931,20 +931,17 @@ export function Collage({
     const top = layers[layers.length - 1];
     let depth = top && top["depth"] !== undefined ? num(top["depth"]) + 1 : undefined;
     let covered = layers.length > 0, at = 0, first = true;
-    for (const file of given) {
+    await takeInTurn(given, say, async (file) => {
       // An SVG, where the collage keeps shapes, comes in as its own shapes.
       const svg = keepsShapes ? await svgIn(file) : undefined;
       if (svg !== undefined) {
         const where = on && at ? { x: on.x + 40 * at, y: on.y + 40 * at } : on;
         at++;
         await addShapes(svg, file.name.replace(/\.svg$/i, "") || "Pasted", where);
-        continue;
+        return;
       }
       const size = await pictureSize(file);
-      if (!size) {
-        say({ text: `${file.name} isn't a picture this can read.`, problem: true });
-        continue;
-      }
+      if (!size) return `${file.name} isn't a picture this can read.`;
       if (!asked) (inLayer = await layerFor()), (asked = true);
       let b: Box;
       // An SVG is drawing, not a photograph: it comes in at its own size, fitted, never
@@ -969,7 +966,7 @@ export function Collage({
       first = false;
       const reply = await send(add, made);
       if (reply?.id && pick) setPicked(pick, reply.id);
-    }
+    });
   };
   // An SVG brought in as its own shapes and curves, each an object, where it would sit
   // as a picture: as big as it is, smaller where it wouldn't fit, centered on `on` or the

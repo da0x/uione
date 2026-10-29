@@ -15,7 +15,7 @@ import { useFiles, useRunner } from "./data.js";
 import type { ViewState } from "./data.js";
 import { useSaying } from "./said.js";
 import { pictureSize } from "./vectors.js";
-import { choosePictures, handPictures, hintOf, setPicked, useKeys, useOff, usePicturesHanded, useTool } from "./workspace.js";
+import { choosePictures, handPictures, hintOf, setPicked, takeInTurn, useKeys, useOff, usePicturesHanded, useTool } from "./workspace.js";
 import { useUI } from "./ui.js";
 import { kindOf } from "./paper/index.js";
 import type { Parts } from "./paper/index.js";
@@ -564,12 +564,9 @@ export function Paper({
     const to = first ? undefined : shown[at + 1]?.position;
     const known = new Set(shown.map((b) => b.id));
     let n = 0;
-    for (const file of given) {
+    await takeInTurn(given, say, async (file) => {
       const size = await pictureSize(file);
-      if (!size) {
-        say({ text: `${file.name} isn't a picture this can read.`, problem: true });
-        continue;
-      }
+      if (!size) return `${file.name} isn't a picture this can read.`;
       const position = to !== undefined ? from + ((to - from) * (n + 1)) / (given.length + 1) : from + n + 1;
       const path = await files.upload(file, () => {});
       const made: Row = { picture: path, picture_width: size.w, picture_height: size.h, position, words: "", kind: "picture", align: "center" };
@@ -578,7 +575,7 @@ export function Paper({
       else going.current = { position, at: 0, known };
       n++;
       await run(add, fieldsOf(made, fields));
-    }
+    });
   };
   // A paste or add pictures button: the clipboard's pictures, or those chosen.
   usePicturesHanded(name, addPictures);

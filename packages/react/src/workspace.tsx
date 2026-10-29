@@ -11,6 +11,7 @@ import type { ReactNode } from "react";
 import { useRunner, useView } from "./data.js";
 import type { ViewState } from "./data.js";
 import { useSaying } from "./said.js";
+import type { Said } from "./said.js";
 import { useUI } from "./ui.js";
 
 // A toolbar's group its buttons are in, which draws them as tools.
@@ -447,6 +448,24 @@ export function handPictures(name: string, files: File[] | "paste"): void {
   handed.set(name, files);
   handedListeners.forEach((changed) => changed());
 }
+
+// Pictures taken one at a time, the page given back to the browser before each, so it
+// draws and can be worked in while many come in; the workspace saying how far they've
+// got while there are several, and, once they're in, what couldn't be taken, as
+// `take` says why. The same as the desktop's.
+export async function takeInTurn<T>(given: T[], say: (said: Said | undefined) => void, take: (item: T, index: number) => Promise<string | void>): Promise<void> {
+  let wrong: string | undefined;
+  for (const [i, item] of given.entries()) {
+    await givenBack();
+    if (given.length > 1) say({ text: `Adding ${i + 1} of ${given.length} pictures…` });
+    wrong = (await take(item, i)) || wrong;
+  }
+  if (wrong) say({ text: wrong, problem: true });
+  else if (given.length > 1) say(undefined);
+}
+
+// The page given back to the browser for a moment, to draw and take what's pressed.
+export const givenBack = (): Promise<void> => new Promise((done) => setTimeout(done, 0));
 
 // And what it's handed taken, by what names it.
 export function usePicturesHanded(name: string | undefined, take: (files: File[]) => void | Promise<void>): void {

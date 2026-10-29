@@ -5,11 +5,13 @@
 // images in tests/golden. ONE_DESKTOP_GOLDEN=write draws them again; each is then looked at
 // before it's committed.
 
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <format>
+#include <ranges>
 #include <fstream>
 #include <span>
 #include <thread>
@@ -153,6 +155,35 @@ TEST("a picture written as a PNG reads back the same, and what isn't one says so
 	CHECK(!not_one.has_value());
 	CHECK(not_one.error().starts_with("That isn't a picture"));
 	CHECK(!one::desktop::picture::read("/nowhere/at/all.png").has_value());
+}
+
+TEST("a picture's size is read from its file without reading the picture, an SVG's from its own, and what isn't one has none") {
+	auto folder = std::filesystem::temp_directory_path() / "one-desktop-sizes";
+	std::filesystem::create_directories(folder);
+	CHECK(one::desktop::picture::of(30, 20, std::vector<std::uint8_t>(30 * 20 * 4, 90)).write_png(folder / "wide.png").has_value());
+	std::ofstream(folder / "drawing.svg") << R"(<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80"><rect width="120" height="80"/></svg>)";
+	std::ofstream(folder / "words.txt") << "hello";
+	CHECK(one::desktop::picture::size_of(folder / "wide.png") == std::pair(30, 20));
+	CHECK(one::desktop::picture::size_of(folder / "drawing.svg") == std::pair(120, 80));
+	CHECK(!one::desktop::picture::size_of(folder / "words.txt"));
+	CHECK(!one::desktop::picture::size_of(folder / "gone.png"));
+	std::filesystem::remove_all(folder);
+}
+
+TEST("a picture made smaller keeps its shape, each pixel the average of those it covers, and one small already is itself") {
+	// Black and white columns, two pixels each, made half as wide: each pixel gray.
+	std::vector<std::uint8_t> stripes;
+	for (int y = 0; y < 4; ++y) {
+		for (int x = 0; x < 8; ++x) {
+			std::uint8_t v = x % 2 == 0 ? 0 : 255;
+			stripes.insert(stripes.end(), {v, v, v, 255});
+		}
+	}
+	auto made = one::desktop::picture::of(8, 4, stripes).smaller(4);
+	CHECK(made.width() == 4 && made.height() == 2);
+	CHECK(std::ranges::all_of(made.rgba() | std::views::stride(4), [](std::uint8_t v) { return v >= 126 && v <= 129; }));
+	auto small = four_colors();
+	CHECK(small.smaller(64).rgba() == small.rgba());
 }
 
 TEST("a picture is drawn stretched to its area, cropped to a part, and partly showing") {

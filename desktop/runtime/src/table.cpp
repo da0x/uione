@@ -194,7 +194,7 @@ namespace one::desktop::runtime {
 				cells.push_back(tone ? desktop::edge(*tone) : desktop::spacer().grow(0).width(3));
 			}
 			// A small picture of its file, before its cells.
-			if (!spec.picture.empty()) cells.push_back(picture_of(p, row[spec.picture].as_string(), spec.fit, 40).width(40).grow(0));
+			if (!spec.picture.empty()) cells.push_back(picture_of(p, row[spec.picture].as_string(), spec.fit, 40, 640).width(40).grow(0));
 			for (std::size_t c = 0; c < spec.columns.size(); ++c) {
 				const auto& column = spec.columns[c].field;
 				// What a row opens is said in the table's color, when it has one, by its first column.

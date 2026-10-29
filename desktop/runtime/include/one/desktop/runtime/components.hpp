@@ -199,6 +199,28 @@ namespace one::desktop::runtime {
 	// they're over it; and those dropped on it since it was last built.
 	desktop::view pictures_target(page& p, desktop::view shown, const std::string& key);
 	std::vector<std::filesystem::path> pictures_dropped(page& p, const std::string& key);
+	// A picture handed to something that takes them, as it comes in: measured, and kept
+	// where the source keeps files, away from the window's thread, so a large one, or
+	// many, never hold it up. Its place among those handed with it, and whether one
+	// before it came in, so what it makes joins theirs as one step to undo.
+	struct coming_picture {
+		std::filesystem::path file = {};
+		std::string kept = {};  // what its file is kept as, or nothing when it's kept with its command
+		std::string svg = {};   // its text, when it's an SVG
+		int width = 0, height = 0;
+		std::optional<long long> bytes = {};
+		std::string date = {};
+		std::size_t index = 0, count = 1;
+		bool joined = false;
+	};
+	// Pictures handed to what `key` names, each measured and kept in turn in the
+	// background, the workspace saying how far it's got while there are several, and,
+	// once they're in, what couldn't be taken; and those come in since it was last
+	// built, in order.
+	void pictures_coming(page& p, const std::string& key, std::vector<std::filesystem::path> files);
+	std::vector<coming_picture> pictures_come(page& p, const std::string& key);
+	// Runs a command making something of a picture come in, its file in `field`.
+	void run_with_picture(page& p, const std::string& command, value made, const std::string& field, const coming_picture& picture, std::function<void(const answer&)> after);
 	desktop::view paper_button(page& p, paper_ask ask);
 	desktop::view paper_size(page& p, paper_ask ask);
 	// crop "Crop", edit words "Edit", add words "Text": asks the screen's collage.
@@ -210,8 +232,13 @@ namespace one::desktop::runtime {
 	double screen_width();
 	double screen_height();
 	// A file's picture, `height` tall, all of it fitted in, or filling its place, on the
-	// sunken color while there's none, as a card's is drawn.
-	desktop::view picture_of(page& p, const std::string& kept, bool fit, float height);
+	// sunken color while there's none, as a card's is drawn: read away from the window's
+	// thread, and a copy no longer on its longer side than `longest` where that's given,
+	// as for a card, where the whole of a large one would be wasted.
+	desktop::view picture_of(page& p, const std::string& kept, bool fit, float height, int longest = 0);
+	// A file's picture as the window draws it, the same way: nothing until it's read,
+	// and an empty one when there's no such file or it isn't a picture.
+	std::optional<desktop::picture> picture_soon(page& p, const std::string& kept, int longest = 0);
 	desktop::view pipeline_board(page& p, pipeline_spec spec);
 	desktop::view cards(page& p, cards_spec spec);
 	// How far something is in its stage, like 2 of 5: a thin bar in the accent and its count.

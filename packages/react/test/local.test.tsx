@@ -374,6 +374,47 @@ describe("a local app's files", () => {
     await localSource({ name: "x", packages: [notes], store }).opened;
     expect(store.files.size).toBe(0);
   });
+
+  it("draws a picture's smaller copy once, keeps it beside the picture, and lets it go with it", async () => {
+    const store = memoryStore();
+    const notes = localPackage("x", [entity("x::note", [{ name: "picture" }])], [command("x::note::create").creates("x::note"), command("x::note::delete").deletes("x::note")], []);
+    const source = localSource({ name: "x", packages: [notes], store });
+    const decoded: unknown[] = [];
+    const was = { bitmap: globalThis.createImageBitmap, canvas: globalThis.OffscreenCanvas, address: URL.createObjectURL };
+    globalThis.createImageBitmap = (async (_: Blob, options?: { resizeWidth: number; resizeHeight: number }) => {
+      decoded.push(options);
+      return { width: options?.resizeWidth ?? 4032, height: options?.resizeHeight ?? 3024, close() {} };
+    }) as unknown as typeof createImageBitmap;
+    globalThis.OffscreenCanvas = class {
+      constructor(
+        readonly width: number,
+        readonly height: number,
+      ) {}
+      getContext() {
+        return { drawImage() {} };
+      }
+      async convertToBlob() {
+        return new Blob([`${this.width}x${this.height}`], { type: "image/png" });
+      }
+    } as unknown as typeof OffscreenCanvas;
+    URL.createObjectURL = (blob: Blob) => `blob:${blob.size}`;
+    try {
+      const path = await source.files.upload(new File(["a large photo"], "harbor.jpg", { type: "image/jpeg" }), () => {});
+      const made = (await source.run("x::note::create", { picture: path })) as CommandReply;
+      expect(await source.files.small!(path, 640)).toBe("blob:7");
+      expect(decoded).toEqual([undefined, { resizeWidth: 640, resizeHeight: 480, resizeQuality: "high" }]);
+      expect((await store.file(`${path} small 640`))!.size).toBe("640x480".length);
+      // Read again, it's the one kept, not drawn again.
+      await localSource({ name: "x", packages: [notes], store }).files.small!(path, 640);
+      expect(decoded.length).toBe(2);
+      expect(store.files.size).toBe(2);
+      await source.run("x::note::delete", { id: made.id });
+      await localSource({ name: "x", packages: [notes], store }).opened;
+      expect(store.files.size).toBe(0);
+    } finally {
+      (globalThis.createImageBitmap = was.bitmap), (globalThis.OffscreenCanvas = was.canvas), (URL.createObjectURL = was.address);
+    }
+  });
 });
 
 describe("a value divided, or what's left over", () => {

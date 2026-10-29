@@ -173,6 +173,9 @@ namespace one::screens {
 		std::optional<person> reader() const { return source_.reader(); }
 		// Where a file a field names is on this machine, when the source keeps it here.
 		std::optional<std::filesystem::path> file_here(const std::string& kept) const { return source_.file_here(kept); }
+		// What it reads from and runs on, which outlives it: for work done away from the
+		// app's loop, like keeping a file, that may finish after it's left.
+		screens::source& source() const { return source_; }
 		std::string me() const { return reader() ? reader()->uid : ""; }
 
 		// What's being worked on now in what the page reads: each record someone holds

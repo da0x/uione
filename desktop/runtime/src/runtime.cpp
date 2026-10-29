@@ -12,12 +12,17 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <atomic>
+#include <condition_variable>
+#include <deque>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <format>
 #include <functional>
+#include <iterator>
+#include <mutex>
 #include <optional>
 #include <thread>
 
@@ -293,11 +298,93 @@ namespace one::desktop::runtime {
 		return handed;
 	}
 
+	namespace {
+		// What a test holds back of what's handed to the window, while it does.
+		std::atomic<bool> held = false;
+		std::mutex holding;
+		std::vector<std::function<void()>> held_back;
+
+		// The threads work away from the window's is done on, started the first time
+		// there's some, each taking the next in turn. Never stopped: they wait, and go
+		// with the app.
+		class workers {
+		public:
+			void add(std::function<void()> work) {
+				{
+					std::lock_guard hold(lock_);
+					if (started_ == 0) {
+						started_ = std::clamp(static_cast<int>(std::thread::hardware_concurrency()) - 1, 1, 4);
+						for (int i = 0; i < started_; ++i) std::thread([this] { serve(); }).detach();
+					}
+					waiting_.push_back(std::move(work));
+				}
+				woken_.notify_one();
+			}
+
+		private:
+			void serve() {
+				for (;;) {
+					std::function<void()> next;
+					{
+						std::unique_lock hold(lock_);
+						woken_.wait(hold, [this] { return !waiting_.empty(); });
+						next = std::move(waiting_.front());
+						waiting_.pop_front();
+					}
+					next();
+				}
+			}
+			std::mutex lock_;
+			std::condition_variable woken_;
+			std::deque<std::function<void()>> waiting_;
+			int started_ = 0;
+		};
+		workers& shared_workers() {
+			static workers* all = new workers();
+			return *all;
+		}
+	}  // namespace
+
 	void post(std::function<void()> task) {
+		if (held) {
+			std::lock_guard hold(holding);
+			held_back.push_back(std::move(task));
+			return;
+		}
 		if (desktop::app* app = posting_to.load()) app->post(std::move(task));
 	}
 
-	bool posting() { return posting_to.load() != nullptr; }
+	bool posting() { return held || posting_to.load() != nullptr; }
+
+	void in_background(std::function<void()> work) {
+		if (!posting()) return work();
+		shared_workers().add(std::move(work));
+	}
+
+	void handed_back(std::function<void()> task) {
+		if (posting()) post(std::move(task));
+		else task();
+	}
+
+	void hold_posted(bool on) {
+		held = on;
+		if (!on) {
+			std::lock_guard hold(holding);
+			held_back.clear();
+		}
+	}
+
+	std::size_t run_posted(std::size_t most) {
+		std::vector<std::function<void()>> now;
+		{
+			std::lock_guard hold(holding);
+			std::size_t taken = std::min(most, held_back.size());
+			now.assign(std::make_move_iterator(held_back.begin()), std::make_move_iterator(held_back.begin() + static_cast<std::ptrdiff_t>(taken)));
+			held_back.erase(held_back.begin(), held_back.begin() + static_cast<std::ptrdiff_t>(taken));
+		}
+		for (auto& task : now) task();
+		return now.size();
+	}
 
 	namespace {
 		// A site's notices, said by the desktop whatever screen is open (decision 0024):

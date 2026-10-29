@@ -9,9 +9,12 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <expected>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <sstream>
+#include <thread>
 
 #include "check.hpp"
 #include "one/local/local.hpp"
@@ -272,9 +275,28 @@ TEST("files nothing names any more are let go of when the folder opens, and thos
 		kept = *f->keep(s.at / "kept.png");
 		dropped = *f->keep(s.at / "dropped.png");
 		CHECK(f->append({.command = "make", .at = "", .changes = {{.entity = "picture", .id = "a", .fields = value(std::map<std::string, value>{{"file", kept}})}}}).has_value());
+		// And a smaller copy of each, as a window draws one.
+		std::filesystem::create_directories(s.at / "data" / "files" / "small");
+		std::ofstream(s.at / "data" / "files" / "small" / (kept.substr(6) + "-640.png")) << "small";
+		std::ofstream(s.at / "data" / "files" / "small" / (dropped.substr(6) + "-640.png")) << "small";
 	}
 	auto opened = local_source::open(*folder::open_at(s.at / "data"));
 	CHECK(opened.has_value());
 	CHECK(std::filesystem::exists(s.at / "data" / kept));
 	CHECK(!std::filesystem::exists(s.at / "data" / dropped));
+	CHECK(std::filesystem::exists(s.at / "data" / "files" / "small" / (kept.substr(6) + "-640.png")));
+	CHECK(!std::filesystem::exists(s.at / "data" / "files" / "small" / (dropped.substr(6) + "-640.png")));
+}
+
+TEST("a file is kept ahead of its command on any thread, the command's field then naming it as kept") {
+	scratch s;
+	std::filesystem::create_directories(s.at);
+	std::filesystem::path photo = s.at / "beach.png";
+	std::ofstream(photo, std::ios::binary) << "abc";
+	auto source = local_source::open(*folder::open_at(s.at / "data"));
+	std::optional<std::expected<std::string, std::string>> kept;
+	std::thread([&] { kept = (*source)->keep(photo); }).join();
+	CHECK(kept && *kept && **kept == "files/ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+	if (kept && *kept) CHECK(std::filesystem::exists(s.at / "data" / **kept));
+	CHECK(kept && !(*source)->keep(s.at / "gone.png")->has_value());
 }

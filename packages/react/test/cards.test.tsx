@@ -9,6 +9,8 @@ import { fireEvent, render, waitFor } from "@testing-library/react";
 import { App, Cards, PaperButton, memorySource, screen as defineScreen, useView } from "../src/index.js";
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
+import { takeInTurn } from "../src/workspace.js";
+import { vi } from "vitest";
 
 const paste = {
   command: "studio::piece::create",
@@ -69,5 +71,42 @@ describe("cards that take pictures", () => {
     fireEvent.change(opened!);
     await waitFor(() => expect(source.runs.some((r) => r.command === "studio::piece::create")).toBe(true));
     expect(source.runs.find((r) => r.command === "studio::piece::create")!.input).toMatchObject({ room: "r1", name: "beach", picture_width: 640 });
+  });
+});
+
+describe("pictures taken in turn", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("give the page back to the browser before each, saying how far they've got, and nothing once they're in", async () => {
+    const happened: string[] = [];
+    const later = globalThis.setTimeout;
+    vi.spyOn(globalThis, "setTimeout").mockImplementation(((run: () => void, wait?: number) => later(() => (happened.push(`given back after ${wait}`), run()), wait)) as typeof setTimeout);
+    const said: unknown[] = [];
+    await takeInTurn(["harbor", "dusk", "pier"], (s) => said.push(s?.text), async (name) => void happened.push(name));
+    expect(happened).toEqual(["given back after 0", "harbor", "given back after 0", "dusk", "given back after 0", "pier"]);
+    expect(said).toEqual(["Adding 1 of 3 pictures…", "Adding 2 of 3 pictures…", "Adding 3 of 3 pictures…", undefined]);
+  });
+
+  it("say, once they're in, what couldn't be taken", async () => {
+    const said: unknown[] = [];
+    await takeInTurn(["notes.txt", "harbor.jpg"], (s) => said.push(s), async (name) => (name.endsWith(".txt") ? `${name} isn't a picture this can read.` : undefined));
+    expect(said.at(-1)).toEqual({ text: "notes.txt isn't a picture this can read.", problem: true });
+  });
+
+  it("are drawn on cards from a smaller copy where the store makes them", async () => {
+    const source = memorySource({ files: true });
+    source.set("studio::room_page", { pieces: [{ id: "n0", name: "Kept", image: "files/abc" }] }, "r1");
+    const asked: unknown[] = [];
+    const files = { upload: async () => "files/abc", address: async (path: string) => `whole:${path}`, small: async (path: string, longest: number) => (asked.push([path, longest]), `small:${path}`) };
+    function Pieces() {
+      const page = useView("studio::room_page", "r1");
+      return <Cards view={page} list="pieces" columns={{ name: "Name" }} picture="image" />;
+    }
+    const only = defineScreen({ title: "Pieces", route: "/" }, () => <Pieces />);
+    const drawn = render(<App name="studio" screens={[only]} ui={plain} data={{ ...source, subscribe: source.subscribe, run: source.run, files }} location="/" />);
+    await waitFor(() => expect(drawn.container.querySelector("img")?.getAttribute("src")).toBe("small:files/abc"));
+    expect(asked).toEqual([["files/abc", 640]]);
   });
 });

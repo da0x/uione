@@ -394,6 +394,15 @@ TEST("a canvas places its cards where they say, lays out those that don't by col
 	CHECK(p.error("tracker::issue::place") == "you can't move that one");
 }
 
+TEST("a page reads from and runs on its source, which keeps no file ahead of a command unless it keeps files itself") {
+	memory_source data;
+	auto s = tracker();
+	navigator nav(s, data);
+	nav.open("/projects/atlas");
+	CHECK(&nav.current().source() == &data);
+	CHECK(!data.keep(std::filesystem::temp_directory_path() / "anything.png").has_value());
+}
+
 TEST("a form's files are uploaded as it's sent and added to what's attached, and one that isn't there turns it down") {
 	memory_source data;
 	data.on("tracker::issue::attach", [](const value&, memory_source&) -> answer { return "atlas-12"; });

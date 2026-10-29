@@ -2076,6 +2076,14 @@ form step::update "Save" {
   `picture_date`, each only when the entity has that field. Several at once are one
   step to undo, and cards with none yet still take them. A terminal can't be dropped
   on, so it doesn't take them.
+
+  Pictures coming in, here or in a collage or paper, are read and kept one at a
+  time away from the app's drawing, so the window keeps answering however many
+  there are and however large. While there are several, the workspace's messages
+  say how far they've got, like "Adding 12 of 40 pictures…", and say nothing once
+  they're in, or what couldn't be taken. A card draws a smaller copy of its
+  picture, made once and kept beside it, while `picture poster.preview` shows the
+  whole of it.
 - `picture poster.preview fit` shows the file a value holds, on its own, as wide as
   its place and 320 tall: a field of what's picked, like `poster`, or of a view per
   something, like `poster_page.preview`. All of it is fitted in, or, with `fill` or

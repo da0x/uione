@@ -966,6 +966,80 @@ TEST("cards take pictures chosen or dropped, each a record made by their add, it
 	std::filesystem::remove_all(folder);
 }
 
+TEST("pictures coming into cards are measured and kept away from the window, which is built again and again while they come in, saying how far they've got") {
+	auto folder = std::filesystem::temp_directory_path() / "uione-cards-coming";
+	std::filesystem::remove_all(folder);
+	std::filesystem::create_directories(folder);
+	// As large as a camera's.
+	auto file = folder / "harbor.png";
+	one::desktop::offscreen::write_png(file, {4032, 3024, std::vector<std::uint8_t>(std::size_t{4032} * 3024 * 4, 200)});
+	memory_source data;
+	data.set("studio::room_page", "r1", value(fields{{"pieces", list{}}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Pieces", "/:room", "", [](page& p) {
+		                     return items(cards(p, {.view = p.view("studio::room_page", p.param("room")),
+		                                            .list = "pieces",
+		                                            .columns = {{"name", "Name"}},
+		                                            .picture = "image",
+		                                            .add = "studio::piece::create",
+		                                            .fields = {{"picture", "image"}, {"picture_width", "picture_width"}, {"picture_height", "picture_height"}},
+		                                            .key = "/:room cards pieces",
+		                                            .paste = true}));
+	                     }});
+	navigator nav(s, data);
+	nav.open("/r1");
+	built(nav);
+	one::desktop::runtime::hold_posted(true);
+	nav.current().kept<std::vector<std::string>>("pictures chosen /:room cards pieces").set(std::vector<std::string>(8, file.string()));
+	built(nav);
+	// Nothing measured or made while the window was built: it's all away.
+	CHECK(data.runs().empty());
+	int frames = 0;
+	std::vector<std::string> said;
+	for (; data.runs().size() < 8 && frames < 5000; ++frames) {
+		if (one::desktop::runtime::run_posted(1) == 0) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		if (std::string now = nav.current().told().peek(); !now.empty() && (said.empty() || said.back() != now)) said.push_back(now);
+		built(nav);
+	}
+	for (int i = 0; i < 200 && one::desktop::runtime::run_posted() == 0; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	built(nav);
+	CHECK(frames > 8);
+	CHECK(data.runs().size() == 8);
+	if (data.runs().size() == 8) CHECK(data.runs().back().fields["picture_width"].as_integer() == 4032 && data.runs().back().fields["picture_height"].as_integer() == 3024);
+	CHECK(!said.empty() && said.front() == "Adding 1 of 8 pictures…" && said.back() == "Adding 8 of 8 pictures…");
+	// And once they're in, it's no longer said.
+	CHECK(nav.current().told().peek().empty());
+	one::desktop::runtime::hold_posted(false);
+	std::filesystem::remove_all(folder);
+}
+
+TEST("a card's picture is drawn from a smaller copy, made once and kept beside the file it's of when that's named by its hash") {
+	auto folder = std::filesystem::temp_directory_path() / "uione-cards-small";
+	std::filesystem::remove_all(folder);
+	std::filesystem::create_directories(folder / "files");
+	std::string hash(64, 'a');
+	one::desktop::offscreen::write_png(folder / "files" / hash, {2000, 1000, std::vector<std::uint8_t>(std::size_t{2000} * 1000 * 4, 120)});
+	struct kept_there : memory_source {
+		std::filesystem::path in;
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return in / kept; }
+	} data;
+	data.in = folder;
+	data.set("studio::room_page", "r1", value(fields{{"pieces", list{value(fields{{"id", "c1"}, {"name", "Harbor"}, {"image", "files/" + hash}})}}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Pieces", "/:room", "", [](page& p) {
+		                     return items(cards(p, {.view = p.view("studio::room_page", p.param("room")), .list = "pieces", .columns = {{"name", "Name"}}, .picture = "image"}));
+	                     }});
+	navigator nav(s, data);
+	nav.open("/r1");
+	(void)drawn(nav);
+	auto small = one::desktop::picture::read(folder / "files" / "small" / (hash + "-640.png"));
+	CHECK(small.has_value());
+	if (small) CHECK(small->width() == 640 && small->height() == 320);
+	std::filesystem::remove_all(folder);
+}
+
 namespace {
 
 	site with_issue() {

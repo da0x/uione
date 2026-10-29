@@ -151,6 +151,54 @@ namespace one::desktop::runtime {
 			});
 		}
 
+		// What's drawn in the window from a picture kept at `file`: the whole of it, or a
+		// copy no longer on its longer side than `longest`, made once and kept beside it,
+		// by its hash and that size, where it's named by its hash. Read away from the
+		// window's thread, and nothing until it is; the window built again then. With no
+		// window to build again, it's read now.
+		state<int> pictures_read{0};
+		std::optional<desktop::picture> read_soon(const std::filesystem::path& file, int longest) {
+			static kept_by<desktop::picture> whole(8), small(512);
+			auto& kept = longest > 0 ? small : whole;
+			std::string key = std::format("{} {}", file.string(), longest);
+			auto make = [file, longest] {
+				if (longest <= 0) return desktop::picture::read(file).value_or(desktop::picture());
+				std::string name = file.filename().string();
+				bool hashed = name.size() == 64 && name.find_first_not_of("0123456789abcdef") == std::string::npos;
+				std::filesystem::path beside = file.parent_path() / "small" / std::format("{}-{}.png", name, longest);
+				if (hashed) {
+					if (auto read = desktop::picture::read(beside)) return *read;
+				}
+				auto read = desktop::picture::read(file);
+				if (!read) return desktop::picture();
+				desktop::picture made = read->smaller(longest);
+				std::error_code failed;
+				if (hashed && made.width() < read->width() && (std::filesystem::create_directories(beside.parent_path(), failed), !failed)) {
+					std::filesystem::path writing = beside;
+					writing += std::format(".{}", ::getpid());
+					if (made.write_png(writing)) std::filesystem::rename(writing, beside, failed);
+				}
+				return made;
+			};
+			if (!posting()) return kept.get(key, make);
+			if (auto known = kept.peek(key)) return known;
+			static std::mutex reading;
+			static std::set<std::string> working;
+			pictures_read.get();
+			std::lock_guard hold(reading);
+			if (working.insert(key).second) {
+				in_background([key, make, &kept] {
+					kept.get(key, make);
+					{
+						std::lock_guard hold(reading);
+						working.erase(key);
+					}
+					post([] { pictures_read.set(pictures_read.peek() + 1); });
+				});
+			}
+			return std::nullopt;
+		}
+
 		// A picture mirrored, then turned a quarter clockwise as many times as `turns`.
 		desktop::picture oriented(const desktop::picture& p, int turns, bool mirrored) {
 			int w = p.width(), h = p.height();
@@ -911,60 +959,56 @@ namespace one::desktop::runtime {
 			});
 		}
 
-		// Pictures dropped or pasted: the first on a collage with nothing on it covers it,
-		// and the rest, and every SVG, are as big as they are, smaller where they wouldn't
-		// fit, centered where they were let go, each a little further along; all one step
-		// to undo. The last of them is picked once it's made, so it's ready to be worked
-		// on.
-		void add_pictures(page& p, const collage_spec& spec, const value& layers, double width, double height, const std::vector<std::filesystem::path>& files,
-		                  std::optional<model::point> on) {
+		// Pictures dropped or pasted, to come in where they were let go, or in the middle.
+		void take_pictures(page& p, const collage_spec& spec, std::vector<std::filesystem::path> files, std::optional<model::point> on) {
 			if (spec.add.empty() || !spec.paste || !spec.fields.contains("picture")) return;
+			p.kept<std::optional<model::point>>("collage pictures at " + spec.key).set(on);
+			pictures_coming(p, spec.key, std::move(files));
+		}
+
+		// Those come in: the first on a collage with nothing on it covers it, and the rest,
+		// and every SVG, are as big as they are, smaller where they wouldn't fit, centered
+		// where they were let go, each a little further along; all one step to undo. The
+		// last of them is picked once it's made, so it's ready to be worked on.
+		void add_pictures(page& p, const collage_spec& spec, const value& layers, double width, double height, const std::vector<coming_picture>& pictures,
+		                  std::optional<model::point> on) {
 			// The layer pictures go in, made first when there's none; an SVG makes its own.
-			bool pictures = std::ranges::any_of(files, [&](const auto& f) { return vector_of(f).empty() || !keeps_shapes(spec); });
-			if (pictures && !layer_ready(p, spec, [&p, spec, layers, width, height, files, on] { add_pictures(p, spec, layers, width, height, files, on); })) return;
+			bool any = std::ranges::any_of(pictures, [&](const auto& c) { return c.svg.empty() || !keeps_shapes(spec); });
+			if (any && !layer_ready(p, spec, [&p, spec, layers, width, height, pictures, on] { add_pictures(p, spec, layers, width, height, pictures, on); })) return;
 			const auto& all = layers.as_array();
 			double depth = !all.empty() && !all.back()["depth"].is_null() ? all.back()["depth"].as_double() + 1 : 0;
-			bool first = true, covered = !all.empty();
-			int at = 0;
-			for (const auto& file : files) {
+			bool covered = !all.empty();
+			for (const auto& picture : pictures) {
+				double at = static_cast<double>(picture.index);
 				// An SVG, where the collage keeps shapes, comes in as its own shapes.
-				if (std::string svg = vector_of(file); !svg.empty() && keeps_shapes(spec)) {
-					std::string name = file.stem().string().starts_with("one-picture-") ? "Pasted" : file.stem().string();
+				if (!picture.svg.empty() && keeps_shapes(spec)) {
+					std::string name = picture.file.stem().string().starts_with("one-picture-") ? "Pasted" : picture.file.stem().string();
 					std::optional<model::point> where = on;
 					if (where && at) where = model::point{where->x + 40.0 * at, where->y + 40.0 * at};
-					++at;
-					add_shapes(p, spec, layers, width, height, svg, name, where);
+					add_shapes(p, spec, layers, width, height, picture.svg, name, where);
 					continue;
 				}
-				auto read = desktop::picture::read(file);
-				if (!read || !*read) {
-					p.told().set(std::format("{} isn't a picture this can read.", file.filename().string()));
-					continue;
-				}
-				double pw = read->width(), ph = read->height();
+				double pw = picture.width, ph = picture.height;
 				model::box b;
 				// An SVG is drawing, not a photograph: it comes in at its own size, fitted,
 				// never covering the collage.
-				if (!covered && vector_of(file).empty()) {
+				if (!covered && picture.svg.empty()) {
 					b = model::sitting("fill", pw, ph, width, height);
 					covered = true;
 				} else {
 					double s = std::min({1.0, width / pw, height / ph});
 					double cx = on ? on->x : width / 2, cy = on ? on->y : height / 2;
 					b = {cx - pw * s / 2 + 40.0 * at, cy - ph * s / 2 + 40.0 * at, pw * s, ph * s};
-					++at;
 				}
 				value made = value(fields{{"x", b.x}, {"y", b.y}, {"w", b.w}, {"h", b.h}});
 				if (!spec.parent.empty()) made.fields[spec.parent] = value(spec.subject);
 				in_layer(p, spec, made);
 				if (!all.empty() && !all.back()["depth"].is_null()) made.fields["depth"] = value(depth++);
 				if (spec.fields.contains("picture_width")) made.fields["picture_width"] = value(pw), made.fields["picture_height"] = value(ph);
-				if (!std::exchange(first, false)) made.fields["one:history"] = value("joined");
-				p.run(spec.add, collage_fields_of(made, spec.fields), attached_files{{spec.fields.at("picture"), {file.string()}}},
-				      [&p, pick = spec.pick](const answer& a) {
-					      if (a && !pick.empty()) p.pick(pick, *a);
-				      },
-				      false);
+				if (picture.joined) made.fields["one:history"] = value("joined");
+				run_with_picture(p, spec.add, collage_fields_of(made, spec.fields), spec.fields.at("picture"), picture, [&p, pick = spec.pick](const answer& a) {
+					if (a && !pick.empty()) p.pick(pick, *a);
+				});
 			}
 		}
 
@@ -1061,12 +1105,12 @@ namespace one::desktop::runtime {
 		void paste(page& p, const collage_spec& spec, const value& layers, double width, double height) {
 			// What this copied, still on the clipboard, comes back as itself.
 			if (auto words = desktop::clipboard_text(); words && !copied().rows.empty() && *words == copied().svg) return paste_objects(p, spec, layers);
-			if (auto files = desktop::clipboard_files(); !files.empty()) add_pictures(p, spec, layers, width, height, files, std::nullopt);
-			else if (auto bytes = desktop::clipboard_picture()) add_pictures(p, spec, layers, width, height, {kept_for_now(*bytes)}, std::nullopt);
+			if (auto files = desktop::clipboard_files(); !files.empty()) take_pictures(p, spec, files, std::nullopt);
+			else if (auto bytes = desktop::clipboard_picture()) take_pictures(p, spec, {kept_for_now(*bytes)}, std::nullopt);
 			else if (auto words = desktop::clipboard_text(); words && words->find_first_not_of(" \n\t") != std::string::npos) {
 				// An SVG's text, as a drawing program copies one, is that SVG, as one dropped is.
 				std::vector<std::uint8_t> bytes(words->begin(), words->end());
-				if (desktop::picture::is_svg(bytes)) add_pictures(p, spec, layers, width, height, {kept_for_now(bytes)}, std::nullopt);
+				if (desktop::picture::is_svg(bytes)) take_pictures(p, spec, {kept_for_now(bytes)}, std::nullopt);
 				else add_words(p, spec, layers, width, height, *words);
 			}
 			else p.told().set("There's nothing to paste. Copy a picture or some words first.");
@@ -1168,14 +1212,14 @@ namespace one::desktop::runtime {
 				std::string key = kept_key(file, layer);
 				std::lock_guard hold(measuring);
 				if (working.insert(key).second) {
-					std::thread([file, layer, key, woken] {
+					in_background([file, layer, key, woken] {
 						(void)measured_now(file, layer, 1);
 						{
 							std::lock_guard hold(measuring);
 							working.erase(key);
 						}
 						post([woken] { woken.set(woken.peek() + 1); });
-					}).detach();
+					});
 				}
 				return known;
 			};
@@ -1232,7 +1276,7 @@ namespace one::desktop::runtime {
 			{
 				std::lock_guard hold(preparing);
 				if (!last_only && working.insert(key).second) {
-					std::thread([key, id, file = *file, layer, shift, width, height, woken] {
+					in_background([key, id, file = *file, layer, shift, width, height, woken] {
 						ready_layer made = made_ready(file, layer, shift, shown_largest);
 						readied.get(key, [&] { return made; });
 						{
@@ -1241,7 +1285,7 @@ namespace one::desktop::runtime {
 							last[id] = key;
 						}
 						post([woken] { woken.set(woken.peek() + 1); });
-					}).detach();
+					});
 				}
 				if (auto found = last.find(id); found != last.end()) shown = found->second;
 			}
@@ -1440,17 +1484,17 @@ namespace one::desktop::runtime {
 			std::filesystem::path file = folder / (stem + ".png");
 			for (int n = 2; std::filesystem::exists(file); ++n) file = folder / std::format("{}-{}.png", stem, n);
 			p.told().set("Saving…");
-			std::thread([told = p.told(), problem = p.problem(), about = p.kept<std::pair<std::string, std::string>>("said of a file"), all = std::move(all), folder, file] {
+			in_background([told = p.told(), problem = p.problem(), about = p.kept<std::pair<std::string, std::string>>("said of a file"), all = std::move(all), folder, file] {
 				std::error_code error;
 				std::filesystem::create_directories(folder, error);
 				auto written = drawn_whole(all).write_png(file);
-				post([told, problem, about, file, written] {
+				handed_back([told, problem, about, file, written] {
 					if (!written) return told.set(""), problem.set(written.error());
 					std::string said = std::format("Saved {} in {}.", file.filename().string(), file.parent_path().string());
 					about.set({said, file.string()});
 					told.set(said);
 				});
-			}).detach();
+			});
 		}
 
 		// Bytes as base64, as a data: address holds them.
@@ -1485,7 +1529,11 @@ namespace one::desktop::runtime {
 
 		// The drawing as a saved SVG, from its vectors: all of it, or only one layer, as
 		// big as that layer, a group's all it holds.
-		std::string svg_of(page& p, const value& layers, double width, double height, const std::vector<std::string>& only) {
+		struct svg_parts {
+			model::box area;
+			std::vector<model::saved_layer> saved;  // each picture's address, until it's written, its file
+		};
+		svg_parts svg_of(page& p, const value& layers, double width, double height, const std::vector<std::string>& only) {
 			std::vector<model::saved_layer> saved;
 			model::box area{0, 0, width, height};
 			placed groups;
@@ -1513,31 +1561,45 @@ namespace one::desktop::runtime {
 					one.kind = "svg", one.svg = svg;
 					if (auto size = desktop::picture::svg_size(svg)) one.natural = {0, 0, size->first, size->second};
 				} else if (auto file = p.file_here(l["picture"].as_string())) {
-					one.kind = "picture", one.href = data_address(*file), one.crop = crop_of(l);
+					one.kind = "picture", one.href = file->string(), one.crop = crop_of(l);
 					one.turns = static_cast<int>(l["turns"].as_double()), one.mirrored = l["mirrored"].as_double() != 0, one.corners = l["corners"].as_double();
 				} else {
 					continue;
 				}
 				saved.push_back(std::move(one));
 			}
-			return model::svg_document(area.w, area.h, saved);
+			return {area, std::move(saved)};
+		}
+
+		// Those parts written, each picture's file read into its address: on any thread.
+		std::string svg_written(svg_parts parts) {
+			for (auto& one : parts.saved) {
+				if (one.kind == "picture") one.href = data_address(one.href);
+			}
+			return model::svg_document(parts.area.w, parts.area.h, parts.saved);
 		}
 
 		// A drawing saved as an SVG in the app's folder in Pictures, as a picture is.
-		void save_svg(page& p, std::string svg, const std::string& name) {
+		void save_svg(page& p, svg_parts parts, const std::string& name) {
 			std::filesystem::path folder = saving_folder();
 			std::string stem = std::format("{}-{:%Y-%m-%d-%H%M}", file_name_of(name),
 			                               std::chrono::zoned_time(std::chrono::current_zone(), std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now())));
 			std::filesystem::path file = folder / (stem + ".svg");
 			for (int n = 2; std::filesystem::exists(file); ++n) file = folder / std::format("{}-{}.svg", stem, n);
-			std::error_code error;
-			std::filesystem::create_directories(folder, error);
-			std::ofstream out(file, std::ios::binary);
-			out << svg;
-			if (!out) return p.problem().set("The drawing couldn't be saved in " + folder.string() + ".");
-			std::string said = std::format("Saved {} in {}.", file.filename().string(), file.parent_path().string());
-			p.kept<std::pair<std::string, std::string>>("said of a file").set({said, file.string()});
-			p.told().set(said);
+			p.told().set("Saving…");
+			in_background([told = p.told(), problem = p.problem(), about = p.kept<std::pair<std::string, std::string>>("said of a file"), parts = std::move(parts), folder, file] {
+				std::error_code error;
+				std::filesystem::create_directories(folder, error);
+				std::ofstream out(file, std::ios::binary);
+				out << svg_written(parts);
+				bool written = static_cast<bool>(out);
+				handed_back([told, problem, about, folder, file, written] {
+					if (!written) return told.set(""), problem.set("The drawing couldn't be saved in " + folder.string() + ".");
+					std::string said = std::format("Saved {} in {}.", file.filename().string(), file.parent_path().string());
+					about.set({said, file.string()});
+					told.set(said);
+				});
+			});
 		}
 
 		// What a collage's preview is drawn from, apart from the preview itself.
@@ -1566,9 +1628,14 @@ namespace one::desktop::runtime {
 		return name.empty() || name.starts_with("one-picture-") ? "Pasted image" : name;
 	}
 
-	desktop::view picture_of(page& p, const std::string& kept, bool fit, float height) {
+	std::optional<desktop::picture> picture_soon(page& p, const std::string& kept, int longest) {
 		auto file = kept.empty() ? std::nullopt : p.file_here(kept);
-		desktop::picture shown = file ? picture_kept(*file) : desktop::picture();
+		return file ? read_soon(*file, longest) : std::optional(desktop::picture());
+	}
+
+	desktop::view picture_of(page& p, const std::string& kept, bool fit, float height, int longest) {
+		auto file = kept.empty() ? std::nullopt : p.file_here(kept);
+		desktop::picture shown = file ? read_soon(*file, longest).value_or(desktop::picture()) : desktop::picture();
 		return desktop::drawing([shown, fit](desktop::canvas& c, desktop::rect area) {
 			       const auto& t = current_theme();
 			       c.box(area, {.fill = t.sunken});
@@ -1660,10 +1727,13 @@ namespace one::desktop::runtime {
 			auto asked = p.kept<std::shared_ptr<std::set<std::string>>>("collage sized " + spec.key, std::make_shared<std::set<std::string>>()).peek();
 			for (const auto& l : layers.as_array()) {
 				if (!l.fields.contains("picture_width") || l["picture_width"].as_double() > 0 || asked->contains(l["id"].as_string())) continue;
-				desktop::picture shown = l["picture"].as_string().empty() ? desktop::picture() : layer_picture(p, l);
-				if (!shown) continue;
+				auto file = l["picture"].as_string().empty() ? std::nullopt : p.file_here(l["picture"].as_string());
+				auto size = file ? desktop::picture::size_of(*file) : std::nullopt;
+				if (!size) continue;
+				auto [sw, sh] = *size;
+				if ((static_cast<int>(l["turns"].as_double()) % 2 + 2) % 2 == 1) std::swap(sw, sh);
 				asked->insert(l["id"].as_string());
-				p.run(spec.update, collage_fields_of(value(fields{{"id", l["id"]}, {"picture_width", shown.width()}, {"picture_height", shown.height()}, {"one:history", "apart"}}), spec.fields));
+				p.run(spec.update, collage_fields_of(value(fields{{"id", l["id"]}, {"picture_width", sw}, {"picture_height", sh}, {"one:history", "apart"}}), spec.fields));
 			}
 		}
 		// Its preview, drawn once changes have settled for a moment and nothing's being
@@ -1680,10 +1750,12 @@ namespace one::desktop::runtime {
 				drawn_from.set(now);
 				auto kept = gathered(p, layers, width, height, spec.preview_wide / width, spec.match_colors);
 				kept.clear = spec.clear;
-				auto small = drawn_whole(kept);
-				std::filesystem::path file = kept_for_now(small.png());
-				p.run(spec.preview, value(fields{{"id", spec.subject}, {"one:history", "apart"}}), attached_files{{spec.preview_into, {file.string()}}},
-				      [file](const answer&) { std::filesystem::remove(file); }, true);
+				// Drawn away from the window's thread, and sent once it's back.
+				in_background([kept = std::move(kept), drawn = p.kept<coming_picture>("collage preview drawn " + spec.key), from = &p.source()] {
+					coming_picture made{.file = kept_for_now(drawn_whole(kept).png())};
+					if (auto k = from->keep(made.file); k && *k) made.kept = **k;
+					handed_back([drawn, made] { drawn.set(made); });
+				});
 			} else if (now != drawn_from.peek() && waiting.peek() != now) {
 				waiting.set(now);
 				std::thread([settled, now] {
@@ -1691,6 +1763,13 @@ namespace one::desktop::runtime {
 					post([settled, now] { settled.set(now); });
 				}).detach();
 			}
+		}
+		if (auto drawn = p.kept<coming_picture>("collage preview drawn " + spec.key); !drawn.get().file.empty() && !spec.preview.empty()) {
+			coming_picture made = drawn.peek();
+			drawn.set({});
+			value sent = value(fields{{"id", spec.subject}, {"one:history", "apart"}});
+			if (!made.kept.empty()) p.run(spec.preview, with_uploaded(std::move(sent), spec.preview_into, {made.kept}), {}, [file = made.file](const answer&) { std::filesystem::remove(file); }, true);
+			else p.run(spec.preview, std::move(sent), attached_files{{spec.preview_into, {made.file.string()}}}, [file = made.file](const answer&) { std::filesystem::remove(file); }, true);
 		}
 		// A crop or words are only of the picked layer; picking another puts them away.
 		if (w->crop && w->crop->id != picked) w->crop.reset();
@@ -1700,14 +1779,15 @@ namespace one::desktop::runtime {
 		if (auto shot = p.kept<std::string>("collage screenshot " + spec.key); !shot.get().empty()) {
 			std::filesystem::path taken = shot.peek();
 			shot.set("");
-			add_pictures(p, spec, layers, width, height, {taken}, std::nullopt);
+			take_pictures(p, spec, {taken}, std::nullopt);
 		}
 		// Pictures chosen from files, added like any dropped.
 		if (auto chosen = p.kept<std::vector<std::string>>("collage chosen " + spec.key); !chosen.get().empty()) {
 			std::vector<std::filesystem::path> files(chosen.peek().begin(), chosen.peek().end());
 			chosen.set({});
-			add_pictures(p, spec, layers, width, height, files, std::nullopt);
+			take_pictures(p, spec, files, std::nullopt);
 		}
+		if (auto come = pictures_come(p, spec.key); !come.empty()) add_pictures(p, spec, layers, width, height, come, p.kept<std::optional<model::point>>("collage pictures at " + spec.key).peek());
 		// What its buttons asked of it: a crop begun, words written, or words added.
 		if (auto asked = p.kept<std::string>("collage do " + spec.key); !asked.get().empty()) {
 			std::string does = asked.peek();
@@ -1795,11 +1875,19 @@ namespace one::desktop::runtime {
 				if (one && picks.empty()) p.told().set("Pick something first.");
 				else if (layers.as_array().empty() || width <= 0 || height <= 0) p.told().set(copying ? "There's nothing to copy yet." : "There's nothing to save yet.");
 				else if (copying) {
-					std::string svg = svg_of(p, layers, width, height, one ? picks : std::vector<std::string>{});
-					desktop::copy_text(svg);
+					// Written away from the window's thread, as pictures' files are read into it,
+					// and put on the clipboard back on it.
 					copied() = {};
+					p.told().set("Copying…");
+					in_background([told = p.told(), parts = svg_of(p, layers, width, height, one ? picks : std::vector<std::string>{}), one, cutting] {
+						std::string svg = svg_written(parts);
+						handed_back([told, svg, one, cutting] {
+							desktop::copy_text(svg);
+							if (one) copied().svg = svg;
+							told.set(!one ? "Copied the drawing as SVG. Paste it anywhere." : cutting ? "Cut. Paste it into any layer, or anywhere as SVG." : "Copied. Paste it into any layer, or anywhere as SVG.");
+						});
+					});
 					if (one) {
-						copied().svg = svg;
 						for (const auto& l : layers.as_array()) {
 							std::string id = l["id"].as_string();
 							if (std::ranges::any_of(picks, [&](const std::string& o) { return o == id || w->inside(id, o); })) copied().rows.push_back(l);
@@ -1816,7 +1904,6 @@ namespace one::desktop::runtime {
 						w->chosen.clear();
 						if (!spec.pick.empty()) p.pick(spec.pick, "");
 					}
-					p.told().set(!one ? "Copied the drawing as SVG. Paste it anywhere." : cutting ? "Cut. Paste it into any layer, or anywhere as SVG." : "Copied. Paste it into any layer, or anywhere as SVG.");
 				} else {
 					std::string name = data["title"].as_string().empty() ? data["name"].as_string() : data["title"].as_string();
 					if (name.empty()) name = app_name();
@@ -1833,13 +1920,13 @@ namespace one::desktop::runtime {
 					if (copying) {
 						// Drawn away from the window's thread, and put on the clipboard back on it.
 						p.told().set("Copying…");
-						std::thread([told = p.told(), all = std::move(all), one] {
+						in_background([told = p.told(), all = std::move(all), one] {
 							auto drawn = drawn_whole(all);
 							post([told, drawn, one] {
 								desktop::copy_picture(drawn);
 								told.set(one ? "Copied the layer. Paste it anywhere." : "Copied the picture. Paste it anywhere.");
 							});
-						}).detach();
+						});
 					} else {
 						// Named for what the view calls it, or for the app when it calls it nothing.
 						std::string name = data["title"].as_string().empty() ? data["name"].as_string() : data["title"].as_string();
@@ -2637,7 +2724,7 @@ namespace one::desktop::runtime {
 		if (spec.paste) {
 			drawn = desktop::file_target(
 			    std::move(drawn),
-			    [&p, w, spec, layers, width, height](desktop::dropped what, desktop::point at) {
+			    [&p, w, spec](desktop::dropped what, desktop::point at) {
 				    std::optional<model::point> on;
 				    if (w->scale > 0 && w->board.contains(at)) on = w->on_collage(at);
 				    if (!what.picture.empty()) what.files.push_back(kept_for_now(what.picture));
@@ -2645,7 +2732,7 @@ namespace one::desktop::runtime {
 					    p.told().set("That picture is on the web. Save it first, then drop it here.");
 					    return;
 				    }
-				    add_pictures(p, spec, layers, width, height, what.files, on);
+				    take_pictures(p, spec, what.files, on);
 			    },
 			    {.border = current_theme().accent, .border_width = 3});
 		}

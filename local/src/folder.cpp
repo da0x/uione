@@ -231,6 +231,11 @@ namespace one::local {
 			if (!entry.is_regular_file() || named.contains("files/" + entry.path().filename().string())) continue;
 			if (std::filesystem::remove(entry.path(), error)) ++forgotten;
 		}
+		// And the smaller copies a window draws of one, kept beside it by its hash and size.
+		for (const auto& entry : std::filesystem::directory_iterator(root_ / "files" / "small", error)) {
+			std::string name = entry.path().filename().string();
+			if (!named.contains("files/" + name.substr(0, name.find('-')))) std::filesystem::remove(entry.path(), error);
+		}
 		return forgotten;
 	}
 
@@ -238,7 +243,7 @@ namespace one::local {
 		std::ifstream in(file, std::ios::binary);
 		if (!in) return std::unexpected("can't read " + file.string());
 		// Copied while it's hashed, into a name of its own, then given its hash's name.
-		static std::mt19937 random{std::random_device{}()};
+		thread_local std::mt19937 random{std::random_device{}()};
 		std::filesystem::path copying = root_ / "files" / (".keeping-" + std::to_string(random()));
 		int fd = ::open(copying.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
 		if (fd < 0) return std::unexpected("can't write " + copying.string() + ": " + said(errno));

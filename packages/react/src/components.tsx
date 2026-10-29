@@ -11,7 +11,7 @@ import type { ReactElement, ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { partsOf } from "./keys.js";
 import { ShownPath, fill, useConfirmContext, useFill, usePageTitle, useSignIn, useSite } from "./app.js";
-import { hintOf, rememberGiven, setPicked as pickRow, useInGroup, useInOptions, useLastGiven, useOverRun, usePicturesHanded, useStyled, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
+import { hintOf, rememberGiven, setPicked as pickRow, useInGroup, useInOptions, useLastGiven, useOverRun, usePicturesHanded, useStyled, takeInTurn, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
 import { useSaying } from "./said.js";
 import { pictureSize } from "./vectors.js";
 import type { BoardCard, CanvasRegion, ChartProps, FieldProps, Filtered, Hue, LandingFeature, LandingProps, LinkProps, PipelineRow, TrackStep } from "./contract.js";
@@ -1681,7 +1681,7 @@ export function Table({
   const links = useLinks();
   const params = useParams();
   const pickedId = usePickedId(pick ?? "");
-  const addresses = useAddresses(rowsOf(view.data?.[list]), picture);
+  const addresses = useAddresses(rowsOf(view.data?.[list]), picture, 640);
   // What's typed in the search box, over the fields it searches, as they're shown,
   // the tab that's open and the page it's on, kept in the address under the list's
   // name, like issues.tab=done, so a link shows the same.
@@ -2703,14 +2703,16 @@ export interface Tally {
 
 // Where each row's picture is read from, a file it holds in a field, asked once for
 // each file.
-function useAddresses(rows: Row[], field: string | undefined): Record<string, string> {
+// A smaller copy's, no longer on its longer side than `longest`, where that's given and
+// the store makes them, as for cards.
+function useAddresses(rows: Row[], field: string | undefined, longest?: number): Record<string, string> {
   const store = useFiles();
   const [addresses, setAddresses] = useState<Record<string, string>>({});
   const held = field ? rows.map((row) => row[field]).filter((path): path is string => typeof path === "string" && path !== "") : [];
   useEffect(() => {
     for (const path of held) {
       if (addresses[path] || !store) continue;
-      store.address(path).then((address) => setAddresses((now) => ({ ...now, [path]: address })), () => {});
+      (longest && store.small ? store.small(path, longest) : store.address(path)).then((address) => setAddresses((now) => ({ ...now, [path]: address })), () => {});
     }
   }, [held.join("\n")]);
   return addresses;
@@ -2773,7 +2775,7 @@ export function Cards({
   const [title, ...rest] = Object.keys(columns);
   const counted = tally ? rowsOf(tally.view.data?.[tally.list]) : [];
   const rows = rowsOf(view.data?.[list]);
-  const addresses = useAddresses(rows, picture);
+  const addresses = useAddresses(rows, picture, 640);
   const taking = useTakingPictures(paste, name);
   // Hidden when empty is hidden until there's something to show, not drawn while it loads.
   if (hideEmpty && (view.status !== "live" || rows.length === 0)) return null;
@@ -2836,12 +2838,9 @@ function useTakingPictures(paste: { command: string; fields: Record<string, stri
   const add = async (given: File[]) => {
     if (!paste || !files || !paste.fields["picture"]) return;
     let first = true;
-    for (const file of given) {
+    await takeInTurn(given, say, async (file) => {
       const size = await pictureSize(file);
-      if (!size) {
-        say({ text: `${file.name} isn't a picture this can read.`, problem: true });
-        continue;
-      }
+      if (!size) return `${file.name} isn't a picture this can read.`;
       const made: CommandInput = { ...(paste.given ?? {}) };
       const keep = (part: string, held: unknown) => {
         const field = paste.fields[part];
@@ -2857,7 +2856,7 @@ function useTakingPictures(paste: { command: string; fields: Record<string, stri
       if (!first) made["one:history"] = "joined";
       first = false;
       await runner.run(paste.command, made);
-    }
+    });
   };
   usePicturesHanded(paste ? name : undefined, add);
   if (!paste) return undefined;
