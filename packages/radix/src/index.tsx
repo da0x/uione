@@ -2461,7 +2461,7 @@ export const radix: ComponentSet = {
   ColorPicker,
 
   Group: ({ name, small, across, atEnd, unsaid, children }) => (
-    <div role="group" aria-label={name} data-at-end={atEnd ? "" : undefined} className="flex flex-col items-center justify-between gap-0.5 border-r border-line px-2 last:border-r-0 [&:has(>div:empty)]:hidden">
+    <div role="group" aria-label={name} data-at-end={atEnd ? "" : undefined} className="flex shrink-0 flex-col items-center justify-between gap-0.5 border-r border-line px-2 last:border-r-0 [&:has(>div:empty)]:hidden">
       <div
         className={small ? "grid gap-0.5" : "flex items-start gap-0.5"}
         style={small ? { gridTemplateColumns: `repeat(${across ?? Math.max(1, Math.ceil(Children.toArray(children).length / 2))}, auto)` } : undefined}
