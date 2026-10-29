@@ -2422,9 +2422,12 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     first block's words before it and the last's after it made one and the blocks between
     deleted.
   - A math block shows its words while the caret's in it, and its equation, set, once
-    the caret leaves; it keeps the room of the larger, so the page doesn't move. In a
-    code block, Enter starts a new line, and Enter on an empty last line leaves it for
-    text after it.
+    the caret leaves; it keeps the room of the larger, so the page doesn't move. On a
+    phone it's written on a sheet over the page instead, its equation at the top as
+    it's typed, where the keyboard leaves it in sight, and kept with Accept or let go
+    with Cancel. In a code block, Enter starts a new line, and Enter on an empty last
+    line leaves it for text after it. Words pasted over several lines are a block a
+    paragraph, but in code, which keeps its lines.
   - `insert "Equation" icon equation { kind = kind::math }`, a button anywhere on the
     screen, makes an empty block after the one the caret is in, given those values, by
     the paper's `add`, and puts the caret in it.

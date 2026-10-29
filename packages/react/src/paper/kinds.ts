@@ -65,6 +65,10 @@ export interface BlockKind {
   continuesAs?: string;
   // What it shows besides its words; its words alone when it doesn't say.
   showing?(asked: ShowingAsked): Showing;
+  // On a phone, written apart, on a sheet over the page: what it makes of its words
+  // shown above them as they're typed, then kept or let go. Its name, and what's wrong
+  // with words it can't make anything of yet.
+  apart?: { name: string; problem?(words: string): string | undefined };
 }
 
 // The family a page's face is: a book's serif, the app's own text face, a lyric's

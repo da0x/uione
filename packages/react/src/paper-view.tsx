@@ -458,6 +458,9 @@ export function Paper({
     return () => watching.disconnect();
   }, [view.status === "loading"]);
   const [writingIn, setWritingIn] = useState<string | undefined>(undefined);
+  // A block being written apart, on a phone, and its words as they're typed there.
+  const [apart, setApart] = useState<{ id: string; words: string } | null>(null);
+  const opening = useRef(false);
   const [, rebuilt] = useState(0);
 
   // What the view has caught up with is no longer kept apart; what it hasn't yet is
@@ -517,7 +520,9 @@ export function Paper({
       opened.current = true;
       const last = shown[shown.length - 1];
       const el = last && elements.current.get(last.id);
+      opening.current = true;
       if (el) placeCaret(el, wordsOf(el).length);
+      opening.current = false;
       if (pick && last?.id) setPicked(pick, last.id);
     }
   });
@@ -1131,6 +1136,24 @@ export function Paper({
     </nav>
   ) : null;
 
+  // On a phone, a block of a kind written apart is, as it's gone to or pressed.
+  const writeApart = (b: Block) => {
+    const el = elements.current.get(b.id);
+    if (!narrow || readOnly || !b.id || !el || !kindOf(b.kind).apart) return;
+    setApart({ id: b.id, words: wordsOf(el) });
+    el.blur();
+  };
+  // What was written apart kept, as if typed into the block, or let go.
+  const keep = (kept: boolean) => {
+    const el = apart && elements.current.get(apart.id);
+    if (kept && apart && el && wordsOf(el) !== apart.words) {
+      el.textContent = apart.words;
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      send(apart.id);
+    }
+    setApart(null);
+  };
+
   if (view.status === "loading") return <p className="one-quiet">Loading…</p>;
   const page = (
     <div
@@ -1226,12 +1249,15 @@ export function Paper({
               caretBlock.current = b.id;
               setWritingIn(b.id);
               if (pick && b.id) setPicked(pick, b.id);
+              if (!opening.current) writeApart(b);
             }}
+            apart={narrow && !readOnly && kindOf(b.kind).apart ? () => writeApart(b) : undefined}
             onBlur={() => send(b.id)}
             typing={() => written.current.has(b.id)}
           />
         ))}
       </div>
+      {apart && <Apart block={shown.find((b) => b.id === apart.id)} words={apart.words} zoom={size} retyped={(words) => setApart({ ...apart, words })} done={keep} />}
     </div>
   );
   if (!rail) return page;
@@ -1255,6 +1281,51 @@ export function Paper({
   );
 }
 
+// A block written apart, as an equation is on a phone: a sheet over the page, what its
+// words make at the top, where the keyboard leaves it in sight, the words under it, and
+// Cancel and Accept, as Escape and Enter do.
+function Apart({ block, words, zoom, retyped, done }: { block?: Block; words: string; zoom: number; retyped: (words: string) => void; done: (kept: boolean) => void }) {
+  const kind = kindOf(block?.kind ?? "");
+  const align = "center" as CSSProperties["textAlign"];
+  const made = kind.showing?.({ parts: block?.parts ?? {}, across: 320, tall: 320, words, focused: false, readOnly: true, zoom, align, toWords: () => {} });
+  const wrong = kind.apart?.problem?.(words);
+  const button: CSSProperties = { font: "inherit", fontSize: 15, padding: "6px 12px", border: "none", borderRadius: 8, background: "transparent", color: "var(--color-accent, #2457d6)", cursor: "pointer" };
+  return (
+    <div role="dialog" aria-label={kind.apart?.name} style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", flexDirection: "column", background: "var(--color-surface, #ffffff)", color: "var(--color-ink, #1b2230)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 8px", borderBottom: "1px solid var(--color-line, #dde2ea)" }}>
+        <button type="button" style={button} onClick={() => done(false)}>
+          Cancel
+        </button>
+        <span style={{ fontWeight: 600 }}>{kind.apart?.name}</span>
+        <button type="button" style={{ ...button, fontWeight: 600 }} onClick={() => done(true)}>
+          Accept
+        </button>
+      </div>
+      <div style={{ display: "grid", placeItems: "center", minHeight: 120, padding: 16, overflowX: "auto", textAlign: "center" }}>
+        {made?.over && !wrong ? <div style={{ display: "grid" }}>{made.over}</div> : <span style={{ fontSize: 13, color: "var(--color-muted, #5b6577)" }}>{wrong ?? "\u00a0"}</span>}
+      </div>
+      <textarea
+        autoFocus
+        value={words}
+        aria-label={kind.apart?.name}
+        spellCheck={false}
+        autoCorrect="off"
+        autoCapitalize="off"
+        rows={3}
+        onChange={(e) => retyped(e.currentTarget.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") return done(false);
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            done(true);
+          }
+        }}
+        style={{ margin: "0 12px", padding: 12, fontSize: 16, fontFamily: "var(--font-mono, ui-monospace, monospace)", border: "1px solid var(--color-line, #dde2ea)", borderRadius: 8, background: "var(--color-sunken, #f1f3f7)", color: "inherit", resize: "none", outline: "none" }}
+      />
+    </div>
+  );
+}
+
 // One block: its words typed into where they are, set as its kind says. A math block is
 // its equation, set, until the caret's in it, when its words show over the equation.
 function PaperBlock({
@@ -1270,6 +1341,7 @@ function PaperBlock({
   onKeyDown,
   onMouseDown,
   onFocus,
+  apart,
   onBlur,
   typing,
 }: {
@@ -1285,6 +1357,7 @@ function PaperBlock({
   onKeyDown: (e: KeyboardEvent<HTMLElement>) => void;
   onMouseDown: (e: MouseEvent<HTMLElement>) => void;
   onFocus: () => void;
+  apart?: () => void; // pressed, written apart, as an equation is on a phone
   onBlur: () => void;
   typing: () => boolean;
 }) {
@@ -1321,7 +1394,8 @@ function PaperBlock({
     align,
     toWords: () => {
       const el = ref.current;
-      if (el) placeCaret(el, wordsOf(el).length);
+      if (apart) apart();
+      else if (el) placeCaret(el, wordsOf(el).length);
     },
   }) ?? { raw: true };
   const editable: CSSProperties = {
@@ -1383,6 +1457,7 @@ function PaperBlock({
         }}
         onKeyDown={onKeyDown}
         onMouseDown={onMouseDown}
+        onClick={apart}
         onFocus={() => {
           setFocused(true);
           onFocus();

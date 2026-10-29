@@ -117,6 +117,39 @@ describe("a paper", () => {
     expect(source.runs[2]).toMatchObject({ command: "studio::passage::create", input: { words: "The gulls follow.", kind: "text", position: 1.75, "one:history": "joined" } });
   });
 
+  it("writes an equation apart on a phone, its equation over its words, kept only when accepted", async () => {
+    const was = window.matchMedia;
+    window.matchMedia = ((query: string) => ({ matches: true, media: query, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia;
+    try {
+      const source = sourceWith([
+        { id: "b1", kind: "text", words: "Before", position: 1, align: "left" },
+        { id: "b2", kind: "math", words: "x^2", position: 2, align: "center" },
+      ]);
+      const drawn = renderPaper(source);
+      await waitFor(() => expect(blocks(drawn).length).toBe(2));
+      act(() => blocks(drawn)[0]!.focus());
+      act(() => blocks(drawn)[1]!.focus());
+      const sheet = await drawn.findByRole("dialog", { name: "Equation" });
+      const words = sheet.querySelector("textarea")!;
+      expect(words.value).toBe("x^2");
+      fireEvent.change(words, { target: { value: "x = a/b^2" } });
+      expect(sheet.querySelector("svg[role=img]")?.getAttribute("aria-label")).toBe("x = a/b^2");
+      fireEvent.change(words, { target: { value: "x = (a" } });
+      expect(sheet.textContent).toContain("a ) to close");
+      fireEvent.click(drawn.getByRole("button", { name: "Cancel" }));
+      expect(drawn.queryByRole("dialog")).toBeNull();
+      expect(source.runs).toHaveLength(0);
+      act(() => blocks(drawn)[0]!.focus());
+      act(() => blocks(drawn)[1]!.focus());
+      fireEvent.change((await drawn.findByRole("dialog")).querySelector("textarea")!, { target: { value: "x = a/b^2" } });
+      fireEvent.click(drawn.getByRole("button", { name: "Accept" }));
+      await waitFor(() => expect(source.runs).toHaveLength(1));
+      expect(source.runs[0]).toMatchObject({ command: "studio::passage::write", input: { id: "b2", words: "x = a/b^2" } });
+    } finally {
+      window.matchMedia = was;
+    }
+  });
+
   it("keeps the lines of words pasted into code", async () => {
     const source = sourceWith([{ id: "b1", kind: "code", words: "", position: 1, align: "left" }]);
     const drawn = renderPaper(source);

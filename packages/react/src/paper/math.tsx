@@ -3,7 +3,8 @@
 
 // An equation: its words in one::math's notation, set as math. While the caret's in it,
 // it's its words, in a well; otherwise its equation, aligned as the block says. Both are
-// in the one place, so it keeps the room of the larger and the page doesn't move.
+// in the one place, so it keeps the room of the larger and the page doesn't move. On a
+// phone it's written apart, its equation over its words as they're typed.
 
 import { Equation } from "../equation.js";
 import { parseMath } from "../math.js";
@@ -14,6 +15,13 @@ export const math: BlockKind = {
   look: inCode,
   room: [10, 18],
   joins: false,
+  apart: {
+    name: "Equation",
+    problem: (words) => {
+      const read = parseMath(words);
+      return words.trim() === "" ? undefined : "problem" in read ? read.problem.says : undefined;
+    },
+  },
   showing: ({ words, focused, readOnly, zoom, align, toWords }) => {
     const set = words.trim() !== "" && "node" in parseMath(words);
     const raw = !set || (focused && !readOnly);
