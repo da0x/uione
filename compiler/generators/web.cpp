@@ -1482,6 +1482,7 @@ namespace one::generators {
                     line += " fields={{ " + kept + " }}";
                     if (c->place) line += " place=" + web_detail::js_string(full_command(ns, *c->place));
                     if (c->reshape) line += " reshape=" + web_detail::js_string(full_command(ns, *c->reshape));
+                    if (c->group) line += " group=" + web_detail::js_string(full_command(ns, *c->group));
                     if (c->snap) line += " snap";
                     if (c->clear) line += " clear";
                     if (c->match_colors) line += " matchColors={" + condition(parts, ns, *c->match_colors) + "}";

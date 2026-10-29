@@ -1750,7 +1750,7 @@ namespace one::language {
                          (peek(1).kind != token_kind::identifier || peek(1).text == "icon" || peek(1).text == "key" || peek(1).text == "when");
             bool as_picture = (at_word("copy") || at_word("save")) && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::identifier && peek(2).text == "as" &&
                               peek(3).kind == token_kind::identifier && (peek(3).text == "picture" || peek(3).text == "svg");
-            bool collage_does = ((at_word("crop") || at_word("paste") || at_word("screenshot")) && alone) || as_picture ||
+            bool collage_does = ((at_word("crop") || at_word("paste") || at_word("screenshot") || at_word("ungroup")) && alone) || as_picture ||
                                 ((at_word("edit") || at_word("add")) && peek(1).kind == token_kind::identifier && peek(1).text == "words") ||
                                 (at_word("add") && peek(1).kind == token_kind::identifier && peek(1).text == "pictures");
             if (collage_does) {
@@ -1769,6 +1769,7 @@ namespace one::language {
                               : first == "screenshot" ? collage_button::kind::screenshot
                               : first == "copy"       ? collage_button::kind::copy
                               : first == "save"       ? collage_button::kind::save
+                              : first == "ungroup"    ? collage_button::kind::ungroup
                               : first == "edit"       ? collage_button::kind::edit_words
                               : pictures              ? collage_button::kind::add_pictures
                                                       : collage_button::kind::add_words;
@@ -2417,6 +2418,9 @@ namespace one::language {
                     if (at_word("place") && peek(1).kind == token_kind::identifier) {
                         advance();
                         collage.place = parse_qualified_name("the command a layer moved or resized is sent to, like layer::place");
+                    } else if (at_word("group") && peek(1).kind == token_kind::identifier) {
+                        advance();
+                        collage.group = parse_qualified_name("the command that puts a layer in a group or takes it out, like layer::group");
                     } else if (at_word("reshape") && peek(1).kind == token_kind::identifier) {
                         advance();
                         collage.reshape = parse_qualified_name("the command a path's nodes moved are sent to, like layer::reshape");

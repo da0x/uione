@@ -7,7 +7,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { colorShifter, svgElement, cornerAt, cropEdgesAt, cropped, drawn, drawnLine, freehand, penPath, pathBounds, pathFractions, pathHandleMoved, pathHandles, pathMoved, pathNodes, pathReaches, svgDocument, halo, harmonicFill, matched, moved, resized, shifted, sitting, snapLines, statsOf, wholeOf } from "../src/collage.js";
+import { around, carried, colorShifter, svgElement, cornerAt, cropEdgesAt, cropped, drawn, drawnLine, freehand, penPath, pathBounds, pathFractions, pathHandleMoved, pathHandles, pathMoved, pathNodes, pathReaches, svgDocument, halo, harmonicFill, matched, moved, resized, shifted, sitting, snapLines, statsOf, wholeOf } from "../src/collage.js";
 import type { Box, Guided } from "../src/collage.js";
 
 type Numbers = number[];
@@ -73,6 +73,8 @@ interface Case {
   node?: number;
   moved?: string;
   out?: boolean;
+  boxes?: Numbers[];
+  one?: Numbers;
   handles?: (number | boolean)[][];
   filled?: boolean;
   reaches?: boolean;
@@ -163,6 +165,12 @@ describe("where a collage's layers go", () => {
         break;
       case "path_reaches":
         expect(pathReaches(k.path!, { x: k.at![0]!, y: k.at![1]! }, k.reach!, k.filled!)).toBe(k.reaches);
+        break;
+      case "around":
+        expect(same(around(k.boxes!.map(boxOf)), boxOf(k.box!))).toBe(true);
+        break;
+      case "carried":
+        expect(same(carried(boxOf(k.one!), boxOf(k.from!), boxOf(k.to!)), boxOf(k.box!))).toBe(true);
         break;
       case "path_bounds": {
         const got = pathBounds(k.path!);

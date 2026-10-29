@@ -319,6 +319,67 @@ describe("a layer drawn on a collage", () => {
     expect(source.runs[0]).toMatchObject({ command: "studio::layer::reshape", input: { id: "l1", points: "M 0 0 C 0 1 0.75 1 1 0", x: 100, y: 100, w: 200, h: 100 } });
   });
 
+  it("picks a group by a press on what it holds, moves it as one in one step, ungroups it, and picks what it holds when pressed twice", async () => {
+    act(() => setPicked("/ layer", undefined));
+    const reply = (input: Record<string, unknown>) => ({ id: String(input["id"]) });
+    const source = memorySource({ commands: { "studio::layer::place": reply, "studio::layer::group": reply, "studio::layer::delete": reply } });
+    const shape = (id: string, x: number, y: number, group: string) => ({ id, shape: "rectangle", fill: "#2e86de", x, y, w: 100, h: 100, group });
+    source.set("studio::poster_page", { width: 1000, height: 500, layers: [{ id: "g", x: 0, y: 0, w: 0, h: 0 }, shape("a", 100, 100, "g"), shape("b", 300, 200, "g"), shape("c", 700, 300, "")] }, "p1");
+    const fields = { ...namedLikeParts, shape: "shape", fill: "fill", group: "group" };
+    function Poster() {
+      const page = useView("studio::poster_page", "p1");
+      return (
+        <>
+          <CollageButton collage="/ layer" does="ungroup" label="Ungroup" />
+          <Collage view={page} list="layers" width="width" height="height" fields={fields} pick="/ layer" name="/ layer" place="studio::layer::place" group="studio::layer::group" remove="studio::layer::delete" />
+          <Picked />
+        </>
+      );
+    }
+    const only = defineScreen({ title: "Poster", route: "/" }, () => <Poster />);
+    const drawn = render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
+    await waitFor(() => expect(drawn.container.querySelector("canvas")).toBeTruthy());
+    const canvas = drawn.container.querySelector("canvas")!;
+    await act(async () => {});
+    // A press on one it holds picks the group; a drag moves all it holds, in one step.
+    fireEvent.pointerDown(canvas, { clientX: 32 + 150, clientY: 32 + 150, pointerId: 1, detail: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 32 + 170, clientY: 32 + 150, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 32 + 200, clientY: 32 + 150, pointerId: 1 });
+    await waitFor(() => expect(source.runs.length).toBe(2));
+    expect(drawn.getByTestId("picked").textContent).toBe("g");
+    const xs = Object.fromEntries(source.runs.map((r) => [r.input["id"], r.input["x"]]));
+    expect(xs).toEqual({ a: 150, b: 350 });
+    expect(source.runs[1]!.input["one:history"]).toBe("joined");
+    // Ungrouped: each it holds in none, and it gone.
+    fireEvent.click(drawn.getByRole("button", { name: "Ungroup" }));
+    await waitFor(() => expect(source.runs.length).toBe(5));
+    expect(source.runs[2]).toMatchObject({ command: "studio::layer::group", input: { group: null } });
+    expect(source.runs[4]).toMatchObject({ command: "studio::layer::delete", input: { id: "g" } });
+  });
+
+  it("picks what a group holds when it's pressed twice", async () => {
+    act(() => setPicked("/ layer", undefined));
+    const source = memorySource();
+    source.set("studio::poster_page", { width: 1000, height: 500, layers: [{ id: "g", x: 0, y: 0, w: 0, h: 0 }, { id: "a", shape: "rectangle", fill: "#000000", x: 100, y: 100, w: 100, h: 100, group: "g" }] }, "p1");
+    function Poster() {
+      const page = useView("studio::poster_page", "p1");
+      return (
+        <>
+          <Collage view={page} list="layers" width="width" height="height" fields={{ ...namedLikeParts, shape: "shape", fill: "fill", group: "group" }} pick="/ layer" name="/ layer" />
+          <Picked />
+        </>
+      );
+    }
+    const only = defineScreen({ title: "Poster", route: "/" }, () => <Poster />);
+    const drawn = render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
+    await waitFor(() => expect(drawn.container.querySelector("canvas")).toBeTruthy());
+    const canvas = drawn.container.querySelector("canvas")!;
+    await act(async () => {});
+    fireEvent.pointerDown(canvas, { clientX: 32 + 150, clientY: 32 + 150, pointerId: 1, detail: 2 });
+    fireEvent.pointerUp(canvas, { clientX: 32 + 150, clientY: 32 + 150, pointerId: 1 });
+    await waitFor(() => expect(drawn.getByTestId("picked").textContent).toBe("a"));
+  });
+
   it("makes a path by points, as a pen draws: corners clicked, a smooth node dragged, ended by Enter or closed on its first node", async () => {
     const source = memorySource({ commands: { "studio::layer::create": () => ({ id: "drawn" }) } });
     source.set("studio::poster_page", { width: 1000, height: 500, layers: [] }, "p1");

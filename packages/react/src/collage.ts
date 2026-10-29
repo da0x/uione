@@ -715,6 +715,21 @@ export function penPath(nodes: PenNode[], closed: boolean): string {
   return out;
 }
 
+// What a group is: the box around all it holds; nothing, around nothing.
+export function around(boxes: Box[]): Box {
+  if (boxes.length === 0) return { x: 0, y: 0, w: 0, h: 0 };
+  const left = Math.min(...boxes.map((b) => b.x)), top = Math.min(...boxes.map((b) => b.y));
+  const right = Math.max(...boxes.map((b) => b.x + b.w)), bottom = Math.max(...boxes.map((b) => b.y + b.h));
+  return { x: left, y: top, w: right - left, h: bottom - top };
+}
+
+// Where one of a group's goes as the group goes from `from` to `to`: as far along and as
+// big for its size, so moved it moves with it, and resized it's resized.
+export function carried(one: Box, from: Box, to: Box): Box {
+  const sx = from.w > 0 ? to.w / from.w : 1, sy = from.h > 0 ? to.h / from.h : 1;
+  return { x: to.x + (one.x - from.x) * sx, y: to.y + (one.y - from.y) * sy, w: one.w * sx, h: one.h * sy };
+}
+
 // A path's nodes, where it is, written as pathIn writes it: where each of its segments
 // ends, M, L and C alike, in order.
 export function pathNodes(absolute: string): Point[] {

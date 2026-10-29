@@ -578,6 +578,12 @@ TEST("a collage's layers go where collage-cases.json says, as they do on the web
 		} else if (what == "cropped") {
 			auto got = c::cropped(box_of(k["kept"]), static_cast<int>(k["edges"].as_integer()), n(k["by"], 0), n(k["by"], 1), box_of(k["whole"]));
 			check::verify(same(got, box_of(k["box"])), "cropped", note + ": " + said(got));
+		} else if (what == "around") {
+			std::vector<c::box> boxes;
+			for (const auto& b : k["boxes"].as_array()) boxes.push_back(box_of(b));
+			check::verify(same(c::around(boxes), box_of(k["box"])), "around", note);
+		} else if (what == "carried") {
+			check::verify(same(c::carried(box_of(k["one"]), box_of(k["from"]), box_of(k["to"])), box_of(k["box"])), "carried", note);
 		} else if (what == "path_bounds") {
 			auto got = c::path_bounds(k["path"].as_string());
 			std::string fractions = c::path_fractions(k["path"].as_string(), got);

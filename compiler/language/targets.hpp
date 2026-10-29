@@ -96,6 +96,7 @@ namespace one::language {
         drawn_by{"collage.draw_hand", "a collage's paths drawn by hand", "web desktop"},
         drawn_by{"collage.draw_points", "a collage's paths drawn node by node, as a pen does", "web desktop"},
         drawn_by{"collage.reshape", "a collage's paths reshaped by their nodes", "web desktop"},
+        drawn_by{"collage.group", "a collage's layers in groups, picked, moved and resized as one", "web desktop"},
         drawn_by{"collage.paste", "pasting and dropping pictures on a collage", everywhere},
         drawn_by{"collage.screenshot", "a screenshot added to a collage", "web desktop"},
         drawn_by{"pictures.choose", "pictures chosen from the device's files, onto a collage or a paper", "web desktop"},
@@ -383,6 +384,7 @@ namespace one::language {
                         if (n.crop) use("collage.crop");
                         if (!n.draws.empty()) use("collage.draw");
                         if (n.reshape) use("collage.reshape");
+                        if (n.group) use("collage.group");
                         if (std::ranges::any_of(n.draws, [](const auto& d) { return d.by == "line"; })) use("collage.draw_line");
                         if (std::ranges::any_of(n.draws, [](const auto& d) { return d.by == "hand"; })) use("collage.draw_hand");
                         if (std::ranges::any_of(n.draws, [](const auto& d) { return d.by == "points"; })) use("collage.draw_points");
@@ -418,6 +420,7 @@ namespace one::language {
                             : n.does == kind::add_pictures ? "pictures.choose"
                             : n.does == kind::copy       ? "collage.copy"
                             : n.does == kind::save       ? "collage.save"
+                            : n.does == kind::ungroup    ? "collage.group"
                                                          : "collage.add");
                         if (n.svg) use("collage.svg");
                         if (!n.keys.empty()) use("key");

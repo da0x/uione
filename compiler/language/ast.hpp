@@ -854,6 +854,7 @@ namespace one::language {
         location size_where;
         std::optional<qualified_name> place;  // place layer::place: a layer moved or resized, kept
         std::optional<qualified_name> reshape;  // reshape layer::reshape: a path's nodes moved, its points and box kept
+        std::optional<qualified_name> group;  // group layer::group: what puts a layer in a group, or takes it out
         std::optional<qualified_name> add;    // add layer::create: what makes new layers, like words added
         std::optional<qualified_name> crop;   // crop layer::crop: a picture cropped in place, kept
         std::optional<qualified_name> write;  // write layer::write: words written in place, or resized, kept
@@ -958,7 +959,7 @@ namespace one::language {
     // crop "Crop" icon crop key c, edit words "Edit", add words "Text": what the screen's
     // collage does to its picked layer, or adds to it, from a toolbar or over the layer.
     struct collage_button {
-        enum class kind { crop, edit_words, add_words, add_pictures, paste, screenshot, copy, save };
+        enum class kind { crop, edit_words, add_words, add_pictures, paste, screenshot, copy, save, ungroup };
         kind does = kind::crop;
         // copy layer as picture, save poster_page as picture: the picked layer, or all of it.
         std::optional<std::string> of;
@@ -1006,6 +1007,7 @@ namespace one::language {
             case kind::screenshot: return "screenshot";
             case kind::copy: return std::string(b.svg ? "copy svg" : "copy") + (picked ? " picked" : "");
             case kind::save: return std::string(b.svg ? "save svg" : "save") + (picked ? " picked" : "");
+            case kind::ungroup: return "ungroup";
         }
         return "";
     }
@@ -1021,6 +1023,7 @@ namespace one::language {
             case kind::screenshot: return "Screenshot";
             case kind::copy: return "Copy";
             case kind::save: return "Save";
+            case kind::ungroup: return "Ungroup";
         }
         return "";
     }
@@ -1567,6 +1570,9 @@ namespace one::language {
             {"hidden", "number"},
             // What it's called in a list of the layers, in place of what it is.
             {"name", "text"},
+            // The group it's in, another of them: a group is drawn as what's in it, and
+            // picked, moved and resized as one.
+            {"group", "self"},
         };
         return all;
     }

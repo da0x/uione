@@ -375,6 +375,16 @@ export const buttonIcons: Record<string, ReactNode> = {
       <path d="M1.5 8A9 9 0 0 1 14.5 8 9 9 0 0 1 1.5 8zM10 8A2 2 0 1 1 6 8 2 2 0 1 1 10 8M2.5 2.5l11 11" />
     </svg>
   ),
+  group: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M1.5 1.5h13v13h-13zM4 4h5v5H4zM7 7h5v5H7z" />
+    </svg>
+  ),
+  ungroup: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2 2.5h6v6H2zM8 7.5h6v6H8z" />
+    </svg>
+  ),
   opacity: (
     <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M14 8A6 6 0 1 1 2 8 6 6 0 1 1 14 8zM8 2v12M8 6l4.5-2.6M8 9.5l5.6-3.2M8 13l4.4-2.5" />

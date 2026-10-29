@@ -67,6 +67,8 @@ namespace studio at / {
 		stroke   text
 		stroke_width  number  = 0
 		hidden   number  = 0
+		// The group it's in, another layer, drawn, moved and resized with it as one.
+		group    layer
 	}
 
 	// A poster's notes, written as a page: each block a title, a heading, a paragraph,
@@ -132,6 +134,10 @@ namespace studio at / {
 	command layer::reshape {
 		changes points x y w h
 	}
+	// Put in a group, another layer, or taken out of it.
+	command layer::group {
+		changes group
+	}
 
 	// Opened once more: counted, but never a step undo takes back.
 	// Shown on another day, as a calendar's poster dragged there is.
@@ -155,7 +161,7 @@ namespace studio at / {
 		title  color  width  height  matched
 		layers = each layer in poster {
 			order by depth
-			picture  crop_x  crop_y  crop_w  crop_h  around  corners  words  size  weight  depth  x  y  w  h  fill  shape  points  stroke  stroke_width  hidden
+			picture  crop_x  crop_y  crop_w  crop_h  around  corners  words  size  weight  depth  x  y  w  h  fill  shape  points  stroke  stroke_width  hidden  group
 		}
 	}
 
@@ -331,6 +337,7 @@ namespace studio at / {
 				draw layer::create { shape = shape::path  stroke = "#1d1d1f"  stroke_width = 4 } by points when tool == tool::pen
 				place layer::place
 				reshape layer::reshape
+				group layer::group
 				crop layer::crop
 				write layer::write
 				delete layer::delete
@@ -341,6 +348,7 @@ namespace studio at / {
 				keep preview poster::preview into preview 480 wide
 				empty "Add a picture or some words to start"
 				over layer {
+					ungroup "Ungroup" icon ungroup key ctrl+shift+g
 					crop "Crop" icon crop key c
 					edit words "Edit" icon edit key enter
 					copy layer as picture "Copy" icon copy

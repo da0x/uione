@@ -210,6 +210,12 @@ namespace one::screens::collage {
 	// either has a handle; closed, back to the first and Z.
 	std::string pen_path(const std::vector<pen_node>& nodes, bool closed);
 
+	// What a group is: the box around all it holds; nothing, around nothing.
+	box around(const std::vector<box>& boxes);
+	// Where one of a group's goes as the group goes from `from` to `to`: as far along
+	// and as big for its size, so moved it moves with it, and resized it's resized.
+	box carried(const box& one, const box& from, const box& to);
+
 	// A path's nodes, where it is, written as path_in writes it: where each of its
 	// segments ends, M, L and C alike, in order.
 	std::vector<point> path_nodes(std::string_view absolute);

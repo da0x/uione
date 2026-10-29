@@ -10,8 +10,10 @@
 
 #include <functional>
 #include <algorithm>
+#include <array>
 #include <map>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -393,6 +395,7 @@ namespace one::screens {
 		std::map<std::string, std::string> fields = {};
 		std::string place = "";  // the command a layer moved or resized is sent to, with x y w h
 		std::string reshape = "";  // and the one a path's nodes moved are, with its points and x y w h
+		std::string group = "";    // and the one that puts a layer in a group, or takes it out, by its group
 		bool snap = false;       // to the collage's edges and middle, and every other layer's
 		bool clear = false;      // nothing behind its layers: shown over a checkerboard, saved clear
 		bool match_colors = false;  // its pictures' colors moved toward one another's, so they look like one picture
@@ -544,6 +547,52 @@ namespace one::screens {
 		for (auto& [at, o] : held) out.push_back(std::move(o));
 		return value(std::move(out));
 	}
+
+	// A collage's layers with their groups worked out: one that others name as their
+	// group holds them, "holds" saying how many, and its place is the box around all it
+	// holds, however deep; one naming a group that isn't there, or itself, is in none.
+	inline value grouped(const value& layers) {
+		std::vector<value> rows = layers.as_array();
+		std::map<std::string, std::size_t> at;
+		for (std::size_t i = 0; i < rows.size(); ++i) at[rows[i]["id"].as_string()] = i;
+		std::map<std::string, std::vector<std::size_t>> held;
+		for (std::size_t i = 0; i < rows.size(); ++i) {
+			std::string group = rows[i]["group"].as_string();
+			if (group.empty()) continue;
+			if (!at.contains(group) || group == rows[i]["id"].as_string()) rows[i].fields["group"] = value("");
+			else held[group].push_back(i);
+		}
+		if (held.empty()) return value(std::move(rows));
+		// Each one's box: its own, or a group's around what it holds; a group that holds
+		// itself, however deep, is its own.
+		std::set<std::size_t> working;
+		std::function<std::array<double, 4>(std::size_t)> box_of = [&](std::size_t i) -> std::array<double, 4> {
+			const value& r = rows[i];
+			std::array<double, 4> own{r["x"].as_double(), r["y"].as_double(), r["w"].as_double(), r["h"].as_double()};
+			auto inside = held.find(r["id"].as_string());
+			if (inside == held.end() || working.contains(i)) return own;
+			working.insert(i);
+			double left = 0, top = 0, right = 0, bottom = 0;
+			bool first = true;
+			for (std::size_t m : inside->second) {
+				auto b = box_of(m);
+				if (first) left = b[0], top = b[1], right = b[0] + b[2], bottom = b[1] + b[3], first = false;
+				left = std::min(left, b[0]), top = std::min(top, b[1]), right = std::max(right, b[0] + b[2]), bottom = std::max(bottom, b[1] + b[3]);
+			}
+			working.erase(i);
+			return {left, top, right - left, bottom - top};
+		};
+		std::map<std::size_t, std::array<double, 4>> boxes;
+		for (const auto& [group, members] : held) boxes[at[group]] = box_of(at[group]);
+		for (const auto& [i, b] : boxes) {
+			auto& f = rows[i].fields;
+			f["x"] = value(b[0]), f["y"] = value(b[1]), f["w"] = value(b[2]), f["h"] = value(b[3]);
+			f["holds"] = value(static_cast<double>(held[rows[i]["id"].as_string()].size()));
+		}
+		return value(std::move(rows));
+	}
+	// Whether a layer is a group, holding others.
+	inline bool holds_others(const value& layer) { return layer["holds"].as_double() > 0; }
 
 	// The layer new objects go in: the one picked, while it's there, or the topmost.
 	inline std::string current_layer(const value& layers, const std::string& picked) {

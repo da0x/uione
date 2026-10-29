@@ -489,6 +489,30 @@ namespace one::desktop::runtime {
 			std::optional<std::pair<std::string, std::string>> reshaped;
 			// The picked path's node last pressed, whose control points show, by its id.
 			std::optional<std::pair<std::string, std::size_t>> node;
+			// The group each layer is in, as last drawn; and while a group is moved or
+			// resized, where it and each it holds were as it began.
+			std::map<std::string, std::string> group_of;
+			model::box carried_group;
+			std::map<std::string, model::box> carried_from;
+			// Whether a layer is in a group, however deep.
+			bool inside(std::string id, const std::string& group) const {
+				for (int depth = 0; depth < 64; ++depth) {
+					auto up = group_of.find(id);
+					if (up == group_of.end()) return false;
+					if (up->second == group) return true;
+					id = up->second;
+				}
+				return false;
+			}
+			// The outermost group it's in, or itself.
+			std::string outermost(std::string id) const {
+				for (int depth = 0; depth < 64; ++depth) {
+					auto up = group_of.find(id);
+					if (up == group_of.end()) break;
+					id = up->second;
+				}
+				return id;
+			}
 			std::vector<std::pair<desktop::rect, std::size_t>> tools;
 			model::box on_board(const model::box& b) const {
 				return {board.x + b.x * scale, board.y + b.y * scale, b.w * scale, b.h * scale};
@@ -500,13 +524,37 @@ namespace one::desktop::runtime {
 		// where it's going.
 		model::box where_is(const value& layer, placed& w) {
 			model::box b = box_of(layer);
-			if (auto& g = w.going; g && g->first == layer["id"].as_string()) {
+			std::string id = layer["id"].as_string();
+			if (auto& g = w.going; g && g->first == id) {
 				auto near = [](double a, double z) { return std::abs(a - z) < 0.01; };
 				bool there = near(b.x, g->second.x) && near(b.y, g->second.y) && near(b.w, g->second.w) && near(b.h, g->second.h);
-				if (there && w.now.what == gesture::none) g.reset();
+				if (there && w.now.what == gesture::none) g.reset(), w.carried_from.clear();
 				else b = g->second;
+			} else if (auto from = w.carried_from.find(id); g && from != w.carried_from.end() && w.inside(id, g->first)) {
+				// One a group holds, carried with it.
+				b = model::carried(from->second, w.carried_group, g->second);
 			}
 			return b;
+		}
+
+		// A group taken to `to`: each it holds carried with it, all one step to undo.
+		void place_carried(page& p, placed& w, const collage_spec& spec, model::box to, std::function<void(const answer&)> back = {}) {
+			bool joined = false;
+			for (const auto& [id, from] : w.carried_from) {
+				model::box b = model::carried(from, w.carried_group, to);
+				value sent = collage_fields_of(value(fields{{"id", id}, {"x", b.x}, {"y", b.y}, {"w", b.w}, {"h", b.h}}), spec.fields);
+				if (std::exchange(joined, true)) sent.fields["one:history"] = value("joined");
+				p.run(spec.place, sent, back);
+			}
+		}
+
+		// A group's gesture begun: where it and each it holds are.
+		void carry_from(placed& w, const value& layers, const std::string& group, model::box from) {
+			w.carried_from.clear();
+			w.carried_group = from;
+			for (const auto& l : layers.as_array()) {
+				if (!holds_others(l) && w.inside(l["id"].as_string(), group)) w.carried_from[l["id"].as_string()] = box_of(l);
+			}
 		}
 
 		// A crop begun on a picture where it is, and the whole picture behind it.
@@ -519,7 +567,7 @@ namespace one::desktop::runtime {
 		void snap_lines(const value& layers, double width, double height, placed& w, const std::string& moving) {
 			std::vector<model::box> others;
 			for (const auto& l : layers.as_array()) {
-				if (l["id"].as_string() != moving) others.push_back(where_is(l, w));
+				if (l["id"].as_string() != moving && !w.inside(l["id"].as_string(), moving) && !holds_others(l)) others.push_back(where_is(l, w));
 			}
 			w.lines = model::snap_lines(width, height, others);
 		}
@@ -658,7 +706,7 @@ namespace one::desktop::runtime {
 			model::box at{cx - size->first * s / 2, cy - size->second * s / 2, size->first * s, size->second * s};
 			const auto& all = layers.as_array();
 			double depth = !all.empty() && !all.back()["depth"].is_null() ? all.back()["depth"].as_double() + 1 : 0;
-			auto made = [&p, spec, shapes, at, s, depth](const std::string& layer, bool joined) {
+			auto made = [&p, spec, shapes, at, s, depth](const std::string& layer, bool joined, const std::string& group = "") {
 				double d = depth;
 				for (const auto& shape : shapes) {
 					model::box b = model::path_bounds(shape.path);
@@ -671,11 +719,30 @@ namespace one::desktop::runtime {
 					if (spec.fields.contains("opacity")) object.fields["opacity"] = value(shape.opacity);
 					if (!spec.parent.empty()) object.fields[spec.parent] = value(spec.subject);
 					if (!spec.layer.empty() && !layer.empty()) object.fields[spec.layer] = value(layer);
+					if (!group.empty()) object.fields["group"] = value(group);
 					value sent = collage_fields_of(object, spec.fields);
 					if (std::exchange(joined, true)) sent.fields["one:history"] = value("joined");
 					p.run(spec.add, sent);
 				}
 			};
+			// Where layers are grouped, one group in the layer it's brought into, named for it,
+			// as big as it is; its shapes made once it is, all one step to undo.
+			if (spec.fields.contains("group")) {
+				auto bring = [&p, spec, made, at, name, depth] {
+					std::string layer = layer_now(p, spec);
+					value group = value(fields{{"x", at.x}, {"y", at.y}, {"w", at.w}, {"h", at.h}, {"depth", depth}});
+					if (spec.fields.contains("name")) group.fields["name"] = value(name);
+					if (!spec.parent.empty()) group.fields[spec.parent] = value(spec.subject);
+					if (!spec.layer.empty() && !layer.empty()) group.fields[spec.layer] = value(layer);
+					p.run(spec.add, collage_fields_of(group, spec.fields), [&p, spec, made, layer](const answer& a) {
+						if (!a) return;
+						made(layer, true, *a);
+						if (!spec.pick.empty()) p.pick(spec.pick, *a);
+					});
+				};
+				if (!layer_ready(p, spec, bring)) return;
+				return bring();
+			}
 			if (spec.layers.empty() || spec.layer_create.empty()) return made(layer_now(p, spec), false);
 			// A new layer, named for it, on top of the rest.
 			value layer = value(fields{{"name", name}, {"depth", p.kept<double>("collage top layer " + spec.key).peek() + 1}});
@@ -1225,15 +1292,18 @@ namespace one::desktop::runtime {
 		}
 
 		// The drawing as a saved SVG, from its vectors: all of it, or only one layer, as
-		// big as that layer.
+		// big as that layer, a group's all it holds.
 		std::string svg_of(page& p, const value& layers, double width, double height, const std::string& only) {
 			std::vector<model::saved_layer> saved;
 			model::box area{0, 0, width, height};
+			placed groups;
 			for (const auto& l : layers.as_array()) {
 				if (!only.empty() && l["id"].as_string() == only) area = box_of(l);
+				if (std::string group = l["group"].as_string(); !group.empty()) groups.group_of[l["id"].as_string()] = group;
 			}
 			for (const auto& l : layers.as_array()) {
-				if (!only.empty() && l["id"].as_string() != only) continue;
+				if (holds_others(l)) continue;
+				if (!only.empty() && l["id"].as_string() != only && !groups.inside(l["id"].as_string(), only)) continue;
 				model::box b = box_of(l);
 				model::saved_layer one{.at = {b.x - area.x, b.y - area.y, b.w, b.h}, .opacity = opacity_of(l)};
 				if (is_words(l)) {
@@ -1337,7 +1407,12 @@ namespace one::desktop::runtime {
 		const value data = collage_parts_of(v.data, spec.list, spec.fields);
 		// Those hidden aren't drawn, picked, snapped to or saved; held in layers, they're
 		// in their layers' order, and those of a hidden layer aren't either.
-		const value layers = spec.layers.empty() ? shown_layers(data[spec.list]) : in_layers(shown_layers(data[spec.list]), data[spec.layers], spec.layer);
+		// A group is drawn as what it holds, its place the box around them.
+		const value layers = grouped(spec.layers.empty() ? shown_layers(data[spec.list]) : in_layers(shown_layers(data[spec.list]), data[spec.layers], spec.layer));
+		w->group_of.clear();
+		for (const auto& l : layers.as_array()) {
+			if (std::string group = l["group"].as_string(); !group.empty()) w->group_of[l["id"].as_string()] = group;
+		}
 		if (!spec.layers.empty()) {
 			auto now = p.kept<std::string>("collage layer " + spec.key);
 			std::string current = current_layer(data[spec.layers], spec.layer_pick.empty() ? "" : p.picked_id(spec.layer_pick));
@@ -1415,6 +1490,17 @@ namespace one::desktop::runtime {
 			asked.set("");
 			if (does == "crop" && chosen && is_picture(*chosen) && !spec.crop.empty()) {
 				w->crop = crop_begun(*chosen);
+			} else if (does == "ungroup" && chosen && holds_others(*chosen) && !spec.group.empty()) {
+				// What it holds, each in no group, and it gone, all one step to undo.
+				bool joined = false;
+				for (const auto& l : layers.as_array()) {
+					if (l["group"].as_string() != picked) continue;
+					value sent = collage_fields_of(value(fields{{"id", l["id"]}, {"group", value()}}), spec.fields);
+					if (std::exchange(joined, true)) sent.fields["one:history"] = value("joined");
+					p.run(spec.group, sent);
+				}
+				if (!spec.remove.empty()) p.run(spec.remove, value(fields{{"id", picked}, {"one:history", "joined"}}));
+				if (!spec.pick.empty()) p.pick(spec.pick, "");
 			} else if (does == "edit" && chosen && is_words(*chosen) && !spec.write.empty()) {
 				w->editing = placed::writing{picked, (*chosen)["words"].as_string(), false};
 			} else if (does == "paste") {
@@ -1544,7 +1630,7 @@ namespace one::desktop::runtime {
 		if (chosen && !w->crop && !w->editing) {
 			auto asked = p.kept<std::string>("collage do " + spec.key);
 			for (const auto& a : spec.asks) {
-				bool fits = a.does == "crop" ? is_picture(*chosen) : a.does == "edit" ? is_words(*chosen) : true;
+				bool fits = a.does == "crop" ? is_picture(*chosen) : a.does == "edit" ? is_words(*chosen) : a.does == "ungroup" ? holds_others(*chosen) : true;
 				if (!fits) continue;
 				for (const auto& k : a.keys) p.on_key(k, [asked, does = a.does] { asked.set(does); });
 			}
@@ -1556,10 +1642,14 @@ namespace one::desktop::runtime {
 				for (auto [key, dx, dy] : {std::tuple{"left", -1.0, 0.0}, {"right", 1.0, 0.0}, {"up", 0.0, -1.0}, {"down", 0.0, 1.0}}) {
 					for (double by : {1.0, 10.0}) {
 						std::string chord = by > 1 ? std::string("shift+") + key : key;
-						p.on_key(chord, [&p, w, place = spec.place, kept = spec.fields, id = picked, b = box_of(*chosen), dx, dy, by] {
+						p.on_key(chord, [&p, w, spec, layers, group = holds_others(*chosen), id = picked, b = box_of(*chosen), dx, dy, by] {
 							model::box to{b.x + dx * by, b.y + dy * by, b.w, b.h};
 							w->going = std::pair{id, to};
-							p.run(place, collage_fields_of(value(fields{{"id", id}, {"x", to.x}, {"y", to.y}, {"w", to.w}, {"h", to.h}}), kept));
+							if (group) {
+								carry_from(*w, layers, id, b);
+								return place_carried(p, *w, spec, to);
+							}
+							p.run(spec.place, collage_fields_of(value(fields{{"id", id}, {"x", to.x}, {"y", to.y}, {"w", to.w}, {"h", to.h}}), spec.fields));
 						});
 					}
 				}
@@ -1609,7 +1699,7 @@ namespace one::desktop::runtime {
 			}
 			std::optional<desktop::rect> framed;
 			float framed_radius = 0;  // a picture's frame follows its corners, round as they are
-			bool framed_words = false, chosen_picture = false;
+			bool framed_words = false, chosen_picture = false, framed_group = false;
 			std::vector<desktop::point> nodes;  // a picked path's, drawn instead of its frame
 			std::vector<std::pair<desktop::point, desktop::point>> levers;  // its chosen node's control points, from the node
 			std::optional<desktop::point> chosen_node;
@@ -1624,6 +1714,11 @@ namespace one::desktop::runtime {
 				for (const auto& layer : layers.as_array()) {
 					std::string id = layer["id"].as_string();
 					model::box b = where_is(layer, *w);
+					// A group draws nothing of its own; picked, it's framed around all it holds.
+					if (holds_others(layer)) {
+						if (id == picked && !full) framed = as_rect(w->on_board(b)), framed_group = true;
+						continue;
+					}
 					if (is_words(layer)) {
 						// Being written: as typed so far, with its caret, all of it marked while
 						// the first key would replace it. Resized: its letters as large.
@@ -1769,7 +1864,7 @@ namespace one::desktop::runtime {
 			if (w->crop) drawn = {{"check", "Keep"}, {"close", "Put away"}};
 			else {
 				for (const auto& a : spec.asks) {
-					bool fits = a.does == "crop" ? chosen_picture : a.does == "edit" ? framed_words : true;
+					bool fits = a.does == "crop" ? chosen_picture : a.does == "edit" ? framed_words : a.does == "ungroup" ? framed_group : true;
 					if (fits) drawn.emplace_back(a.icon, a.label);
 				}
 				for (const auto& [b, _] : over) drawn.emplace_back(b.icon, b.label);
@@ -1817,7 +1912,7 @@ namespace one::desktop::runtime {
 				        for (const auto& l : layers.as_array()) {
 					        if (l["id"].as_string() != picked) continue;
 					        for (const auto& a : spec.asks) {
-						        bool fits = a.does == "crop" ? is_picture(l) && vector_here(p, l).empty() : a.does == "edit" ? is_words(l) : true;
+						        bool fits = a.does == "crop" ? is_picture(l) && vector_here(p, l).empty() : a.does == "edit" ? is_words(l) : a.does == "ungroup" ? holds_others(l) : true;
 						        if (fits) fitting.push_back(a.does);
 					        }
 				        }
@@ -1884,7 +1979,7 @@ namespace one::desktop::runtime {
 			        // A node of the picked path reshapes it, and shows its control points,
 			        // which reshape it too.
 			        for (const auto& l : layers.as_array()) {
-				        if (l["id"].as_string() != picked || !is_path(l) || spec.reshape.empty()) continue;
+				        if (l["id"].as_string() != picked || !is_path(l) || holds_others(l) || spec.reshape.empty()) continue;
 				        std::string outline = outline_of(l, box_of(l));
 				        if (w->node && w->node->first == picked) {
 					        for (const auto& h : model::path_handles(outline, w->node->second)) {
@@ -1908,7 +2003,7 @@ namespace one::desktop::runtime {
 			        // A corner of the picked layer resizes it: a picture with its shape kept,
 			        // words by their size. A path has nodes, not corners.
 			        for (const auto& l : layers.as_array()) {
-				        if (l["id"].as_string() != picked || is_path(l)) continue;
+				        if (l["id"].as_string() != picked || (is_path(l) && !holds_others(l))) continue;
 				        if (is_words(l) ? spec.write.empty() : spec.place.empty()) continue;
 				        model::box b = where_is(l, *w);
 				        if (is_words(l)) {
@@ -1916,7 +2011,9 @@ namespace one::desktop::runtime {
 					        b.w = mw, b.h = mh;
 				        }
 				        if (int corner = model::corner_at(w->on_board(b), on, handle); corner >= 0) {
-					        w->now = {.what = gesture::resizing, .id = picked, .from = b, .at = at, .corner = corner, .edges = 0, .kept_from = {}, .free = is_shape(l)};
+					        // A group keeps its shape unless Shift, as a picture does.
+					        w->now = {.what = gesture::resizing, .id = picked, .from = b, .at = at, .corner = corner, .edges = 0, .kept_from = {}, .free = is_shape(l) && !holds_others(l)};
+					        if (holds_others(l)) carry_from(*w, layers, picked, b);
 					        snap_lines(layers, width, height, *w, picked);
 					        return true;
 				        }
@@ -1925,6 +2022,7 @@ namespace one::desktop::runtime {
 			        // is cropped and words written.
 			        const auto& all = layers.as_array();
 			        for (std::size_t i = all.size(); i-- > 0;) {
+				        if (holds_others(all[i])) continue;
 				        model::box b = where_is(all[i], *w);
 				        if (is_words(all[i])) {
 					        auto [mw, mh] = measured(all[i]["words"].as_string(), all[i]["size"].as_double(), weight_of(all[i]), italic_of(all[i]));
@@ -1933,6 +2031,16 @@ namespace one::desktop::runtime {
 				        if (!hits(all[i], b, w->on_collage(at), 1 / w->scale)) continue;
 				        std::string id = all[i]["id"].as_string();
 				        w->node.reset();
+				        // One a group holds is picked as its outermost group; pressed twice,
+				        // as itself, as a drawing program goes into a group.
+				        const value* row = &all[i];
+				        if (clicks < 2 && w->outermost(id) != id) {
+					        id = w->outermost(id);
+					        for (const auto& l : all) {
+						        if (l["id"].as_string() == id) row = &l;
+					        }
+					        b = where_is(*row, *w);
+				        }
 				        if (!spec.pick.empty()) p.pick(spec.pick, id);
 				        // Its layer is the current one, as new objects go in it.
 				        if (!spec.layer_pick.empty() && !all[i][spec.layer].as_string().empty()) p.pick(spec.layer_pick, all[i][spec.layer].as_string());
@@ -1943,6 +2051,7 @@ namespace one::desktop::runtime {
 				        }
 				        if (!spec.place.empty()) {
 					        w->now = {.what = gesture::moving, .id = id, .from = b, .at = at, .corner = 0, .edges = 0, .kept_from = {}};
+					        if (holds_others(*row)) carry_from(*w, layers, id, b);
 					        snap_lines(layers, width, height, *w, id);
 				        }
 				        return true;
@@ -2039,8 +2148,9 @@ namespace one::desktop::runtime {
 			        w->going = std::pair{g.id, to};
 			        // Where it's taken, kept; turned down, it goes back where it was.
 			        auto back = [w](const answer& a) {
-				        if (!a) w->going.reset();
+				        if (!a) w->going.reset(), w->carried_from.clear();
 			        };
+			        if (!w->carried_from.empty() && w->inside(w->carried_from.begin()->first, g.id)) return place_carried(p, *w, spec, to, back);
 			        // Words resized are larger or smaller words, not stretched ones.
 			        for (const auto& l : layers.as_array()) {
 				        if (l["id"].as_string() == g.id && is_words(l) && g.what == gesture::resizing && g.from.h > 0) {
@@ -2190,6 +2300,7 @@ namespace one::desktop::runtime {
 		std::string object_name(page& p, const value& l) {
 			std::string name = l["words"].as_string().substr(0, l["words"].as_string().find('\n'));
 			if (!l["name"].as_string().empty()) return l["name"].as_string();
+			if (holds_others(l)) return "Group";
 			if (!is_words(l)) {
 				// A path of two points is a line.
 				std::string shape = l["shape"].as_string(), points = l["points"].as_string();
@@ -2272,6 +2383,7 @@ namespace one::desktop::runtime {
 				for (const auto& o : objects) {
 					if (o[spec.object_layer].as_string() == id && !hidden_layer(o)) held.push_back(o);
 				}
+				held = grouped(value(held)).as_array();
 				auto open = p.kept<bool>("layers open " + id);
 				std::vector<desktop::view> row;
 				desktop::view eye;
@@ -2314,25 +2426,55 @@ namespace one::desktop::runtime {
 				}));
 				movable.push_back(!spec.order.empty()), layer_of.push_back(i);
 				if (!open.get()) continue;
-				for (std::size_t j = held.size(); j-- > 0;) {
-					const value& o = held[j];
-					std::string object = o["id"].as_string();
-					std::vector<desktop::view> inside;
-					auto pick_object = [&p, spec, id, object] {
-						if (!spec.object_pick.empty()) p.pick(spec.object_pick, object);
-						if (!spec.pick.empty()) p.pick(spec.pick, id);
-					};
-					inside.push_back(name_of_row(p, object, object_name(p, o), name_style(hidden, true), spec.object_rename, pick_object, spec.fields));
-					if (!spec.object_remove.empty()) {
-						inside.push_back(desktop::tool_button("delete", "Delete", [&p, command = spec.object_remove, object] { p.run(command, value(std::map<std::string, value>{{"id", object}})); },
-						                                      {.tiny = true, .on_hover = true}));
+				// Its objects, topmost first, a group's opened under it, each further in.
+				std::function<void(const std::string&, float, int)> add = [&](const std::string& within, float indent, int depth) {
+					for (std::size_t j = held.size(); j-- > 0;) {
+						const value& o = held[j];
+						if (o["group"].as_string() != within || depth > 32) continue;
+						std::string object = o["id"].as_string();
+						bool group = holds_others(o);
+						auto shown = p.kept<bool>("layers open " + object);
+						std::vector<desktop::view> inside;
+						if (group) {
+							bool opened_group = shown.get();
+							inside.push_back(desktop::drawing([opened_group](desktop::canvas& c, desktop::rect area) {
+								                 desktop::draw_icon(c, opened_group ? "chevron_down" : "chevron_right", {area.x, area.y + (area.height - 16) / 2, 16, 16}, current_theme().ink);
+							                 })
+							                     .width(16)
+							                     .height(24)
+							                     .grow(0)
+							                     .on_click([shown] { shown.set(!shown.peek()); }));
+						}
+						auto pick_object = [&p, spec, id, object] {
+							if (!spec.object_pick.empty()) p.pick(spec.object_pick, object);
+							if (!spec.pick.empty()) p.pick(spec.pick, id);
+						};
+						inside.push_back(name_of_row(p, object, object_name(p, o), name_style(hidden, true), spec.object_rename, pick_object, spec.fields));
+						if (!spec.object_remove.empty()) {
+							// A group's all it holds go with it, in one step.
+							std::vector<std::string> gone{object};
+							placed groups;
+							for (const auto& h : held) {
+								if (!h["group"].as_string().empty()) groups.group_of[h["id"].as_string()] = h["group"].as_string();
+							}
+							for (const auto& h : held) {
+								if (groups.inside(h["id"].as_string(), object)) gone.push_back(h["id"].as_string());
+							}
+							inside.push_back(desktop::tool_button("delete", "Delete", [&p, command = spec.object_remove, gone] {
+								bool first = true;
+								for (const auto& each : gone) {
+									value sent = value(std::map<std::string, value>{{"id", each}});
+									if (!std::exchange(first, false)) sent.fields["one:history"] = value("joined");
+									p.run(command, sent);
+								}
+							}, {.tiny = true, .on_hover = true}));
+						}
+						rows.push_back(list_row({}, std::move(inside), object == picked_object, indent, pick_object));
+						movable.push_back(false), layer_of.push_back(i);
+						if (group && shown.get()) add(object, indent + 16, depth + 1);
 					}
-					rows.push_back(list_row({}, std::move(inside), object == picked_object, 20, [&p, spec, id, object] {
-						if (!spec.object_pick.empty()) p.pick(spec.object_pick, object);
-						if (!spec.pick.empty()) p.pick(spec.pick, id);
-					}));
-					movable.push_back(false), layer_of.push_back(i);
-				}
+				};
+				add("", 20, 0);
 			}
 			// A layer held and dragged goes where it's let go, in one step.
 			auto list = desktop::reorderable(std::move(rows), std::move(movable), [&p, command = spec.order, ordered, layer_of](std::size_t from, std::size_t to) {

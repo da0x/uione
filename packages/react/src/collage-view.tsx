@@ -16,7 +16,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
-import { colorShifter, cornerAt, pathIn, cropEdgesAt, cropped, drawn, drawnLine, freehand, halo, penPath, haloInside, haloReach, harmonicFill, matched, matchingCast, matchingStrength, moved, resized, sitting, pathBounds, pathFractions, pathHandleMoved, pathHandles, pathMoved, pathNodes, pathReaches, snapLines, statsOf, svgDocument, wholeOf } from "./collage.js";
+import { colorShifter, cornerAt, pathIn, cropEdgesAt, cropped, drawn, drawnLine, freehand, halo, penPath, haloInside, haloReach, harmonicFill, matched, matchingCast, matchingStrength, moved, resized, sitting, pathBounds, pathFractions, around, carried, pathHandleMoved, pathHandles, pathMoved, pathNodes, pathReaches, snapLines, statsOf, svgDocument, wholeOf } from "./collage.js";
 import type { Box, ColorShift, ColorStats, Guided, Lines, PenNode, Point, SavedLayer } from "./collage.js";
 import { useFiles, useRunner } from "./data.js";
 import { pictureSize, svgIn, svgShapes, svgSize } from "./vectors.js";
@@ -581,8 +581,11 @@ async function svgOf(layers: Row[], W: number, H: number, address: ((path: strin
   const one = only ? layers.find((l) => l["id"] === only) : undefined;
   const area = one ? boxOf(one) : { x: 0, y: 0, w: W, h: H };
   const saved: SavedLayer[] = [];
+  const groupOf = groupsOf(layers);
+  // A group's all it holds.
   for (const l of layers) {
-    if (only && l["id"] !== only) continue;
+    if (holdsOthers(l)) continue;
+    if (only && l["id"] !== only && !inGroup(groupOf, str(l["id"]), only)) continue;
     const b = boxOf(l);
     const at = { x: b.x - area.x, y: b.y - area.y, w: b.w, h: b.h };
     const opacity = opacityOf(l);
@@ -647,7 +650,7 @@ function ask(name: string, does: string) {
 const pastes = new Map<string, { files: File[]; words: string }>();
 
 // crop "Crop", edit words "Edit", add words "Text": what's asked of the screen's collage.
-export function CollageButton({ collage, does, label, icon, keys }: { collage: string; does: "crop" | "edit" | "add" | "add pictures" | "paste" | "screenshot" | "copy" | "copy picked" | "save" | "save picked" | "copy svg" | "copy svg picked" | "save svg" | "save svg picked"; label: string; icon?: string; keys?: string[] }) {
+export function CollageButton({ collage, does, label, icon, keys }: { collage: string; does: "crop" | "edit" | "ungroup" | "add" | "add pictures" | "paste" | "screenshot" | "copy" | "copy picked" | "save" | "save picked" | "copy svg" | "copy svg picked" | "save svg" | "save svg picked"; label: string; icon?: string; keys?: string[] }) {
   const ui = useUI();
   const tool = useTool() ?? "small";
   const off = useOff();
@@ -719,6 +722,8 @@ interface Placed {
   reshaped?: { id: string; outline: string };
   // The picked path's node last pressed, whose control points show, by its id.
   node?: { id: string; at: number };
+  // While a group is moved or resized, where it and each it holds were as it began.
+  carried?: { group: Box; from: Map<string, Box> };
 }
 
 // A path as a reshape has it so far: its node moved, or one of its control points, in
@@ -748,6 +753,7 @@ export function Collage({
   fields,
   place,
   reshape,
+  group,
   snap = false,
   clear = false,
   matchColors = false,
@@ -781,6 +787,7 @@ export function Collage({
   fields: Record<string, string>; // the field each of its parts is kept in, like words: "caption"
   place?: string; // the command a layer moved or resized is sent to, with x y w h
   reshape?: string; // and the one a path's nodes moved are, with its points and x y w h
+  group?: string; // and the one that puts a layer in a group, or takes it out, by its group
   snap?: boolean;
   clear?: boolean; // nothing behind its layers: shown over a checkerboard, saved clear
   matchColors?: boolean; // its pictures' colors moved toward one another's, so they look like one picture
@@ -829,7 +836,9 @@ export function Collage({
   // their layers' order, and those of a hidden layer aren't either.
   const groups = layersList ? ((data[layersList] as Row[] | undefined) ?? []) : [];
   const shownOnes = ((data[list] as Row[] | undefined) ?? []).filter((l) => !hiddenLayer(l));
-  const layers = layersList && layerField ? inLayers(shownOnes, groups, layerField) : shownOnes;
+  // A group is drawn as what it holds, its place the box around them.
+  const layers = grouped(layersList && layerField ? inLayers(shownOnes, groups, layerField) : shownOnes);
+  const groupOf = groupsOf(layers);
   const pickedLayer = usePickedId(layerPick ?? "") ?? "";
   // Whether it keeps shapes, so an SVG brought in can be its own.
   const keepsShapes = ["shape", "points", "fill", "stroke", "stroke_width"].every((part) => part in fields);
@@ -940,8 +949,21 @@ export function Collage({
     const s = Math.min(1, W / size.w, H / size.h);
     const cx = on ? on.x : W / 2, cy = on ? on.y : H / 2;
     const at = { x: cx - (size.w * s) / 2, y: cy - (size.h * s) / 2 };
-    let inLayer: string | undefined, joined = false;
-    if (layersList && layerField && layerCreate) {
+    let inLayer: string | undefined, joined = false, inGroupOf: string | undefined;
+    const last = layers[layers.length - 1];
+    let depth = last && last["depth"] !== undefined ? num(last["depth"]) + 1 : 0;
+    if ("group" in fields) {
+      // Where layers are grouped, one group in the layer it's brought into, named for
+      // it, as big as it is; its shapes made once it is, all one step to undo.
+      inLayer = await layerFor();
+      const made: Row = { ...at, w: size.w * s, h: size.h * s, depth: depth++ };
+      if ("name" in fields) made["name"] = name;
+      if (parent) made[parent] = subject;
+      if (layerField && inLayer) made[layerField] = inLayer;
+      inGroupOf = (await send(add, made))?.id;
+      if (!inGroupOf) return;
+      joined = true;
+    } else if (layersList && layerField && layerCreate) {
       const top = groups.reduce((most, l) => Math.max(most, num(l["depth"])), 0);
       const made: Row = { name, depth: top + 1 };
       if (layerParent) made[layerParent] = subject;
@@ -952,8 +974,6 @@ export function Collage({
     } else {
       inLayer = await layerFor();
     }
-    const last = layers[layers.length - 1];
-    let depth = last && last["depth"] !== undefined ? num(last["depth"]) + 1 : 0;
     for (const shape of shapes) {
       const b = pathBounds(shape.path);
       const placed = { x: at.x + b.x * s, y: at.y + b.y * s, w: b.w * s, h: b.h * s };
@@ -963,10 +983,12 @@ export function Collage({
       if ("opacity" in fields) object["opacity"] = shape.opacity;
       if (parent) object[parent] = subject;
       if (layerField && inLayer) object[layerField] = inLayer;
+      if (inGroupOf) object["group"] = inGroupOf;
       if (joined) object["one:history"] = "joined";
       joined = true;
       await send(add, object);
     }
+    if (inGroupOf && pick) setPicked(pick, inGroupOf);
   };
   // Words pasted: a layer of them in the middle, a twelfth of its height; or, when
   // they're an SVG's, as a drawing program copies one, that SVG, as one dropped is.
@@ -1081,6 +1103,14 @@ export function Collage({
     asked.delete(name);
     if (asking === "crop" && chosen && isPicture(chosen) && crop) {
       w.crop = cropBegun(chosen);
+    } else if (asking === "ungroup" && chosen && holdsOthers(chosen) && group) {
+      // What it holds, each in no group, and it gone, all one step to undo.
+      const held = layers.filter((l) => str(l["group"]) === picked);
+      void (async () => {
+        for (const [i, l] of held.entries()) await send(group, { id: str(l["id"]), group: null, ...(i > 0 ? { "one:history": "joined" } : {}) });
+        if (remove) await send(remove, { id: picked, "one:history": "joined" });
+      })();
+      pickRow("");
     } else if (asking === "edit" && chosen && isWords(chosen) && write) {
       w.editing = { id: picked, words: str(chosen["words"]), caret: str(chosen["words"]).length, fresh: false };
     } else if (asking.startsWith("copy svg") || asking.startsWith("save svg")) {
@@ -1175,8 +1205,11 @@ export function Collage({
     const g = w.going;
     if (g && g.id === l["id"]) {
       const near = (a: number, z: number) => Math.abs(a - z) < 0.01;
-      if (near(b.x, g.box.x) && near(b.y, g.box.y) && near(b.w, g.box.w) && near(b.h, g.box.h) && !w.now) w.going = undefined;
+      if (near(b.x, g.box.x) && near(b.y, g.box.y) && near(b.w, g.box.w) && near(b.h, g.box.h) && !w.now) (w.going = undefined), (w.carried = undefined);
       else b = g.box;
+    } else if (g && w.carried?.from.has(str(l["id"])) && inGroup(groupOf, str(l["id"]), g.id)) {
+      // One a group holds, carried with it.
+      b = carried(w.carried.from.get(str(l["id"]))!, w.carried.group, g.box);
     }
     if (isWords(l) && !(w.going && w.going.id === l["id"] && w.now)) {
       const writing = w.editing?.id === l["id"];
@@ -1256,6 +1289,11 @@ export function Collage({
     }
     for (const l of layers) {
       let b = onBoard(whereIs(l));
+      // A group draws nothing of its own; picked, it's framed around all it holds.
+      if (holdsOthers(l)) {
+        if (l["id"] === picked && !full) framed = b;
+        continue;
+      }
       if (isWords(l)) {
         // Being written: as typed so far, with its caret, all of it marked while the
         // first key would replace it; being resized, its letters as large.
@@ -1517,8 +1555,22 @@ export function Collage({
     snapLines(
       W,
       H,
-      layers.filter((l) => l["id"] !== moving).map((l) => whereIs(l)),
+      layers.filter((l) => l["id"] !== moving && !inGroup(groupOf, str(l["id"]), moving) && !holdsOthers(l)).map((l) => whereIs(l)),
     );
+  // A group's gesture begun: where it and each it holds are.
+  const carryFrom = (group: string, from: Box) => {
+    w.carried = { group: from, from: new Map(layers.filter((l) => !holdsOthers(l) && inGroup(groupOf, str(l["id"]), group)).map((l) => [str(l["id"]), boxOf(l)])) };
+  };
+  // A group taken to `to`: each it holds carried with it, all one step to undo.
+  const placeCarried = async (to: Box) => {
+    const c = w.carried;
+    if (!c) return;
+    let i = 0;
+    for (const [id, from] of c.from) {
+      const b = carried(from, c.group, to);
+      await send(place!, { id, x: b.x, y: b.y, w: b.w, h: b.h, ...(i++ > 0 ? { "one:history": "joined" } : {}) });
+    }
+  };
   const goingTo = (p: Point, e: { altKey: boolean; shiftKey: boolean }): Box => {
     const g = w.now!;
     const dx = (p.x - g.at.x) / w.scale, dy = (p.y - g.at.y) / w.scale, close = 8 / w.scale;
@@ -1668,11 +1720,13 @@ export function Collage({
       }
     }
     // A corner of the picked one resizes it; a path has nodes, not corners.
-    if (chosen && !isPath(chosen) && (isWords(chosen) ? write : place)) {
+    if (chosen && (!isPath(chosen) || holdsOthers(chosen)) && (isWords(chosen) ? write : place)) {
       const b = whereIs(chosen);
       const corner = cornerAt(onBoard(b), p, handle);
       if (corner >= 0) {
-        w.now = { what: "resizing", id: picked, from: b, at: p, corner, edges: 0, free: isShape(chosen) };
+        // A group keeps its shape unless Shift, as a picture does.
+        w.now = { what: "resizing", id: picked, from: b, at: p, corner, edges: 0, free: isShape(chosen) && !holdsOthers(chosen) };
+        if (holdsOthers(chosen)) carryFrom(picked, b);
         w.lines = linesFor(picked);
         e.currentTarget.setPointerCapture(e.pointerId);
         return;
@@ -1681,9 +1735,17 @@ export function Collage({
     // The top layer under the pointer is picked and moves; pressed twice, a picture is
     // cropped and words written.
     for (let i = layers.length - 1; i >= 0; i--) {
-      const l = layers[i]!;
-      const b = whereIs(l);
+      if (holdsOthers(layers[i]!)) continue;
+      let l = layers[i]!;
+      let b = whereIs(l);
       if (!hits(l, b, p)) continue;
+      // One a group holds is picked as its outermost group; pressed twice, as itself, as
+      // a drawing program goes into a group.
+      if (e.detail < 2 && outermost(groupOf, str(l["id"])) !== str(l["id"])) {
+        const top = outermost(groupOf, str(l["id"]));
+        l = layers.find((r) => str(r["id"]) === top) ?? l;
+        b = whereIs(l);
+      }
       const id = str(l["id"]);
       w.node = undefined;
       pickRow(id);
@@ -1697,6 +1759,7 @@ export function Collage({
       }
       if (place) {
         w.now = { what: "moving", id, from: b, at: p, corner: 0, edges: 0 };
+        if (holdsOthers(l)) carryFrom(id, b);
         w.lines = linesFor(id);
         e.currentTarget.setPointerCapture(e.pointerId);
       }
@@ -1796,10 +1859,15 @@ export function Collage({
     // Where it's taken, kept; turned down, it goes back where it was.
     const back = (made: unknown) => {
       if (made === undefined) {
-        w.going = undefined;
+        w.going = w.carried = undefined;
         paint();
       }
     };
+    if (w.carried && [...w.carried.from.keys()].some((id) => inGroup(groupOf, id, g.id))) {
+      void placeCarried(to).catch(() => back(undefined));
+      paint();
+      return;
+    }
     const l = layers.find((r) => r["id"] === g.id);
     if (l && isWords(l) && g.what === "resizing" && g.from.h > 0 && write) {
       // Words resized are larger or smaller words, not stretched ones.
@@ -1856,7 +1924,10 @@ export function Collage({
     const b = boxOf(chosen);
     const to = { x: b.x + dx, y: b.y + dy, w: b.w, h: b.h };
     w.going = { id: picked, box: to };
-    void send(place, { id: picked, ...to });
+    if (holdsOthers(chosen)) {
+      carryFrom(picked, b);
+      void placeCarried(to);
+    } else void send(place, { id: picked, ...to });
     paint();
   };
   const nudging = picked && place && !busy;
@@ -2085,6 +2156,7 @@ export function Layers({
   if (view.status !== "live") return <p>Loading…</p>;
   if (layers.length === 0) return <p style={{ color: "var(--color-muted)" }}>No layers yet.</p>;
   const nameOf = (l: Row) => {
+    if (holdsOthers(l)) return "Group";
     if (isWords(l)) return str(l["words"]).split("\n")[0]!;
     if (isPicture(l)) return pictures.get(str(l["picture"])) === "vector" ? "SVG" : "Picture";
     // A path of two points is a line.
@@ -2223,7 +2295,7 @@ export function Layers({
           .reverse()
           .flatMap(({ g }) => {
             const id = str(g["id"]), hidden = hiddenLayer(g), opened = open.has(id);
-            const mine = held.filter((o) => str(o[objectLayer]) === id);
+            const mine = grouped(held.filter((o) => str(o[objectLayer]) === id));
             const flip = () => setOpen((was) => (was.has(id) ? new Set([...was].filter((one) => one !== id)) : new Set([...was, id])));
             const rows = [
               <div key={id}>
@@ -2266,9 +2338,16 @@ export function Layers({
                 )}
               </div>,
             ];
-            if (opened) {
+            // Its objects, topmost first, a group's opened under it, each further in.
+            const mineGroups = groupsOf(mine);
+            const objectRows = (within: string, indent: number, depth: number) => {
+              if (depth > 32) return;
               for (const o of [...mine].reverse()) {
-                const object = str(o["id"]);
+                if (str(o["group"]) !== within) continue;
+                const object = str(o["id"]), group = holdsOthers(o), shown = open.has(object);
+                const flipGroup = () => setOpen((was) => (was.has(object) ? new Set([...was].filter((one) => one !== object)) : new Set([...was, object])));
+                // A group's all it holds go with it, in one step.
+                const gone = [object, ...mine.filter((h) => inGroup(mineGroups, str(h["id"]), object)).map((h) => str(h["id"]))];
                 rows.push(
                   <div key={object}>
                   {withEye(
@@ -2280,13 +2359,28 @@ export function Layers({
                       if (objectPick) setPicked(objectPick, object);
                       if (pick) setPicked(pick, id);
                     }}
-                    style={rowStyle(object === pickedObject, 20)}
+                    style={rowStyle(object === pickedObject, indent)}
                     {...hover(object)}
                   >
+                    {group && (
+                      <span onClick={(e) => e.stopPropagation()} style={{ display: "flex" }}>
+                        <button type="button" aria-label={shown ? "Close" : "Open"} title={shown ? "Close" : "Open"} onClick={flipGroup} style={{ width: 16, padding: 0, border: 0, background: "none", color: "inherit", cursor: "pointer" }}>
+                          <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d={shown ? "M4 6l4 4 4-4" : "M6 4l4 4-4 4"} />
+                          </svg>
+                        </button>
+                      </span>
+                    )}
                     {nameField(object, str(o["name"]) || nameOf(o), quiet(hidden, true), objectRename, true)}
                     {objectRemove && (
                       <span onClick={(e) => e.stopPropagation()} style={onHover(object)}>
-                        <ui.Button kind="secondary" icon="delete" tool="tiny" hint="Delete" onClick={() => void runner.reply(objectRemove, { id: object })}>
+                        <ui.Button
+                          kind="secondary"
+                          icon="delete"
+                          tool="tiny"
+                          hint="Delete"
+                          onClick={() => gone.forEach((each, n) => void runner.reply(objectRemove, n === 0 ? { id: each } : { id: each, "one:history": "joined" }))}
+                        >
                           Delete
                         </ui.Button>
                       </span>
@@ -2295,8 +2389,10 @@ export function Layers({
                   )}
                   </div>,
                 );
+                if (group && shown) objectRows(object, indent + 16, depth + 1);
               }
-            }
+            };
+            if (opened) objectRows("", 20, 0);
             return rows;
           })}
       </div>
@@ -2365,6 +2461,50 @@ export function inLayers(objects: Row[], layers: Row[], field: string): Row[] {
     .map(({ o, found }, i) => ({ o, at: found?.at ?? 0, i }))
     .sort((a, b) => a.at - b.at || a.i - b.i)
     .map(({ o }) => o);
+}
+
+// A collage's layers with their groups worked out: one that others name as their group
+// holds them, "holds" saying how many, and its place is the box around all it holds,
+// however deep; one naming a group that isn't there, or itself, is in none. The same as
+// the desktop's.
+export function grouped(layers: Row[]): Row[] {
+  const ids = new Set(layers.map((l) => str(l["id"])));
+  const rows = layers.map((l) => {
+    const group = str(l["group"]);
+    return group && (!ids.has(group) || group === str(l["id"])) ? { ...l, group: "" } : l;
+  });
+  const held = new Map<string, Row[]>();
+  for (const r of rows) if (str(r["group"])) held.set(str(r["group"]), [...(held.get(str(r["group"])) ?? []), r]);
+  if (held.size === 0) return rows;
+  const working = new Set<string>();
+  const boxOfRow = (r: Row): Box => {
+    const id = str(r["id"]);
+    const inside = held.get(id);
+    if (!inside || working.has(id)) return { x: num(r["x"]), y: num(r["y"]), w: num(r["w"]), h: num(r["h"]) };
+    working.add(id);
+    const b = around(inside.map(boxOfRow));
+    working.delete(id);
+    return b;
+  };
+  return rows.map((r) => {
+    const inside = held.get(str(r["id"]));
+    if (!inside) return r;
+    const b = boxOfRow(r);
+    return { ...r, x: b.x, y: b.y, w: b.w, h: b.h, holds: inside.length };
+  });
+}
+// Whether a layer is a group, holding others.
+export const holdsOthers = (l: Row) => num(l["holds"]) > 0;
+// The group each is in, by its id.
+const groupsOf = (rows: Row[]) => new Map(rows.filter((r) => str(r["group"])).map((r) => [str(r["id"]), str(r["group"])]));
+// Whether one is in a group, however deep; and the outermost it's in, or itself.
+function inGroup(groups: Map<string, string>, id: string, group: string): boolean {
+  for (let depth = 0, at = groups.get(id); at !== undefined && depth < 64; at = groups.get(at), depth++) if (at === group) return true;
+  return false;
+}
+function outermost(groups: Map<string, string>, id: string): string {
+  for (let depth = 0; groups.has(id) && depth < 64; depth++) id = groups.get(id)!;
+  return id;
 }
 
 // The layer new objects go in: the one picked, while it's there, or the topmost.

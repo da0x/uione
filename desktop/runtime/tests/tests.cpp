@@ -2202,6 +2202,77 @@ TEST("a collage's path shows a node's control points once the node is pressed, a
 	CHECK(data.runs().back().fields["points"].as_string() == "M 0 0 C 0 1 0.75 1 1 0");
 }
 
+TEST("a collage's group is picked by a press on what it holds, moved as one in one step, and ungrouped; pressed twice, what it holds is picked") {
+	memory_source data;
+	auto shape = [](std::string id, double x, double y, std::string group) {
+		return value(fields{{"id", std::move(id)}, {"shape", "rectangle"}, {"fill", "#2e86de"}, {"x", x}, {"y", y}, {"w", 100}, {"h", 100}, {"group", std::move(group)}});
+	};
+	data.set("studio::poster_page", "p1",
+	         value(fields{{"width", 1600}, {"height", 900},
+	                      {"layers", list{value(fields{{"id", "g"}, {"x", 0}, {"y", 0}, {"w", 0}, {"h", 0}}), shape("a", 100, 100, "g"), shape("b", 300, 200, "g"), shape("c", 900, 500, "")}}}));
+	data.on("studio::layer::place", [](const value& f, memory_source&) -> answer { return f["id"].as_string(); });
+	data.on("studio::layer::group", [](const value& f, memory_source&) -> answer { return f["id"].as_string(); });
+	data.on("studio::layer::delete", [](const value& f, memory_source&) -> answer { return f["id"].as_string(); });
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	auto parts = named_like_parts;
+	parts["group"] = "group";
+	s.screens.push_back({"Poster", "/", "", [parts](page& p) {
+		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .width = "width", .height = "height",
+		                                                                         .fields = parts, .place = "studio::layer::place", .group = "studio::layer::group",
+		                                                                         .pick = "/ layer", .fills = true, .remove = "studio::layer::delete", .key = "/ layer"}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	auto root = built(nav);
+	std::function<one::desktop::element*(one::desktop::element&)> drawing = [&](one::desktop::element& e) -> one::desktop::element* {
+		if (e.children.empty() && e.frame.width > 400 && e.frame.height > 200) return &e;
+		for (auto& child : e.children) {
+			if (auto* found = drawing(*child)) return found;
+		}
+		return nullptr;
+	};
+	auto* board = drawing(*root);
+	CHECK(board != nullptr);
+	if (!board) return;
+	(void)one::desktop::offscreen::draw({900, 900}, 1, tested_theme().page, [&](one::desktop::canvas& c) { root->paint(c); });
+	auto area = board->frame;
+	float scale = std::min((area.width - 64) / 1600.f, (area.height - 64) / 900.f);
+	one::desktop::point origin{area.x + (area.width - 1600 * scale) / 2, area.y + (area.height - 900 * scale) / 2};
+	auto on = [&](double x, double y) { return one::desktop::point{origin.x + static_cast<float>(x) * scale, origin.y + static_cast<float>(y) * scale}; };
+	// A press on one it holds picks the group, and a drag moves all it holds, in one step.
+	CHECK(board->press(on(150, 150), 1));
+	CHECK(nav.current().picked_id("/ layer") == "g");
+	board->drag(on(170, 150));
+	board->release(on(200, 150), board);
+	CHECK(data.runs().size() == 2);
+	if (data.runs().size() != 2) return;
+	std::map<std::string, double> xs;
+	for (const auto& r : data.runs()) xs[r.fields["id"].as_string()] = r.fields["x"].as_double();
+	CHECK(std::abs(xs["a"] - 150) < 1);
+	CHECK(std::abs(xs["b"] - 350) < 1);
+	CHECK(data.runs()[1].fields["one:history"].as_string() == "joined");
+	// Pressed twice, the one it holds.
+	root = built(nav);
+	board = drawing(*root);
+	(void)one::desktop::offscreen::draw({900, 900}, 1, tested_theme().page, [&](one::desktop::canvas& c) { root->paint(c); });
+	board->press(on(350, 250), 2);
+	board->release(on(350, 250), board);
+	CHECK(nav.current().picked_id("/ layer") == "b");
+	// Ungrouped: each it holds in none, and it gone.
+	nav.current().pick("/ layer", "g");
+	nav.current().kept<std::string>("collage do / layer").set("ungroup");
+	(void)drawn(nav);
+	const auto& runs = data.runs();
+	CHECK(runs.size() == 5);
+	if (runs.size() != 5) return;
+	CHECK(runs[2].command == "studio::layer::group");
+	CHECK(runs[2].fields["group"].is_null());
+	CHECK(runs[3].fields["one:history"].as_string() == "joined");
+	CHECK(runs[4].command == "studio::layer::delete");
+	CHECK(runs[4].fields["id"].as_string() == "g");
+}
+
 TEST("a collage's layers listed beside it, topmost first: each an eye, its preview in the collage's proportions, its name, up, down and delete; a hidden one isn't drawn") {
 	memory_source data;
 	auto shape = [](std::string id, std::string kind, double x, double y, double w, double h, std::string fill, double depth, double hidden = 0) {

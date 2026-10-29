@@ -691,6 +691,20 @@ namespace one::screens::collage {
 		return out;
 	}
 
+	box around(const std::vector<box>& boxes) {
+		if (boxes.empty()) return {};
+		double left = boxes[0].x, top = boxes[0].y, right = boxes[0].x + boxes[0].w, bottom = boxes[0].y + boxes[0].h;
+		for (const auto& b : boxes) {
+			left = std::min(left, b.x), top = std::min(top, b.y), right = std::max(right, b.x + b.w), bottom = std::max(bottom, b.y + b.h);
+		}
+		return {left, top, right - left, bottom - top};
+	}
+
+	box carried(const box& one, const box& from, const box& to) {
+		double sx = from.w > 0 ? to.w / from.w : 1, sy = from.h > 0 ? to.h / from.h : 1;
+		return {to.x + (one.x - from.x) * sx, to.y + (one.y - from.y) * sy, one.w * sx, one.h * sy};
+	}
+
 	std::vector<point> path_nodes(std::string_view absolute) {
 		std::vector<point> out;
 		for (const auto& c : commands_of(absolute)) {

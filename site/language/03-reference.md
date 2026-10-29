@@ -2234,9 +2234,22 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     the control points either side moving with it. Let go, the command is sent its
     new `points` and its box, `x y w h`, worked out again around them, a pixel wide
     where it's straight across or down.
+    A node pressed shows its control points too, round where the nodes are square,
+    each dragged on its own; a smooth node's other one turns to stay in line with it.
+  - A layer's `group`, another of the collage's layers, puts it in that group. A
+    group draws nothing of its own: it's drawn as what it holds, and its place is the
+    box around them. A press on anything it holds picks the group, the outermost one
+    it's in, framed with corners, and a drag or the arrows move it and all it holds,
+    resized keeping their shape unless Shift; each is sent to `place`, all one step to
+    undo. Pressed twice, what's under the pointer is picked on its own. An SVG
+    brought in comes in as one group of its shapes, named for it. A list of the
+    layers shows what a group holds under it, opened by its caret.
+  - `group layer::group`: what puts a layer in a group or takes it out, sent its
+    `group`. An `ungroup "Ungroup" icon ungroup` button over the picked group sends
+    each it holds with no group and deletes the group by the collage's `delete`.
   - `clear`: nothing is behind its layers, as a drawing's page is. Where nothing is,
-    it's shown over a gray and white checkerboard, as drawing programs show what's
-    clear, and a picture or a preview of it is clear there too. Without it, its page
+    it's shown over a checkerboard, white and gray, or gray and black in the dark, as
+    drawing programs show what's clear, and a picture or a preview of it is clear there too. Without it, its page
     is white.
   - `crop layer::crop`: a picked picture is cropped in place, as a press twice on it
     or a `crop "Crop" icon crop key c` button begins: the whole picture faint around
