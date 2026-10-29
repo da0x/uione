@@ -12,10 +12,11 @@
 //                                        its apps: the web app served by Vite, or the
 //                                        desktop or terminal app; the first it targets
 //                                        unless --target names another
-//   one deploy <folder> [--yes]          build every project under a folder, itself
+//   one deploy <folder> [-y]             build every project under a folder, itself
 //                                        one or holding several, then deploy each by
 //                                        its build/deploy, which asks before it changes
-//                                        anything unless --yes
+//                                        anything unless -y, or --yes, says to go ahead
+//                                        with every one
 //   one upgrade <project>                bring a project to this compiler: apply the
 //                                        fixes its mistakes come with, and record this
 //                                        version in its project block
@@ -50,7 +51,7 @@ namespace {
         std::cerr << "usage: one check <path>...\n"
                      "       one build <project> [--out <folder>] [--for <environment>] [--target <target>[,<target>...]]\n"
                      "       one run <project> [--for <environment>] [--target <target>]\n"
-                     "       one deploy <folder> [--for <environment>] [--yes]\n"
+                     "       one deploy <folder> [--for <environment>] [-y|--yes]\n"
                      "       one show <file>:<line>[-<line>]\n"
                      "       one upgrade <project>\n"
                      "       one theme [--seed <number>] [--scheme complementary|analogous|triadic|split_complementary|monochrome]\n"
@@ -341,7 +342,7 @@ int main(int argc, char** argv) {
         std::string environment;
         bool yes = false;
         for (std::size_t i = 2; i < args.size(); ++i) {
-            if (args[i] == "--yes" && !yes) yes = true;
+            if ((args[i] == "--yes" || args[i] == "-y") && !yes) yes = true;
             else if (args[i] == "--for" && environment.empty() && i + 1 < args.size() && !args[i + 1].empty()) environment = args[++i];
             else return usage();
         }
