@@ -18,7 +18,11 @@
 #   tools/check-includes --staged   the same, run when compiler files are committed
 
 set -u
-cd "$(git rev-parse --show-toplevel)/compiler" || exit 1
+# A hook in a worktree is given GIT_DIR, and git then takes the folder it's run from
+# as the top of the tree; naming the tree keeps paths relative to compiler/.
+root=$(git rev-parse --show-toplevel) || exit 1
+export GIT_WORK_TREE="$root"
+cd "$root/compiler" || exit 1
 
 if [ "${1:-}" = "--staged" ] && [ -z "$(git diff --cached --name-only --diff-filter=ACMR -- .)" ]; then
 	exit 0
