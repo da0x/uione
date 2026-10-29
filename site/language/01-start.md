@@ -70,6 +70,13 @@ To deploy, add a `project` block saying where the project runs (its domain, its
 Firebase project and its region), and `one build` also writes the Pulumi program and
 `build/deploy`, which deploys everything to your Google Cloud project.
 
+`one deploy notes` builds the project and runs its deploy, which shows what will
+change and asks first. Given a folder holding several projects, like a site in
+`site/` and the apps it serves in `apps/`, `one deploy .` finds each one, builds them
+all, and deploys none unless every one builds; then it deploys them one at a time,
+each asking first, and stops at the first that isn't deployed. `--yes` deploys without
+asking.
+
 A project with nothing for a backend to do, with no entities, commands or views and
 no sign-in, like a company's front page, gets no `api/`. Its deploy is only the web
 app on Firebase Hosting and its domain, with no database and no Cloud Run, so its

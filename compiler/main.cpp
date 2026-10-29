@@ -12,6 +12,10 @@
 //                                        its apps: the web app served by Vite, or the
 //                                        desktop or terminal app; the first it targets
 //                                        unless --target names another
+//   one deploy <folder> [--yes]          build every project under a folder, itself
+//                                        one or holding several, then deploy each by
+//                                        its build/deploy, which asks before it changes
+//                                        anything unless --yes
 //   one upgrade <project>                bring a project to this compiler: apply the
 //                                        fixes its mistakes come with, and record this
 //                                        version in its project block
@@ -46,6 +50,7 @@ namespace {
         std::cerr << "usage: one check <path>...\n"
                      "       one build <project> [--out <folder>] [--for <environment>] [--target <target>[,<target>...]]\n"
                      "       one run <project> [--for <environment>] [--target <target>]\n"
+                     "       one deploy <folder> [--for <environment>] [--yes]\n"
                      "       one show <file>:<line>[-<line>]\n"
                      "       one upgrade <project>\n"
                      "       one theme [--seed <number>] [--scheme complementary|analogous|triadic|split_complementary|monochrome]\n"
@@ -163,6 +168,20 @@ namespace {
         return out;
     }
 
+    // A step run to its end, said first; whether it succeeded.
+    bool perform(const one::driver::step& s) {
+        say(s);
+        std::cout.flush();
+        pid_t child = fork();
+        if (child == 0) {
+            if (chdir(s.folder.c_str()) == 0) execvp(s.command[0].c_str(), arguments(s).data());
+            std::cerr << "one: couldn't run " << s.command[0] << "\n";
+            _exit(127);
+        }
+        int status = 0;
+        return child >= 0 && waitpid(child, &status, 0) >= 0 && WIFEXITED(status) && WEXITSTATUS(status) == 0;
+    }
+
     // Builds the project, then each step of running its app in turn, and then the app
     // in this process's place, so closing it, or Ctrl+C, is closing the app.
     int run(const std::string& project, const std::string& environment, const std::string& target) {
@@ -175,15 +194,7 @@ namespace {
             return 1;
         }
         for (const auto& s : plan.before) {
-            say(s);
-            pid_t child = fork();
-            if (child == 0) {
-                if (chdir(s.folder.c_str()) == 0) execvp(s.command[0].c_str(), arguments(s).data());
-                std::cerr << "one: couldn't run " << s.command[0] << "\n";
-                _exit(127);
-            }
-            int status = 0;
-            if (child < 0 || waitpid(child, &status, 0) < 0 || !WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+            if (!perform(s)) {
                 std::cerr << "one: " << s.command[0] << " failed, so the " << plan.target << " app wasn't started\n";
                 return 1;
             }
@@ -193,6 +204,36 @@ namespace {
         if (chdir(plan.app.folder.c_str()) == 0) execvp(plan.app.command[0].c_str(), arguments(plan.app).data());
         std::cerr << "one: couldn't start " << plan.app.command[0] << "\n";
         return 1;
+    }
+
+    // Builds every project under the folder, each by this compiler run again so a
+    // project for another version is handed to it, and deploys none unless all of
+    // them build; then deploys each in turn, stopping at the first that fails.
+    int deploy(const std::string& root, const std::string& self, const std::string& environment, bool yes) {
+        auto plan = one::driver::plan_deploy(root, self, environment, yes);
+        if (!plan.refusal.empty()) {
+            std::cerr << "one: " << plan.refusal << "\n";
+            return 1;
+        }
+        for (const auto& s : plan.builds) {
+            if (!perform(s)) {
+                std::cerr << "one: " << s.command[2] << " didn't build, so nothing was deployed\n";
+                return 1;
+            }
+        }
+        for (std::size_t i = 0; i < plan.deploys.size(); ++i) {
+            if (!perform(plan.deploys[i])) {
+                std::cerr << "one: " << plan.builds[i].command[2] << " wasn't deployed";
+                if (i + 1 < plan.deploys.size()) {
+                    std::cerr << ", so the rest weren't either:";
+                    for (std::size_t rest = i + 1; rest < plan.builds.size(); ++rest) std::cerr << " " << plan.builds[rest].command[2];
+                }
+                std::cerr << "\n";
+                return 1;
+            }
+        }
+        std::cout << "deployed " << plan.deploys.size() << (plan.deploys.size() == 1 ? " project\n" : " projects\n");
+        return 0;
     }
 
     int upgrade(const std::string& project) {
@@ -296,5 +337,15 @@ int main(int argc, char** argv) {
         return run(args[1], environment, target);
     }
     if (args.size() == 2 && args[0] == "show") return show(args[1]);
+    if (args.size() >= 2 && args[0] == "deploy") {
+        std::string environment;
+        bool yes = false;
+        for (std::size_t i = 2; i < args.size(); ++i) {
+            if (args[i] == "--yes" && !yes) yes = true;
+            else if (args[i] == "--for" && environment.empty() && i + 1 < args.size() && !args[i + 1].empty()) environment = args[++i];
+            else return usage();
+        }
+        return deploy(args[1], argv[0], environment, yes);
+    }
     return usage();
 }
