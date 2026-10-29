@@ -20,9 +20,9 @@ import "@fontsource-variable/fraunces/wght.css";
 import "@fontsource-variable/fraunces/wght-italic.css";
 import { Children, Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { CSSProperties, ReactNode } from "react";
-import type { ButtonProps, CardsProps, ChoiceProps, ColorPickerProps, ComponentSet, OptionsProps, SliderProps } from "@uione/react";
-import { Surface, mosaicTile } from "@uione/react";
+import type { CSSProperties, KeyboardEvent as KeyDown, ReactNode } from "react";
+import type { ButtonProps, CardGroup, CardsProps, ChoiceProps, ColorPickerProps, ComponentSet, DatedTimelineProps, OptionsProps, SliderProps } from "@uione/react";
+import { Surface, mosaicRows, mosaicTile } from "@uione/react";
 import { highlight, highlightCodeBlocks } from "./highlight.js";
 import { MarkdownField, MarkdownText } from "./markdown.js";
 import { nameStyles, setCodeDisplay, tabWidths, useCodeDisplay } from "./display.js";
@@ -562,6 +562,63 @@ function Mosaic({ status, cards }: CardsProps) {
       </div>
       {cards.length === 0 && <p className="text-sm text-muted">{status === "loading" ? "Loading…" : "Nothing here yet."}</p>}
     </div>
+  );
+}
+
+// Cards under a heading for each year, month or day, in the text's face, strong and
+// larger, a mosaic's tiles starting again under each. A part out of view isn't laid out
+// or drawn, its height reckoned from how many it holds, so the page scrolls to any
+// heading at once however many are above it.
+function Grouped({ status, cards, mosaic, groups }: CardsProps & { groups: CardGroup[] }) {
+  return (
+    <div className="@container flex flex-col gap-8" aria-busy={status === "loading"}>
+      {groups.map((group) => {
+        const rows = mosaic ? mosaicRows(group.count) : Math.ceil(group.count / 3);
+        const tall = mosaic ? `calc(${rows} * 33cqw + 3rem)` : `calc(${rows} * 22rem + 3rem)`;
+        return (
+          <section key={group.id} aria-labelledby={group.id} className="flex flex-col gap-3" style={{ contentVisibility: "auto", containIntrinsicSize: `auto ${tall}` }}>
+            <h2 id={group.id} className="scroll-mt-4 font-sans text-2xl font-semibold tracking-normal">
+              {group.title}
+            </h2>
+            <radix.Cards status={status} cards={cards.slice(group.first, group.first + group.count)} mosaic={mosaic} />
+          </section>
+        );
+      })}
+      {groups.length === 0 && <p className="text-sm text-muted">{status === "loading" ? "Loading…" : "Nothing here yet."}</p>}
+    </div>
+  );
+}
+
+// The years and months of cards under headings by a date: each year strong with how
+// many it holds, its months under it with theirs, the one in view marked in the accent.
+// Each is a button; the arrows, j and k, Home and End move between them.
+function DatedTimeline({ entries }: DatedTimelineProps) {
+  const moved = (event: KeyDown<HTMLUListElement>) => {
+    const buttons = [...event.currentTarget.querySelectorAll("button")];
+    const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    const to = { ArrowDown: at + 1, j: at + 1, ArrowUp: at - 1, k: at - 1, Home: 0, End: buttons.length - 1 }[event.key];
+    if (to === undefined || event.altKey || event.ctrlKey || event.metaKey) return;
+    event.preventDefault();
+    buttons[Math.max(0, Math.min(buttons.length - 1, to))]?.focus();
+  };
+  return (
+    <ul className="flex flex-col text-sm" onKeyDown={moved}>
+      {entries.map((entry, i) => (
+        <li key={entry.key} className={entry.year && i > 0 ? "mt-2" : undefined}>
+          <button
+            type="button"
+            aria-current={entry.current || undefined}
+            onClick={entry.onChoose}
+            className={`flex w-full items-center justify-between gap-3 rounded-control py-1.5 text-left focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-hidden ${
+              entry.year ? "px-2 font-semibold" : "pr-2 pl-5"
+            } ${entry.current ? "bg-accent/15 text-ink" : "hover:bg-sunken"}`}
+          >
+            {entry.title}
+            <span className="text-muted tabular-nums">{entry.count}</span>
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -1184,7 +1241,7 @@ export const radix: ComponentSet = {
       {source && <img src={source} alt="" className={`h-full w-full ${fit ? "object-contain" : "object-cover"}`} />}
     </div>
   ),
-  Cards: ({ status, cards, mosaic }) => (mosaic ? <Mosaic status={status} cards={cards} /> : (
+  Cards: ({ status, cards, mosaic, groups }) => groups ? <Grouped status={status} cards={cards} mosaic={mosaic} groups={groups} /> : (mosaic ? <Mosaic status={status} cards={cards} /> : (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy={status === "loading"}>
       {cards.map((card) => {
         const total = card.tally?.reduce((n, part) => n + part.count, 0) ?? 0;
@@ -2555,6 +2612,7 @@ export const radix: ComponentSet = {
     </div>
   ),
 
+  DatedTimeline,
   Timeline: ({ status, entries, title, fresh }) => {
     if (status !== "live" || entries.length === 0) return null;
     const changes = (

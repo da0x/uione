@@ -385,10 +385,93 @@ export interface CanvasCard {
 // that open it filtered.
 // As a mosaic, each card is its picture, filling the tile mosaicTile gives it, what
 // else it shows over its foot.
+// Under headings by a date, each group is its heading and the cards from its first, a
+// mosaic's tiles starting again under each, its heading's id what a timeline scrolls to.
 export interface CardsProps {
   status: ViewStatus;
   cards: Card[];
   mosaic?: boolean;
+  groups?: CardGroup[];
+}
+export interface CardGroup {
+  id: string;
+  title: string;
+  first: number;
+  count: number;
+}
+
+// A list ordered by a date, under a heading for each year, month or day of it as it's
+// read here, in the list's own order: each heading's key, like 2026-10, what it says,
+// like October 2026, and the rows under it, from the first. Rows that don't say a date
+// are under one heading saying so. Worked out in one pass. The same as the desktop's.
+export type TimeUnit = "year" | "month" | "day";
+export interface TimeGroup {
+  key: string;
+  title: string;
+  first: number;
+  count: number;
+}
+const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+export function timeGroups(rows: Record<string, unknown>[], field: string, unit: TimeUnit): TimeGroup[] {
+  const out: TimeGroup[] = [];
+  const pad = (n: number, width = 2) => String(n).padStart(width, "0");
+  rows.forEach((row, i) => {
+    const said = row[field];
+    const when = said instanceof Date ? said : typeof said === "string" && said ? new Date(said) : undefined;
+    let key = "none";
+    let title = "No date";
+    if (when && !Number.isNaN(when.getTime())) {
+      // A day alone is that day wherever it's read, as a calendar places it.
+      const alone = when.getUTCHours() === 0 && when.getUTCMinutes() === 0 && when.getUTCSeconds() === 0 && when.getUTCMilliseconds() === 0;
+      const y = alone ? when.getUTCFullYear() : when.getFullYear();
+      const m = (alone ? when.getUTCMonth() : when.getMonth()) + 1;
+      const d = alone ? when.getUTCDate() : when.getDate();
+      if (unit === "year") (key = pad(y, 4)), (title = String(y));
+      else if (unit === "month") (key = `${pad(y, 4)}-${pad(m)}`), (title = `${monthNames[m - 1]} ${y}`);
+      else (key = `${pad(y, 4)}-${pad(m)}-${pad(d)}`), (title = `${monthNames[m - 1]} ${d}, ${y}`);
+    }
+    const last = out[out.length - 1];
+    if (last && last.key === key) last.count += 1;
+    else out.push({ key, title, first: i, count: 1 });
+  });
+  return out;
+}
+// What a timeline of them lists: each year, with how many it holds, and under it its
+// months, each with its own count, as the list orders them; only the years when the
+// headings are a year's. A month of headings by day is all of its days.
+export interface DatedEntry {
+  key: string;
+  title: string;
+  count: number;
+  year: boolean;
+}
+export function yearsOf(groups: TimeGroup[], unit: TimeUnit): DatedEntry[] {
+  const out: DatedEntry[] = [];
+  let yearAt = -1;
+  for (const g of groups) {
+    const year = g.key === "none" ? "none" : g.key.slice(0, 4);
+    if (yearAt < 0 || out[yearAt]!.key !== year) {
+      yearAt = out.length;
+      out.push({ key: year, title: year === "none" ? g.title : year, count: 0, year: true });
+    }
+    out[yearAt]!.count += g.count;
+    if (unit === "year" || year === "none") continue;
+    const month = g.key.slice(0, 7);
+    if (out[out.length - 1]!.key !== month) out.push({ key: month, title: monthNames[Number(month.slice(5)) - 1]!, count: 0, year: false });
+    out[out.length - 1]!.count += g.count;
+  }
+  return out;
+}
+// Whether a heading's key is in what a timeline's entry names, as 2026-10-12 is in
+// 2026-10 and in 2026.
+export function within(key: string, entry: string): boolean {
+  return key.startsWith(entry) && (key.length === entry.length || key[entry.length] === "-");
+}
+
+// The years and months of cards under headings by a date, each with how many it holds:
+// the one in view marked, and one chosen scrolls the cards to its heading.
+export interface DatedTimelineProps {
+  entries: (DatedEntry & { current: boolean; onChoose: () => void })[];
 }
 
 // Where the nth card of a mosaic goes, in its columns and rows, counted from 0: every 8
@@ -878,6 +961,7 @@ export interface ComponentSet {
   Details: ComponentType<DetailsProps>;
   Thread: ComponentType<ThreadProps>;
   Timeline: ComponentType<TimelineProps>;
+  DatedTimeline: ComponentType<DatedTimelineProps>;
   Find: ComponentType<FindProps>;
   Form: ComponentType<FormProps>;
   Button: ComponentType<ButtonProps>;

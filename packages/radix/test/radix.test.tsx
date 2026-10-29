@@ -13,6 +13,7 @@ import {
   Cards,
   Code,
   Command,
+  DatedTimeline,
   Confirm,
   Form,
   Hero,
@@ -225,6 +226,43 @@ describe("cards", () => {
     expect([tiles[4]!.style.gridColumn, tiles[4]!.style.gridRow]).toEqual(["3 / span 1", "3 / span 2"]);
     const title = within(tiles[0]!).getByRole("heading", { name: "Clipping 1" });
     expect(title.className.split(" ")).toContain("font-sans");
+  });
+});
+
+describe("cards under a heading for each month", () => {
+  it("head each in the text's face, strong and larger, each part laid out only near the view, and a timeline of them moved through by its keys", async () => {
+    const source = memorySource();
+    const at = (m: number, d: number) => new Date(Date.UTC(2026, m - 1, d, 12));
+    source.set("studio::room_page", { pieces: [at(10, 30), at(10, 2), at(9, 14), at(9, 3), at(9, 1)].map((when, i) => ({ id: `c${i + 1}`, name: `Clipping ${i + 1}`, picture_date: when })) });
+    function Pieces() {
+      const page = useView("studio::room_page");
+      return (
+        <>
+          <Cards view={page} list="pieces" columns={{ name: "Name" }} mosaic by={{ field: "picture_date", unit: "month" }} name="clippings" />
+          <DatedTimeline view={page} list="pieces" by="picture_date" cards="clippings" />
+        </>
+      );
+    }
+    renderScreen(() => <Pieces />, source);
+    const september = screen.getByRole("region", { name: "September 2026" });
+    const heading = within(september).getByRole("heading", { name: "September 2026" });
+    expect(heading.className.split(" ")).toEqual(expect.arrayContaining(["font-sans", "font-semibold", "text-2xl"]));
+    expect(september.style.contentVisibility).toBe("auto");
+    const tiles = within(september).getAllByRole("article");
+    expect([tiles[0]!.style.gridColumn, tiles[0]!.style.gridRow]).toEqual(["1 / span 1", "1 / span 2"]);
+    // The timeline's, not the page's own.
+    const buttons = screen.getAllByRole("button").filter((b) => /\d/.test(b.textContent ?? ""));
+    expect(buttons.map((b) => b.textContent)).toEqual(["20265", "October2", "September3"]);
+    // jsdom lays nothing out, so every heading is at the top, and the last is the one in view.
+    await waitFor(() => expect(buttons.map((b) => b.getAttribute("aria-current"))).toEqual([null, null, "true"]));
+    expect(buttons[2]!.className).toContain("bg-accent/15");
+    expect(buttons[1]!.className).toContain("focus-visible:ring-2");
+    buttons[0]!.focus();
+    fireEvent.keyDown(buttons[0]!, { key: "j" });
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(buttons[2]);
+    fireEvent.keyDown(document.activeElement!, { key: "Home" });
+    expect(document.activeElement).toBe(buttons[0]);
   });
 });
 

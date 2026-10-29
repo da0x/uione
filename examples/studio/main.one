@@ -187,8 +187,8 @@ namespace studio at / {
 
 	view clippings_page {
 		clippings = each clipping {
-			order by created_at descending
-			name  image  picture_bytes
+			order by picture_date descending
+			name  image  picture_bytes  picture_date
 		}
 		// How many there are, and how many bytes they take together.
 		total = count(clippings)
@@ -302,7 +302,8 @@ namespace studio at / {
 	}
 
 	// Pictures kept to go on posters, each one dropped, pasted or chosen made a clipping,
-	// set edge to edge as a mosaic.
+	// set edge to edge as a mosaic under the month each was taken, newest first, and
+	// the years and months beside it, each scrolled to.
 	screen "Clippings" /clippings {
 		layout workspace
 		bar {
@@ -315,12 +316,15 @@ namespace studio at / {
 			}
 		}
 		main {
-			cards clippings_page.clippings mosaic link /clippings/:clipping {
+			cards clippings_page.clippings mosaic by picture_date month link /clippings/:clipping {
 				picture image
 				name
 				add clipping::create
 				paste
 			}
+		}
+		side {
+			timeline clippings_page.clippings by picture_date
 		}
 		status {
 			text "{clippings_page.total} clippings, {clippings_page.size} bytes"

@@ -15,6 +15,8 @@
 terminal cards.picture
 terminal cards.paste
 terminal cards.mosaic
+terminal cards.by
+terminal timeline.by
 terminal picture
 terminal picture.alone
 terminal collage.copy

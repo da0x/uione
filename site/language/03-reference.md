@@ -2078,6 +2078,15 @@ form step::update "Save" {
   left blank. Only what's in view is drawn, each picture read as it comes near.
   A mosaic says which picture each card shows, and its pictures fill their tiles,
   so its picture line says `fill` or nothing. A terminal draws no pictures, so it can't set one.
+  `cards clippings_page.clippings mosaic by picture_date month` sets the cards under
+  a heading for each month of a date their list holds, like "October 2026", in the
+  text's face, strong and larger. `year` and `day` head each year, or each day, like
+  "October 12, 2026", instead. The list is ordered by that date first, so each month's
+  cards are together, and they're newest first when it's `descending`. A mosaic's
+  tiles start again under each heading. A time is the day it is where it's read, and a
+  day alone is that day anywhere. Cards with no date are under "No date". The
+  headings are worked out once each time the list changes. A terminal has no
+  headings among cards, so it can't set them.
   `add clipping::create` and `paste` make a record of each picture dropped on the
   cards, or pasted or chosen by the screen's `paste` and `add pictures` buttons,
   which go to cards that say `paste` when the screen has no collage or paper that
@@ -2748,6 +2757,15 @@ screen / landing constellation {
   none, like a person who has never looked, is before everything. `on open dispatch
   reader::create` runs a command once the timeline opens with something new in it,
   like one saying they've looked; nothing runs when nothing is new.
+- `timeline clippings_page.clippings by picture_date` lists the years and months of the
+  screen's cards under headings by that date instead, each with how many it holds:
+  "2026 214", then "October 31", "September 40". Under headings by year it lists only
+  the years. The month at the top of the cards as they scroll is marked. Click one,
+  or press Enter on it, and the cards scroll so its first heading is at the top. The
+  arrows, `j` and `k`, Home and End move between them. It's placed from the counts above
+  it, so a jump to the oldest month of twenty thousand cards draws none of those
+  above. A screen with a timeline by a date has cards under headings by it, usually in
+  its `side`. A terminal can't scroll cards to a heading, so it has no such timeline.
 - Buttons one after another on a screen sit together in a row, a command's own and
   the ones that open forms alike, and so do links one after another, outside a
   hero or a section, which lay out their own.

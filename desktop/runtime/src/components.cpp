@@ -15,6 +15,7 @@
 #include <chrono>
 #include <filesystem>
 #include <format>
+#include <span>
 #include <thread>
 
 namespace one::desktop::runtime {
@@ -44,25 +45,37 @@ namespace one::desktop::runtime {
 			}
 		}
 
+		// What a mosaic's tile says over its picture's foot: its title, strong, and what
+		// else it shows, light on a shade of the picture, so it reads on any.
+		desktop::view caption_of(const card_model& card) {
+			const auto& t = current_theme();
+			auto title = t.strong();
+			title.color = color::hex(0xffffff);
+			auto rest = t.quiet();
+			rest.color = color::hex(0xffffff, 0.85f);
+			std::vector<desktop::view> said;
+			said.push_back(desktop::text(card.title, title));
+			for (const auto& d : card.details) said.push_back(desktop::text(d, rest));
+			return desktop::column(std::move(said)).spacing(2).padding(edges(10, 12)).background({.fill = color::hex(0x000000, 0.45f), .radius = t.corners});
+		}
+
 		// Cards as a mosaic of their pictures, each in the tile mosaic_tile gives it, filling
 		// it, cropped around its middle, what else it shows over its foot. Its columns share
 		// its width, less the gaps between, and its rows are as tall as a column is wide, so
 		// it scales as it's resized and no card changes tile. Only what's in view, and as
-		// much again around it, is drawn, each picture read as it comes into view. One tile
-		// is chosen, ringed while the mosaic has the keyboard: moved with the arrows, to the
-		// card before or after, or to the one above or below, and opened with Enter.
+		// much again around it, is drawn, each picture read and each caption made as it
+		// comes into view, so a mosaic of many thousands is placed from its count alone. One
+		// tile is chosen, ringed while the mosaic has the keyboard: moved with the arrows, to
+		// the card before or after, or to the one above or below, and opened with Enter.
 		class mosaic_element : public element {
 		public:
 			struct tile {
 				std::string picture, address;
+				card_model card;
 			};
 			// `start` is the address of the tile chosen first, like the card a page was left
 			// from, brought into view as it's first placed.
-			mosaic_element(page& p, std::vector<tile> tiles, std::vector<desktop::view> captions, const std::string& start) : p_(p), tiles_(std::move(tiles)) {
-				for (auto& c : captions) {
-					children.push_back(std::move(c).take());
-					children.back()->parent = this;
-				}
+			mosaic_element(page& p, std::vector<tile> tiles, const std::string& start) : p_(p), tiles_(std::move(tiles)), captions_(tiles_.size()) {
 				for (std::size_t i = 0; i < tiles_.size(); ++i) {
 					if (!start.empty() && tiles_[i].address == start) chosen_ = i, shown_ = false;
 				}
@@ -76,14 +89,11 @@ namespace one::desktop::runtime {
 			}
 
 			void place_content(const rect& area) override {
-				frames_.clear();
+				frames_.resize(tiles_.size());
 				float side = column(area.width);
 				for (std::size_t i = 0; i < tiles_.size(); ++i) {
 					auto at = mosaic_tile(i);
-					rect f{area.x + at.column * (side + gap), area.y + at.row * (side + gap), at.columns * side + (at.columns - 1) * gap, at.rows * side + (at.rows - 1) * gap};
-					frames_.push_back(f);
-					extent e = children[i]->measure(f.width - 2 * inset);
-					children[i]->place({f.x + inset, f.y + f.height - e.height - inset, f.width - 2 * inset, e.height});
+					frames_[i] = {area.x + at.column * (side + gap), area.y + at.row * (side + gap), at.columns * side + (at.columns - 1) * gap, at.rows * side + (at.rows - 1) * gap};
 				}
 				if (!std::exchange(shown_, true) && chosen_ < frames_.size()) reveal(frames_[chosen_]);
 			}
@@ -92,9 +102,11 @@ namespace one::desktop::runtime {
 				const auto& t = current_theme();
 				rect view = c.clipped().value_or(frame);
 				rect near{view.x, view.y - view.height, view.width, view.height * 3};
-				for (std::size_t i = 0; i < tiles_.size(); ++i) {
+				// The tiles from the first block that reaches what's near, as they're placed in order.
+				for (std::size_t i = first_near(near); i < tiles_.size(); ++i) {
 					const rect& f = frames_[i];
-					if (f.y > near.y + near.height || f.y + f.height < near.y) continue;
+					if (f.y > near.y + near.height) break;
+					if (f.y + f.height < near.y) continue;
 					c.box(f, {.fill = t.sunken, .radius = t.corners});
 					if (auto shown = picture_soon(p_, tiles_[i].picture, 640); shown && *shown) {
 						float pw = static_cast<float>(shown->width()), ph = static_cast<float>(shown->height());
@@ -102,7 +114,14 @@ namespace one::desktop::runtime {
 						float fw = f.width / (pw * s), fh = f.height / (ph * s);
 						c.picture(*shown, f, {(1 - fw) / 2, (1 - fh) / 2, fw, fh}, 1, t.corners);
 					}
-					children[i]->paint(c);
+					auto& caption = captions_[i];
+					if (!caption) {
+						caption = caption_of(tiles_[i].card).take();
+						caption->parent = this;
+					}
+					extent e = caption->measure(f.width - 2 * inset);
+					caption->place({f.x + inset, f.y + f.height - e.height - inset, f.width - 2 * inset, e.height});
+					caption->paint(c);
 				}
 				if (shows_focus() && chosen_ < frames_.size()) c.box(frames_[chosen_].inset(-2), {.border = t.accent, .border_width = 2, .radius = t.corners + 2});
 			}
@@ -163,6 +182,15 @@ namespace one::desktop::runtime {
 			static constexpr float gap = 16;   // as plain cards are apart
 			static constexpr float inset = 8;  // a caption from its tile's edges
 			static float column(float width) { return std::max(0.f, (width - 2 * gap) / 3); }
+			// The first tile of the first block of four whose rows reach what's near.
+			std::size_t first_near(const rect& near) const {
+				if (frames_.empty()) return 0;
+				float side = column(frame.width - padding.left - padding.right);
+				float top = frames_[0].y;
+				if (side <= 0 || near.y <= top) return 0;
+				auto block = static_cast<std::size_t>((near.y - top) / (2 * (side + gap)));
+				return std::min(tiles_.size(), block > 0 ? (block - 1) * 4 : 0);
+			}
 			// The tile above or below the chosen one nearest it across.
 			std::optional<std::size_t> nearest(bool below) const {
 				if (chosen_ >= frames_.size()) return std::nullopt;
@@ -181,24 +209,211 @@ namespace one::desktop::runtime {
 			}
 			page& p_;
 			std::vector<tile> tiles_;
+			std::vector<std::unique_ptr<element>> captions_;  // each made as it first comes into view
 			std::vector<rect> frames_;
 			std::size_t chosen_ = 0;
 			bool shown_ = true;  // whether the chosen tile was brought into view, as it's first placed
 		};
 
-		// What a mosaic's tile says over its picture's foot: its title, strong, and what
-		// else it shows, light on a shade of the picture, so it reads on any.
-		desktop::view caption_of(const card_model& card) {
-			const auto& t = current_theme();
-			auto title = t.strong();
-			title.color = color::hex(0xffffff);
-			auto rest = t.quiet();
-			rest.color = color::hex(0xffffff, 0.85f);
-			std::vector<desktop::view> said;
-			said.push_back(desktop::text(card.title, title));
-			for (const auto& d : card.details) said.push_back(desktop::text(d, rest));
-			return desktop::column(std::move(said)).spacing(2).padding(edges(10, 12)).background({.fill = color::hex(0x000000, 0.45f), .radius = t.corners});
+		// What cards under headings by a date and their timeline share, by the cards' key:
+		// the heading in view, as the cards are drawn, and how to scroll the cards to one.
+		struct dated_link {
+			std::string in_view;
+			std::function<void(const std::string&)> jump;
+			const void* jumper = nullptr;  // what jump scrolls, while it's there
+		};
+		std::shared_ptr<dated_link> dated_link_of(page& p, const std::string& key) {
+			return p.kept<std::shared_ptr<dated_link>>("dated " + key, std::make_shared<dated_link>()).peek();
 		}
+
+		// Cards under a heading for each year, month or day, each heading and what's under
+		// it in turn: only those near what's in view are drawn, the heading at the top of
+		// it is told to the timeline, and the timeline scrolls one to the top, from where
+		// it's placed, without anything above it drawn.
+		class dated_element : public element {
+		public:
+			dated_element(std::vector<std::string> keys, std::shared_ptr<dated_link> link) : keys_(std::move(keys)), link_(std::move(link)) {
+				link_->jumper = this;
+				link_->jump = [this](const std::string& entry) { jump(entry); };
+			}
+			~dated_element() override {
+				if (link_->jumper != this) return;
+				link_->jumper = nullptr;
+				link_->jump = {};
+			}
+
+			extent measure_content(float width) override {
+				float height = 0;
+				for (std::size_t i = 0; i < children.size(); ++i) height += children[i]->measure(width).height + (i % 2 == 0 ? 12 : i + 1 < children.size() ? 32 : 0);
+				return {width, height};
+			}
+
+			void place_content(const rect& area) override {
+				float y = area.y;
+				for (std::size_t i = 0; i < children.size(); ++i) {
+					float h = children[i]->measure(area.width).height;
+					children[i]->place({area.x, y, area.width, h});
+					y += h + (i % 2 == 0 ? 12 : 32);
+				}
+				if (!wanted_.empty()) jump(std::exchange(wanted_, ""));
+			}
+
+			void paint_content(canvas& c) override {
+				rect view = c.clipped().value_or(frame);
+				for (auto& child : children) {
+					if (child->frame.y > view.y + 2 * view.height || child->frame.bottom() < view.y - view.height) continue;
+					child->paint(c);
+				}
+				// The heading whose part reaches the top of the view, a little under it.
+				std::string seen = keys_.empty() ? "" : keys_.front();
+				for (std::size_t i = 0; i < keys_.size(); ++i) {
+					if (children[2 * i]->frame.y <= view.y + 24) seen = keys_[i];
+				}
+				if (link_->in_view != seen) {
+					link_->in_view = seen;
+					desktop::runtime::redraw();
+				}
+			}
+
+			void adopt(element& before) override {
+				element::adopt(before);
+				wanted_ = static_cast<dated_element&>(before).wanted_;
+			}
+
+		private:
+			// The first heading in what a timeline's entry names brought to the top of what
+			// scrolls it; once they're placed, if they aren't yet.
+			void jump(const std::string& entry) {
+				for (std::size_t i = 0; i < keys_.size(); ++i) {
+					if (!within(keys_[i], entry)) continue;
+					element& heading = *children[2 * i];
+					if (heading.frame.width <= 0) {
+						wanted_ = entry;
+						return;
+					}
+					link_->in_view = keys_[i];
+					heading.bring_to_top();
+					desktop::runtime::redraw();
+					return;
+				}
+			}
+			std::vector<std::string> keys_;
+			std::shared_ptr<dated_link> link_;
+			std::string wanted_;
+		};
+
+		// A timeline of cards set under headings by a date: each year, strong, with how
+		// many it holds, and under it each of its months with its own count, the one in
+		// view marked as the cards are scrolled. One is chosen, ringed while it has the
+		// keyboard, moved with the arrows, j and k, Home and End, and a click or Enter on
+		// one scrolls the cards so its heading is at the top.
+		class dated_timeline_element : public element {
+		public:
+			dated_timeline_element(std::vector<dated_entry> entries, std::shared_ptr<dated_link> link) : entries_(std::move(entries)), link_(std::move(link)) {
+				const auto& t = current_theme();
+				auto year = t.strong();
+				auto month = t.body();
+				auto count = t.quiet();
+				for (const auto& e : entries_) {
+					std::vector<desktop::view> said;
+					said.push_back(desktop::text(e.title, e.year ? year : month).grow());
+					said.push_back(desktop::text(std::to_string(e.count), count));
+					children.push_back(desktop::row(std::move(said)).spacing(12).padding(edges(0, e.year ? 8 : 20)).take());
+					children.back()->parent = this;
+				}
+			}
+
+			bool focusable() const override { return !entries_.empty(); }
+
+			extent measure_content(float width) override {
+				float height = 0;
+				for (std::size_t i = 0; i < children.size(); ++i) height += row_height(i, width);
+				return {width, height};
+			}
+
+			void place_content(const rect& area) override {
+				float y = area.y;
+				for (std::size_t i = 0; i < children.size(); ++i) {
+					float h = row_height(i, area.width);
+					float inside = children[i]->measure(area.width).height;
+					float above = entries_[i].year && i > 0 ? 10 : 0;
+					children[i]->place({area.x, y + above + (h - above - inside) / 2, area.width, inside});
+					y += h;
+				}
+			}
+
+			void paint_content(canvas& c) override {
+				const auto& t = current_theme();
+				for (std::size_t i = 0; i < children.size(); ++i) {
+					rect r = row_of(i);
+					if (in_view(i)) {
+						auto marked = t.accent;
+						marked.alpha = 0.14f;
+						c.box(r, {.fill = marked, .radius = t.corners});
+					}
+					children[i]->paint(c);
+					if (shows_focus() && i == chosen_) c.box(r, {.border = t.accent, .border_width = 2, .radius = t.corners});
+				}
+			}
+
+			bool handle_key(const key_event& e) override {
+				if (e.alt || e.control || e.super || entries_.empty()) return false;
+				if (e.is(keys::enter) || e.is(keys::keypad_enter)) {
+					go(chosen_);
+					return true;
+				}
+				std::size_t to = chosen_;
+				if (e.is(keys::down) || e.is('j')) to = std::min(chosen_ + 1, entries_.size() - 1);
+				else if (e.is(keys::up) || e.is('k')) to = chosen_ == 0 ? 0 : chosen_ - 1;
+				else if (e.is(keys::home)) to = 0;
+				else if (e.is(keys::end)) to = entries_.size() - 1;
+				else return false;
+				chosen_ = to;
+				reveal(row_of(chosen_));
+				return true;
+			}
+
+			bool click(point at) override {
+				for (std::size_t i = 0; i < children.size(); ++i) {
+					if (!row_of(i).contains(at)) continue;
+					chosen_ = i;
+					go(i);
+					return true;
+				}
+				return false;
+			}
+
+			void adopt(element& before) override {
+				element::adopt(before);
+				auto& was = static_cast<dated_timeline_element&>(before);
+				if (was.chosen_ >= was.entries_.size()) return;
+				for (std::size_t i = 0; i < entries_.size(); ++i) {
+					if (entries_[i].key == was.entries_[was.chosen_].key) chosen_ = i;
+				}
+			}
+
+			element* hit(point at) override { return frame.contains(at) ? this : nullptr; }
+			one::desktop::cursor cursor() const override { return cursor::pointer; }
+
+		private:
+			float row_height(std::size_t i, float width) { return std::max(30.f, children[i]->measure(width).height + 10) + (entries_[i].year && i > 0 ? 10 : 0); }
+			rect row_of(std::size_t i) const {
+				const rect& r = children[i]->frame;
+				return {frame.x + padding.left, r.y - 5, frame.width - padding.left - padding.right, r.height + 10};
+			}
+			// Marked while its heading, or one of its days', is the one at the top of the
+			// cards: a month, or a year when that's all it lists.
+			bool in_view(std::size_t i) const {
+				if (!within(link_->in_view, entries_[i].key)) return false;
+				return !entries_[i].year || i + 1 == entries_.size() || entries_[i + 1].year;
+			}
+			void go(std::size_t i) {
+				if (link_->jump) link_->jump(entries_[i].key);
+			}
+			std::vector<dated_entry> entries_;
+			std::shared_ptr<dated_link> link_;
+			std::size_t chosen_ = 0;
+		};
 
 		// The short line over a front page's title, small and in the accent.
 		desktop::view overline(std::string words) {
@@ -547,6 +762,10 @@ namespace one::desktop::runtime {
 		                        .background({.fill = t.sunken, .radius = t.corners}));
 	}
 
+	namespace {
+		desktop::view cards_shown(page& p, const cards_spec& spec, std::vector<card_model> made, std::span<const value> rows);
+	}
+
 	desktop::view cards(page& p, cards_spec spec) {
 		// Pictures dropped, pasted or chosen, each a record, and a drop target even while
 		// there are none.
@@ -564,84 +783,116 @@ namespace one::desktop::runtime {
 		if (spec.hide_empty && v.status != status::ready) return {};
 		if (auto instead = not_shown(v)) return std::move(*instead);
 		const auto& t = current_theme();
-		if (spec.mosaic) {
-			std::vector<mosaic_element::tile> tiles;
-			std::vector<desktop::view> captions;
-			auto rows = rows_of(v, spec.list);
-			for (const auto& card : cards_of(p, spec)) {
-				std::string picture;
-				for (const auto& row : rows) {
-					if (row["id"].as_string() == card.id) picture = row[spec.picture].as_string();
-				}
-				tiles.push_back({picture, card.address});
-				captions.push_back(caption_of(card));
+		// Under a heading for each year, month or day, each part of the list as cards of its own.
+		if (!spec.by.empty()) {
+			const auto& rows = rows_of(v, spec.list);
+			auto groups = time_groups(rows, spec.by, spec.unit);
+			if (groups.empty()) return spec.hide_empty ? desktop::view() : !spec.add.empty() ? quiet("Nothing here yet. Drop pictures here to add them.").padding(edges(48, 0)) : quiet("Nothing here yet.");
+			auto all = cards_of(p, spec);
+			auto heading = t.strong();
+			heading.size = 22, heading.line_height = 1.25f;
+			std::vector<std::string> keys;
+			std::vector<desktop::view> parts;
+			for (const auto& g : groups) {
+				keys.push_back(g.key);
+				parts.push_back(desktop::text(g.title, heading));
+				std::vector<card_model> held(std::make_move_iterator(all.begin() + static_cast<std::ptrdiff_t>(g.first)), std::make_move_iterator(all.begin() + static_cast<std::ptrdiff_t>(g.first + g.count)));
+				parts.push_back(cards_shown(p, spec, std::move(held), std::span(rows).subspan(g.first, g.count)));
 			}
-			if (tiles.empty()) return spec.hide_empty ? desktop::view() : !spec.add.empty() ? quiet("Nothing here yet. Drop pictures here to add them.").padding(edges(48, 0)) : quiet("Nothing here yet.");
+			auto made = std::make_unique<dated_element>(std::move(keys), dated_link_of(p, spec.key));
+			for (auto& part : parts) {
+				made->children.push_back(std::move(part).take());
+				made->children.back()->parent = made.get();
+			}
+			return desktop::view(std::move(made));
+		}
+		auto all = cards_of(p, spec);
+		if (all.empty()) return spec.hide_empty ? desktop::view() : !spec.add.empty() ? quiet("Nothing here yet. Drop pictures here to add them.").padding(edges(48, 0)) : quiet("Nothing here yet.");
+		return cards_shown(p, spec, std::move(all), rows_of(v, spec.list));
+	}
+
+	namespace {
+
+		// Cards made of the rows they show, in turn: as a mosaic, a gallery of pictures, or a list.
+		desktop::view cards_shown(page& p, const cards_spec& spec, std::vector<card_model> made, std::span<const value> rows) {
+			const auto& t = current_theme();
+			if (spec.mosaic) {
+				std::vector<mosaic_element::tile> tiles;
+				for (std::size_t i = 0; i < made.size(); ++i) {
+					std::string address = made[i].address;
+					tiles.push_back({rows[i][spec.picture].as_string(), std::move(address), std::move(made[i])});
+				}
+				// The card the page was left from, when it's back, chosen and given the keyboard.
+				const std::string& left = p.where_left().opened;
+				bool back = std::ranges::any_of(tiles, [&](const auto& tile) { return !left.empty() && tile.address == left; });
+				desktop::view shown(std::make_unique<mosaic_element>(p, std::move(tiles), left));
+				return back ? std::move(shown).autofocus() : std::move(shown);
+			}
+			std::vector<desktop::list_row> shown;
+			std::map<std::string, std::string> opens;
+			for (std::size_t i = 0; i < made.size(); ++i) {
+				const card_model& card = made[i];
+				opens[card.id] = card.address;
+				std::vector<desktop::view> inside;
+				if (!spec.picture.empty()) inside.push_back(picture_of(p, rows[i][spec.picture].as_string(), spec.fit, 180, 640));
+				// Its title in the text's face, strong, as large as a small heading: a card's name,
+				// not a heading over the page's parts.
+				auto title = t.strong();
+				title.size = 18, title.line_height = 1.3f;
+				if (card.tags.empty()) {
+					inside.push_back(desktop::text(card.title, title));
+				} else {
+					// Its tags beside its title, like Private.
+					std::vector<desktop::view> top;
+					top.push_back(desktop::text(card.title, title).grow());
+					for (const auto& tag : card.tags) top.push_back(desktop::text(tag, t.quiet()).padding(edges(1, 8)).background({.fill = t.sunken, .border = t.line, .border_width = 1, .radius = 9}));
+					inside.push_back(desktop::row(std::move(top)).spacing(6));
+				}
+				for (const auto& d : card.details) inside.push_back(quiet(d));
+				if (spec.tally) inside.push_back(quiet(card.tally));
+				if (!card.filters.empty()) {
+					std::vector<desktop::view> filters;
+					for (const auto& f : card.filters) {
+						auto look = t.quiet();
+						look.color = f.color.empty() ? t.accent : section_color(f.color);
+						filters.push_back(desktop::link(f.label, [&p, address = f.address] { p.open(address); }, look));
+					}
+					inside.push_back(desktop::row(std::move(filters)).spacing(14));
+				}
+				shown.push_back({card.id, desktop::column(std::move(inside)).spacing(8).padding(16).background({.fill = t.surface, .border = t.line, .border_width = 1, .radius = t.corners})});
+			}
 			// The card the page was left from, when it's back, chosen and given the keyboard.
 			const std::string& left = p.where_left().opened;
-			bool back = std::ranges::any_of(tiles, [&](const auto& tile) { return !left.empty() && tile.address == left; });
-			desktop::view shown(std::make_unique<mosaic_element>(p, std::move(tiles), std::move(captions), left));
-			return back ? std::move(shown).autofocus() : std::move(shown);
-		}
-		std::vector<desktop::list_row> shown;
-		std::map<std::string, std::string> opens;
-		for (const auto& card : cards_of(p, spec)) {
-			opens[card.id] = card.address;
-			std::vector<desktop::view> inside;
+			std::string start;
+			for (const auto& [id, address] : opens) {
+				if (!left.empty() && address == left) start = id;
+			}
+			// Cards with pictures are a gallery, side by side as many as fit, as on the web.
 			if (!spec.picture.empty()) {
-				for (const auto& row : rows_of(v, spec.list)) {
-					if (row["id"].as_string() == card.id) inside.push_back(picture_of(p, row[spec.picture].as_string(), spec.fit, 180, 640));
+				std::vector<desktop::view> tiles;
+				for (auto& card : shown) {
+					std::string address = opens[card.key];
+					auto tile = desktop::pressable(std::move(card.shown), [&p, address] {
+						if (!address.empty()) p.open(address);
+					}).width(280);
+					tiles.push_back(card.key == start ? std::move(tile).autofocus().brought_into_view() : std::move(tile));
 				}
+				return desktop::flow(std::move(tiles)).spacing(16);
 			}
-			// Its title in the text's face, strong, as large as a small heading: a card's name,
-			// not a heading over the page's parts.
-			auto title = t.strong();
-			title.size = 18, title.line_height = 1.3f;
-			if (card.tags.empty()) {
-				inside.push_back(desktop::text(card.title, title));
-			} else {
-				// Its tags beside its title, like Private.
-				std::vector<desktop::view> top;
-				top.push_back(desktop::text(card.title, title).grow());
-				for (const auto& tag : card.tags) top.push_back(desktop::text(tag, t.quiet()).padding(edges(1, 8)).background({.fill = t.sunken, .border = t.line, .border_width = 1, .radius = 9}));
-				inside.push_back(desktop::row(std::move(top)).spacing(6));
-			}
-			for (const auto& d : card.details) inside.push_back(quiet(d));
-			if (spec.tally) inside.push_back(quiet(card.tally));
-			if (!card.filters.empty()) {
-				std::vector<desktop::view> filters;
-				for (const auto& f : card.filters) {
-					auto look = t.quiet();
-					look.color = f.color.empty() ? t.accent : section_color(f.color);
-					filters.push_back(desktop::link(f.label, [&p, address = f.address] { p.open(address); }, look));
-				}
-				inside.push_back(desktop::row(std::move(filters)).spacing(14));
-			}
-			shown.push_back({card.id, desktop::column(std::move(inside)).spacing(8).padding(16).background({.fill = t.surface, .border = t.line, .border_width = 1, .radius = t.corners})});
+			auto listed = desktop::list(std::move(shown), {.on_open = [&p, opens](const std::string& id) {
+				if (auto found = opens.find(id); found != opens.end() && !found->second.empty()) p.open(found->second);
+			}, .start = start});
+			return start.empty() ? std::move(listed) : std::move(listed).autofocus();
 		}
-		if (shown.empty()) return spec.hide_empty ? desktop::view() : !spec.add.empty() ? quiet("Nothing here yet. Drop pictures here to add them.").padding(edges(48, 0)) : quiet("Nothing here yet.");
-		// The card the page was left from, when it's back, chosen and given the keyboard.
-		const std::string& left = p.where_left().opened;
-		std::string start;
-		for (const auto& [id, address] : opens) {
-			if (!left.empty() && address == left) start = id;
-		}
-		// Cards with pictures are a gallery, side by side as many as fit, as on the web.
-		if (!spec.picture.empty()) {
-			std::vector<desktop::view> tiles;
-			for (auto& card : shown) {
-				std::string address = opens[card.key];
-				auto tile = desktop::pressable(std::move(card.shown), [&p, address] {
-					if (!address.empty()) p.open(address);
-				}).width(280);
-				tiles.push_back(card.key == start ? std::move(tile).autofocus().brought_into_view() : std::move(tile));
-			}
-			return desktop::flow(std::move(tiles)).spacing(16);
-		}
-		auto listed = desktop::list(std::move(shown), {.on_open = [&p, opens](const std::string& id) {
-			if (auto found = opens.find(id); found != opens.end() && !found->second.empty()) p.open(found->second);
-		}, .start = start});
-		return start.empty() ? std::move(listed) : std::move(listed).autofocus();
+
+	}  // namespace
+
+	desktop::view dated_timeline(page& p, dated_timeline_spec spec) {
+		const view_state& v = *spec.view;
+		if (v.status != status::ready) return {};
+		auto entries = years_of(time_groups(rows_of(v, spec.list), spec.by, spec.unit), spec.unit);
+		if (entries.empty()) return {};
+		return desktop::view(std::make_unique<dated_timeline_element>(std::move(entries), dated_link_of(p, spec.cards)));
 	}
 
 	desktop::view details(page&, state<view_state> from, std::vector<screens::column> fields, std::map<std::string, std::vector<screens::option>> choices,

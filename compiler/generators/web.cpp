@@ -1239,6 +1239,13 @@ namespace one::generators {
                         sources += (sources.empty() ? "" : ", ") + one + ", by: [" + by + "] }";
                     }
                     out.line("<Find label=" + web_detail::js_string(box->label) + " sources={[" + sources + "]} />");
+                } else if (auto* timeline = std::get_if<language::timeline_item>(&item.node); timeline && timeline->by) {
+                    // The years and months of the cards it goes with, which it scrolls.
+                    parts.components.insert("DatedTimeline");
+                    const language::cards_item* c = language::dated_cards(screen, *timeline);
+                    out.line("<DatedTimeline view={" + view_variable(parts, full_view(ns, timeline->view.text())) + "} list=" + web_detail::js_string(timeline->list) +
+                             " by=" + web_detail::js_string(*timeline->by) + " unit=" + web_detail::js_string(c ? c->by_unit : "month") + " cards=" +
+                             web_detail::js_string(c ? cards_key(*c) : "") + " />");
                 } else if (auto* timeline = std::get_if<language::timeline_item>(&item.node)) {
                     parts.components.insert("Timeline");
                     std::string line = "<Timeline view={" + view_variable(parts, full_view(ns, timeline->view.text())) + "} list=" + web_detail::js_string(timeline->list);
@@ -2473,6 +2480,7 @@ namespace one::generators {
             if (cards.hide_empty) line += " hideEmpty";
             if (cards.picture) line += " picture=" + web_detail::js_string(*cards.picture) + (cards.picture_sits == "fit" ? " fit" : "");
             if (cards.mosaic) line += " mosaic";
+            if (cards.by) line += " by={{ field: " + web_detail::js_string(*cards.by) + ", unit: " + web_detail::js_string(cards.by_unit) + " }}";
             if (cards.link) {
                 std::string target = full_route(ns, *cards.link);
                 line += " link=" + web_detail::js_string(target);
@@ -2515,6 +2523,8 @@ namespace one::generators {
                 for (const auto& [part, field] : language::cards_fields(cards, *entity)) fields += (fields.empty() ? "" : ", ") + part + ": " + web_detail::js_string(field);
                 line += " paste={{ command: " + web_detail::js_string(full_command(ns, *cards.add)) + ", fields: { " + fields + " }" + (given.empty() ? "" : ", given: { " + given + " }") +
                         " }} name=" + web_detail::js_string(cards_key(cards));
+            } else if (cards.by) {
+                line += " name=" + web_detail::js_string(cards_key(cards));
             }
             out.line(line + " />");
         }

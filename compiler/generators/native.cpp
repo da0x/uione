@@ -1303,6 +1303,7 @@ namespace one::generators {
             if (c.hide_empty) out += ", .hide_empty = true";
             if (c.picture) out += ", .picture = " + str(*c.picture) + (c.picture_sits == "fit" ? ", .fit = true" : "");
             if (c.mosaic) out += ", .mosaic = true";
+            if (c.by) out += ", .by = " + str(*c.by) + ", .unit = time_unit::" + c.by_unit;
             // Pictures dropped, pasted or chosen, each a record made by its add, given what the
             // address names, each part in the field it's kept in.
             if (c.paste && c.add && c.picture && entity) {
@@ -1311,6 +1312,8 @@ namespace one::generators {
                 out += ", .add = " + str(screens::full_command(ns, *c.add)) + ", .fields = {" + fields + "}";
                 if (!given.empty()) out += ", .given = {" + given + "}";
                 out += ", .key = " + str(cards_key(c)) + ", .paste = true";
+            } else if (c.by) {
+                out += ", .key = " + str(cards_key(c));
             }
             return out + "})";
         }
@@ -1456,7 +1459,12 @@ namespace one::generators {
                    (c_list.empty() ? "" : ", {" + c_list + "}") + ")";
         }
 
-        std::string timeline(screen_parts& parts, const std::string& ns, const language::timeline_item& t) {
+        std::string timeline(screen_parts& parts, const std::string& ns, const language::timeline_item& t, const std::vector<language::screen_item>& screen) {
+            if (t.by) {
+                const language::cards_item* c = language::dated_cards(screen, t);
+                return "dated_timeline(p, {.view = " + view_variable(parts, screens::full_view(ns, t.view.text())) + ", .list = " + str(t.list) + ", .by = " + str(*t.by) +
+                       ", .unit = time_unit::" + (c ? c->by_unit : std::string("month")) + ", .cards = " + str(c ? cards_key(*c) : "") + "})";
+            }
             std::string out = "timeline(p, {.view = " + view_variable(parts, screens::full_view(ns, t.view.text())) + ", .list = " + str(t.list);
             std::vector<std::string> subject;
             auto columns = model_.listed_columns(ns, t.view.text(), t.list);
@@ -1847,7 +1855,7 @@ namespace one::generators {
                     }
                     code = "find(p, " + str(f->label) + ", {" + sources + "})";
                 } else if (auto* t = std::get_if<language::timeline_item>(&item.node)) {
-                    code = timeline(parts, ns, *t);
+                    code = timeline(parts, ns, *t, screen);
                 } else if (auto* t = std::get_if<language::table_item>(&item.node)) {
                     code = table(parts, ns, *t, screen);
                 } else if (auto* g = std::get_if<language::grid_item>(&item.node)) {

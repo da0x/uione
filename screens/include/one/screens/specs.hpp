@@ -723,6 +723,8 @@ namespace one::screens {
 		std::vector<std::pair<std::string, std::string>> query;
 		std::string color = "";
 	};
+	// What a list ordered by a date is set under a heading for: each year, month or day.
+	enum class time_unit { year, month, day };
 	struct cards_spec {
 		state<view_state> view;
 		std::string list;
@@ -737,14 +739,27 @@ namespace one::screens {
 		std::string picture = "";                                 // a file field's picture on top of each card
 		bool fit = false;                                         // all of it fitted in, or filling its place
 		bool mosaic = false;                                      // set as a mosaic of pictures, each filling its tile (see mosaic_tile)
+		// Under a heading for each year, month or day of a date field the list is ordered by.
+		std::string by = "";
+		time_unit unit = time_unit::month;
 		// Pictures dropped, pasted or chosen, each a record made by `add`, given what's
 		// `given` besides, its file in the picture and the rest of its parts, its own size,
 		// its file's name, bytes and date, each in the field `fields` says.
 		std::string add = "";
 		std::map<std::string, std::string> fields = {};
 		std::map<std::string, std::string> given = {};
-		std::string key = "";  // what the screen's paste and add pictures buttons name them by
+		std::string key = "";  // what the screen's paste and add pictures buttons name them by, and its timeline
 		bool paste = false;
+	};
+
+	// The years and months of cards set under headings by a date, each with how many it
+	// holds: the one in view marked, and one chosen scrolled to the top of the cards.
+	struct dated_timeline_spec {
+		state<view_state> view;
+		std::string list;
+		std::string by;
+		time_unit unit = time_unit::month;
+		std::string cards;  // the key of the cards it goes with
 	};
 
 	// Stepping from a record's screen to the one before or after it in a list of them,

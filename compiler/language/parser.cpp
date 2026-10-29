@@ -2908,6 +2908,14 @@ namespace one::language {
                     cards.mosaic_where = advance().where;
                     cards.mosaic = true;
                 }
+                // by picture_date month: under a heading for each month of the date.
+                if (at_word("by")) {
+                    advance();
+                    cards.by_where = peek().where;
+                    cards.by = expect(token_kind::identifier, "the date the list is ordered by, like by picture_date month").text;
+                    if (!at_word("year") && !at_word("month") && !at_word("day")) fail_expecting("year, month or day, as in by picture_date month");
+                    cards.by_unit = advance().text;
+                }
                 if (at_word("link")) {
                     advance();
                     cards.link_where = peek().where;
@@ -3111,7 +3119,15 @@ namespace one::language {
                     end_line();
                     return {where, thread_item{std::move(view), std::move(list)}};
                 }
-                timeline_item timeline{std::move(view), std::move(list), std::nullopt, {}, std::nullopt, nullptr, {}, std::nullopt, {}};
+                timeline_item timeline{std::move(view), std::move(list), std::nullopt, {}, std::nullopt, nullptr, {}, std::nullopt, {}, std::nullopt, {}};
+                // timeline library.photos by picture_date: the years and months of the cards by it.
+                if (at_word("by")) {
+                    advance();
+                    timeline.by_where = peek().where;
+                    timeline.by = expect(token_kind::identifier, "the date its cards are under headings by, like by picture_date").text;
+                    end_line();
+                    return {where, std::move(timeline)};
+                }
                 if (at(token_kind::string)) timeline.title = advance().text;
                 if (at_word("link")) {
                     advance();

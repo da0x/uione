@@ -994,8 +994,10 @@ TEST("cards as a mosaic: every eight two blocks of a tall tile, a wide one and t
 	// Wider, it's the same tiles, larger, as tall as they are wide.
 	auto root = drawn(nav).take();
 	root->place({0, 0, 900, 1500});
+	// The mosaic: what takes the keyboard and grows as it widens, with nothing made inside
+	// it until it's drawn.
 	std::function<one::desktop::element*(one::desktop::element&)> find = [&](one::desktop::element& e) -> one::desktop::element* {
-		if (e.children.size() == 11) return &e;
+		if (e.focusable() && e.children.empty() && e.measure(1200).height > e.measure(600).height) return &e;
 		for (auto& child : e.children) {
 			if (auto* in = find(*child)) return in;
 		}
@@ -1004,21 +1006,24 @@ TEST("cards as a mosaic: every eight two blocks of a tall tile, a wide one and t
 	one::desktop::element* mosaic = find(*root);
 	CHECK(mosaic != nullptr);
 	if (mosaic) {
-		auto captions = [&](float width) {
-			mosaic->place({0, 0, width, mosaic->measure(width).height});
-			std::vector<one::desktop::rect> at;
-			for (auto& c : mosaic->children) at.push_back(c->frame);
-			return at;
-		};
-		auto narrow = captions(600), wide = captions(1200);
 		CHECK(mosaic->measure(1200).height > mosaic->measure(600).height);
-		for (std::size_t i = 0; i < 11; ++i) CHECK(wide[i].width > narrow[i].width);
-		// The first card's tile is tall at the left, the second's wide at the top right.
-		CHECK(narrow[0].x < narrow[1].x);
-		CHECK(narrow[1].width > narrow[2].width * 2);
-		// A click on a tile opens its card.
-		CHECK(mosaic->click({wide[10].x + 4, wide[10].y - 40}));
-		CHECK(nav.current().address() == "/clippings/c11");
+		mosaic->place({0, 0, 1200, mosaic->measure(1200).height});
+		float side = (1200 - 32) / 3.f;
+		auto opened = [&](float x, float y) {
+			nav.open("/");
+			auto again = drawn(nav).take();
+			again->place({0, 0, 1200, 1500});
+			auto* m = find(*again);
+			m->place({0, 0, 1200, m->measure(1200).height});
+			CHECK(m->click({x, y}));
+			return nav.current().address();
+		};
+		// The first card's tile is tall at the left, the second's wide at the top right,
+		// and the eleventh's the third of the second eight.
+		CHECK(opened(10, side * 1.5f) == "/clippings/c1");
+		CHECK(opened(side + 26, 10) == "/clippings/c2");
+		auto eleventh = mosaic_tile(10);
+		CHECK(opened(eleventh.column * (side + 16) + 10, eleventh.row * (side + 16) + 10) == "/clippings/c11");
 	}
 	std::filesystem::remove_all(folder);
 }
@@ -3734,4 +3739,146 @@ TEST("a picture alone is zoomed by Ctrl and its keys, its zoom buttons and a pin
 	CHECK(nav.current().address() == "/posters/p1");
 	CHECK(looked(window.w).at(450, 40) == black);
 	std::filesystem::remove_all(folder);
+}
+
+namespace {
+
+	// Posters taken a few hours apart, newest first, from the end of October 2026 back,
+	// under a heading for each month as a mosaic, and the years and months beside them.
+	site dated_archive(int count, memory_source& data) {
+		using namespace std::chrono;
+		list posters;
+		auto newest = sys_days(year(2026) / October / day(30)) + hours(12);
+		for (int i = 0; i < count; ++i) {
+			value taken;
+			taken.type = value::kind::time;
+			taken.time.seconds = duration_cast<seconds>((newest - hours(30) * i).time_since_epoch()).count();
+			posters.push_back(value(fields{{"id", std::format("p{}", i)}, {"title", std::format("Poster {}", i)}, {"image", ""}, {"taken", taken}}));
+		}
+		data.set("studio::archive", "", value(fields{{"posters", posters}}));
+		site s{.name = "studio", .id = "org.uione.runtime-tests"};
+		s.look = tested_theme();
+		s.screens.push_back({"Posters", "/posters", "", [](page& p) {
+			                     auto archive = p.view("studio::archive");
+			                     return workspace(p, region{"main", items(cards(p, {.view = archive, .list = "posters", .columns = {{"title", "Title"}}, .link = "/posters/:poster", .picture = "image", .mosaic = true, .by = "taken", .unit = time_unit::month, .key = "/posters cards"}))},
+			                                      region{"side", items(dated_timeline(p, {.view = archive, .list = "posters", .by = "taken", .unit = time_unit::month, .cards = "/posters cards"}))});
+		                     }});
+		s.screens.push_back({"Poster", "/posters/:poster", "", [](page&) { return items(); }});
+		return s;
+	}
+
+	// What's drawn in a window: each mosaic, taking the keyboard with nothing made inside
+	// it until it's drawn, and the timeline, a row for each year and month.
+	void each_dated(one::desktop::element& e, std::vector<one::desktop::element*>& mosaics, one::desktop::element*& timeline) {
+		if (e.focusable() && e.children.empty()) mosaics.push_back(&e);
+		else if (e.focusable() && e.children.size() > 1) timeline = &e;
+		for (auto& child : e.children) each_dated(*child, mosaics, timeline);
+	}
+
+}  // namespace
+
+TEST("cards by a date are under a heading for each month, a mosaic's tiles starting again under each, and their timeline marks the month in view and scrolls one chosen to the top") {
+	use_time_zone("UTC");
+	memory_source data;
+	// 30 hours apart from October 30: 24 in October, 24 in September, 25 in August, the rest in July.
+	auto s = dated_archive(80, data);
+	navigator nav(s, data);
+	nav.open("/posters");
+	kept_window window(nav);
+	window.w.size = {1200, 700};
+	window.update();
+	(void)looked(window.w);
+	window.update();
+	std::vector<one::desktop::element*> mosaics;
+	one::desktop::element* timeline = nullptr;
+	each_dated(*window.w.root, mosaics, timeline);
+	CHECK(mosaics.size() == 4);
+	CHECK(timeline != nullptr);
+	if (mosaics.size() != 4 || !timeline) return;
+	CHECK(timeline->children.size() == 5);  // 2026, then each of its four months
+	// Each month's mosaic starts with its own tall tile, so its height is its count's.
+	float side = (mosaics[1]->frame.width - 32) / 3;
+	CHECK(std::abs(mosaics[0]->frame.height - (mosaic_rows(24) * side + (mosaic_rows(24) - 1) * 16)) < 2);
+	CHECK(std::abs(mosaics[2]->frame.height - (mosaic_rows(25) * side + (mosaic_rows(25) - 1) * 16)) < 2);
+	float top = mosaics[0]->frame.y;
+	auto marked = [&](std::size_t row) {
+		auto seen = looked(window.w);
+		auto& r = timeline->children[row]->frame;
+		return seen.at(static_cast<int>(r.x) + 2, static_cast<int>(r.y + r.height / 2)) != seen.at(static_cast<int>(timeline->frame.x) + 2, static_cast<int>(timeline->frame.bottom()) + 20);
+	};
+	// October is in view at first.
+	CHECK(marked(1));
+	CHECK(!marked(2));
+	// Chosen with the keyboard, August is scrolled to the top, and marked.
+	window.update();
+	each_dated(*window.w.root, mosaics = {}, timeline);
+	timeline->handle_key({.symbol = one::desktop::keys::down, .text = ""});
+	timeline->handle_key({.symbol = one::desktop::keys::down, .text = ""});
+	timeline->handle_key({.symbol = one::desktop::keys::down, .text = ""});
+	timeline->handle_key({.symbol = one::desktop::keys::enter, .text = ""});
+	window.update();
+	(void)looked(window.w);
+	window.update();
+	each_dated(*window.w.root, mosaics = {}, timeline);
+	CHECK_SAYING(std::abs(mosaics[2]->frame.y - top) < 30, std::format("{} {}", mosaics[2]->frame.y, top));
+	CHECK(marked(3));
+	CHECK(!marked(1));
+	// Scrolled back by the wheel to September, it's marked in its place.
+	one::desktop::deliver_wheel(window.w, {300, 300}, 0, -(mosaics[2]->frame.y - mosaics[1]->frame.y) + 10);
+	window.update();
+	(void)looked(window.w);
+	window.update();
+	each_dated(*window.w.root, mosaics = {}, timeline);
+	CHECK(marked(2));
+	CHECK(!marked(3));
+	// A click on one: July's heading at the top.
+	auto& july = timeline->children[4]->frame;
+	window.click({july.x + july.width / 2, july.y + july.height / 2});
+	window.update();
+	(void)looked(window.w);
+	window.update();
+	each_dated(*window.w.root, mosaics = {}, timeline);
+	CHECK_SAYING(std::abs(mosaics[3]->frame.y - top) < 30, std::format("{} {}", mosaics[3]->frame.y, top));
+	CHECK(marked(4));
+}
+
+TEST("twenty thousand cards by a date have their months worked out, and the oldest scrolled to, in a moment, drawing only what's in view") {
+	use_time_zone("UTC");
+	memory_source data;
+	auto s = dated_archive(20000, data);
+	navigator nav(s, data);
+	nav.open("/posters");
+	using clock = std::chrono::steady_clock;
+	auto rows = rows_of(nav.current().view("studio::archive").peek(), "posters");
+	auto started = clock::now();
+	auto entries = years_of(time_groups(rows, "taken", time_unit::month), time_unit::month);
+	auto months = clock::now() - started;
+	kept_window window(nav);
+	window.w.size = {1200, 700};
+	started = clock::now();
+	started = clock::now();
+	window.update();
+	(void)looked(window.w);
+	auto first = clock::now() - started;
+	std::vector<one::desktop::element*> mosaics;
+	one::desktop::element* timeline = nullptr;
+	each_dated(*window.w.root, mosaics, timeline);
+	CHECK(timeline != nullptr);
+	if (!timeline) return;
+	CHECK(timeline->children.size() == entries.size());
+	float top = mosaics.front()->frame.y;
+	started = clock::now();
+	// Scrolled, not built again, as the window does when it's chosen.
+	timeline->handle_key({.symbol = one::desktop::keys::end, .text = ""});
+	timeline->handle_key({.symbol = one::desktop::keys::enter, .text = ""});
+	one::desktop::bring_up_to_date(window.w);
+	(void)looked(window.w);
+	auto jump = clock::now() - started;
+	each_dated(*window.w.root, mosaics = {}, timeline);
+	CHECK_SAYING(std::abs(mosaics.back()->frame.y - top) < 30, std::format("{} {}", mosaics.back()->frame.y, top));
+	auto ms = [](auto d) { return std::chrono::duration<double, std::milli>(d).count(); };
+	std::fprintf(stderr, "    20000 cards in %zu months: months worked out in %.1f ms, first drawn in %.1f ms, the oldest month scrolled to and drawn in %.1f ms\n", mosaics.size(), ms(months), ms(first), ms(jump));
+	// Unoptimized and checked as these tests are built, a good deal slower than an app.
+	CHECK(ms(months) < 200);
+	CHECK(ms(jump) < 500);
 }

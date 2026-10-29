@@ -427,6 +427,30 @@ namespace one::screens {
 	// around, nor while the list isn't there or doesn't hold the one shown.
 	std::string stepped_to(page_base& p, const step_spec& spec);
 
+	// A list ordered by a date, under a heading for each year, month or day of it as
+	// it's read here, in the list's own order: each heading's key, like 2026-10, what
+	// it says, like October 2026, and the rows under it, from the first, so a mosaic
+	// starts each from its own first tile. Rows that don't say a date are under one
+	// heading saying so. Worked out once each time the list changes, in one pass. The
+	// same as the web's.
+	struct time_group {
+		std::string key, title;
+		std::size_t first = 0, count = 0;
+	};
+	std::vector<time_group> time_groups(const std::vector<value>& rows, const std::string& field, time_unit by);
+	// What a timeline of them lists: each year, with how many it holds, and under it
+	// its months, each with its own count, as the list orders them; only the years when
+	// the headings are a year's. A month of headings by day is all of its days.
+	struct dated_entry {
+		std::string key, title;
+		std::size_t count = 0;
+		bool year = false;
+	};
+	std::vector<dated_entry> years_of(const std::vector<time_group>& groups, time_unit by);
+	// Whether a heading's key is in what a timeline's entry names, as 2026-10-12 is in
+	// 2026-10 and in 2026.
+	bool within(const std::string& key, const std::string& entry);
+
 	// Where the nth card of a mosaic goes, in its columns and rows: every 8 cards are
 	// two blocks, one above the other, each three equal columns by two rows as tall as
 	// a column is wide. In the first, its first card is a column wide and both rows

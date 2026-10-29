@@ -3555,6 +3555,13 @@ namespace one::language {
                     }
                 } else if (auto* thread = std::get_if<thread_item>(&item.node)) {
                     verify_listing(ns, thread->view, thread->list, route, false, {"body", "author.name"});
+                } else if (auto* timeline = std::get_if<timeline_item>(&item.node); timeline && timeline->by) {
+                    // The years and months of cards under headings by the same date, on this screen.
+                    snake(timeline->view);
+                    bool beside = std::ranges::any_of(cards_, [&](const cards_item* c) { return c->view.text() == timeline->view.text() && c->list.value_or("") == timeline->list && c->by == timeline->by; });
+                    if (!beside) {
+                        error(timeline->by_where, "a timeline by " + *timeline->by + " goes with the cards it scrolls, so this screen has cards " + timeline->view.text() + "." + timeline->list + " by " + *timeline->by + " month");
+                    }
                 } else if (auto* timeline = std::get_if<timeline_item>(&item.node)) {
                     verify_listing(ns, timeline->view, timeline->list, route, true, {"field", "before", "after", "created_at"});
                     if (timeline->link && !routes_.contains(full_route(ns, *timeline->link))) {
@@ -4601,6 +4608,21 @@ namespace one::language {
             // A mosaic is its cards' pictures, each filling its tile.
             if (cards.mosaic && !cards.picture) error(cards.mosaic_where, "a mosaic is its cards' pictures, so its cards say which file each shows, like picture image");
             else if (cards.mosaic && cards.picture_sits == "fit") error(cards.picture_where, "a mosaic's pictures each fill their tile, so its picture line says fill, or nothing");
+            // Under a heading for each month of a date: one the rows hold, which the list is
+            // ordered by first, so each month's cards are together.
+            if (cards.by) {
+                const entity_declaration* card = listed_entity(ns, *rows);
+                const field* f = card ? find_field(*card, *cards.by) : nullptr;
+                std::string order;
+                if (!rows->order.empty()) {
+                    const expression& first = *rows->order.front();
+                    auto* reversed = std::get_if<unary_expression>(&first.node);
+                    order = written(reversed ? *reversed->operand : first);
+                }
+                if (card && f && (!f->type || f->type->text() != "date" || f->list)) error(cards.by_where, "cards are under headings by a date, and " + card->name + "." + *cards.by + " isn't one");
+                else if (!in_rows(*rows, *cards.by)) error(cards.by_where, "view " + cards.view.text() + " has no " + *cards.by + (cards.list ? " in its " + *cards.list : "") + "; add it to the list's block");
+                else if (order != *cards.by) error(cards.by_where, "cards under headings by " + *cards.by + " keep each " + cards.by_unit + " together, so their list is ordered by it first, like order by " + *cards.by + " descending");
+            }
             // Pictures dropped, pasted or chosen, each made a record by add, the file in its
             // picture, and each other part in the field named like it, of the part's type.
             if (cards.add || cards.paste) {

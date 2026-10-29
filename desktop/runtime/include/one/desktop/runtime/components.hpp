@@ -266,6 +266,8 @@ namespace one::desktop::runtime {
 	std::optional<desktop::picture> picture_soon(page& p, const std::string& kept, int longest = 0);
 	desktop::view pipeline_board(page& p, pipeline_spec spec);
 	desktop::view cards(page& p, cards_spec spec);
+	// The years and months of cards under headings by a date, as dated_timeline_spec says.
+	desktop::view dated_timeline(page& p, dated_timeline_spec spec);
 	// How far something is in its stage, like 2 of 5: a thin bar in the accent and its count.
 	desktop::view progress_bar(double step, double steps, float width);
 	// chart agent_page.stats.cpu "CPU" percent: a run of numbers over time, large.

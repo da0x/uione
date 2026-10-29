@@ -929,6 +929,76 @@ TEST_CASE("cards set as a mosaic of their pictures say so to both runtimes, and 
     CHECK(messages(fitted) == std::vector<std::string>{"31: a mosaic's pictures each fill their tile, so its picture line says fill, or nothing"});
 }
 
+TEST_CASE("cards under a heading for each month of a date, and the timeline of their years and months beside them, say so to both runtimes, and say why when they can't be") {
+    const std::string pieces = R"(namespace studio at / {
+	entity poster {
+		title  text
+	}
+
+	entity clipping {
+		poster        poster  required
+		name          text
+		image         file
+		picture_date  date
+	}
+
+	view poster_page per poster {
+		title
+		clippings = each clipping in poster {
+			order by picture_date descending
+			name  image  picture_date
+		}
+	}
+
+	screen "Clipping" /posters/:poster/clippings/:clipping {
+	}
+
+	screen "Clippings" /posters/:poster {
+		cards poster_page.clippings mosaic by picture_date month link /posters/:poster/clippings/:clipping {
+			picture image
+			name
+		}
+		timeline poster_page.clippings by picture_date
+	}
+}
+)";
+    CHECK(messages(project + pieces).empty());
+    auto files = built(project + pieces);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    CHECK(web.find(R"(mosaic by={{ field: "picture_date", unit: "month" }} link="/posters/:poster/clippings/:clipping")") != std::string::npos);
+    CHECK(web.find(R"(name="/posters/:poster cards clippings" />)") != std::string::npos);
+    CHECK(web.find(R"(<DatedTimeline view={posterPage} list="clippings" by="picture_date" unit="month" cards="/posters/:poster cards clippings" />)") != std::string::npos);
+    CHECK(native.find(R"(.mosaic = true, .by = "picture_date", .unit = time_unit::month, .key = "/posters/:poster cards clippings"})") != std::string::npos);
+    CHECK(native.find(R"(dated_timeline(p, {.view = poster_page, .list = "clippings", .by = "picture_date", .unit = time_unit::month, .cards = "/posters/:poster cards clippings"}))") != std::string::npos);
+    // By year or day as well.
+    std::string daily = project + pieces;
+    daily.replace(daily.find("picture_date month"), std::string("picture_date month").size(), "picture_date day");
+    CHECK(messages(daily).empty());
+    CHECK(built(daily)["desktop/src/screens/main.cpp"].find(".unit = time_unit::day") != std::string::npos);
+    // Under headings by a date the list is ordered by first, so each month's are together.
+    std::string unordered = project + pieces;
+    unordered.replace(unordered.find("order by picture_date descending"), std::string("order by picture_date descending").size(), "order by name");
+    CHECK(messages(unordered) == std::vector<std::string>{"32: cards under headings by picture_date keep each month together, so their list is ordered by it first, like order by picture_date descending"});
+    std::string named = project + pieces;
+    named.replace(named.find("mosaic by picture_date"), std::string("mosaic by picture_date").size(), "mosaic by name");
+    named.replace(named.find("order by picture_date"), std::string("order by picture_date").size(), "order by name");
+    CHECK(messages(named)[0] == "32: cards are under headings by a date, and clipping.name isn't one");
+    // A timeline by a date goes with cards under headings by it.
+    std::string lone = project + pieces;
+    lone.replace(lone.find(" by picture_date month"), std::string(" by picture_date month").size(), "");
+    CHECK(messages(lone) == std::vector<std::string>{"36: a timeline by picture_date goes with the cards it scrolls, so this screen has cards poster_page.clippings by picture_date month"});
+    // Year, month or day.
+    std::string week = project + pieces;
+    week.replace(week.find("picture_date month"), std::string("picture_date month").size(), "picture_date week");
+    diagnostics said;
+    (void)parse("main.one", week, said);
+    CHECK(!said.empty());
+    if (!said.empty()) CHECK(said.front().message == "expected year, month or day, as in by picture_date month, found 'week'");
+}
+
 TEST_CASE("a record's screen steps to the one before or after it in a list's own order, in its place, and says why when it can't") {
     const std::string pieces = R"(namespace studio at / {
 	entity poster {

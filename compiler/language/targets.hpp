@@ -152,6 +152,7 @@ namespace one::language {
         drawn_by{"cards.picture", "a picture on each card", "web desktop"},
         drawn_by{"cards.paste", "pictures pasted and dropped on cards, each made a record", "web desktop"},
         drawn_by{"cards.mosaic", "cards set as a mosaic of their pictures", "web desktop"},
+        drawn_by{"cards.by", "cards under a heading for each year, month or day", "web desktop"},
         drawn_by{"chart", "chart", everywhere},
         drawn_by{"monitor", "monitor", everywhere},
         drawn_by{"details", "details", everywhere},
@@ -168,6 +169,7 @@ namespace one::language {
         drawn_by{"timeline.link", "a timeline's link", everywhere},
         drawn_by{"timeline.new", "a timeline's new when", everywhere},
         drawn_by{"timeline.open", "a timeline's on open", everywhere},
+        drawn_by{"timeline.by", "a timeline of cards' years and months, scrolled to", "web desktop"},
         drawn_by{"copy", "copy", everywhere},
         drawn_by{"themes", "themes", everywhere},
         drawn_by{"grid", "a grid", everywhere},
@@ -323,6 +325,7 @@ namespace one::language {
                         if (n.picture) use("cards.picture");
                         if (n.paste) use("cards.paste");
                         if (n.mosaic) use("cards.mosaic");
+                        if (n.by) use("cards.by");
                     } else if constexpr (std::is_same_v<T, chart_item>) {
                         use("chart");
                     } else if constexpr (std::is_same_v<T, monitor_item>) {
@@ -356,6 +359,10 @@ namespace one::language {
                     } else if constexpr (std::is_same_v<T, thread_item>) {
                         use("thread");
                     } else if constexpr (std::is_same_v<T, timeline_item>) {
+                        if (n.by) {
+                            use("timeline.by");
+                            return;
+                        }
                         use("timeline");
                         if (n.link) use("timeline.link");
                         if (n.fresh) use("timeline.new");

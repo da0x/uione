@@ -5,7 +5,7 @@
 // a command, asking before it does, or hiding a value that can't be trusted, and
 // then hands the drawing to the app's component set.
 
-import { Children, createContext, isValidElement, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { Children, createContext, isValidElement, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import type { ReactElement, ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
@@ -16,7 +16,8 @@ import { useSaying } from "./said.js";
 import { PictureAlone, stepped, useAwakeOn, useSwipeStep } from "./alone.js";
 import { pictureSize } from "./vectors.js";
 import { cameraOf, factsOf, takenAt } from "./exif.js";
-import type { BoardCard, CanvasRegion, ChartProps, FieldProps, Filtered, Hue, LandingFeature, LandingProps, LinkProps, PipelineRow, TrackStep } from "./contract.js";
+import { timeGroups, within, yearsOf } from "./contract.js";
+import type { BoardCard, CanvasRegion, CardGroup, ChartProps, FieldProps, Filtered, Hue, LandingFeature, LandingProps, LinkProps, PipelineRow, TimeUnit, TrackStep } from "./contract.js";
 import { readValue, scaleTop, seriesOf, toneOfState, valueAt, type ChartUnit } from "./series.js";
 import { calendarGo, calendarOf, dateOf, dayOf, movedTo } from "./calendar.js";
 import { fileName, useAuth, useFiles, useRunner, useSearch } from "./data.js";
@@ -2812,6 +2813,7 @@ export function Cards({
   picture,
   fit = false,
   mosaic = false,
+  by,
   paste,
   name,
 }: {
@@ -2831,19 +2833,24 @@ export function Cards({
   picture?: string; // a file each row holds, shown on top of its card
   fit?: boolean; // all of it fitted in, or filling its place
   mosaic?: boolean; // set as a mosaic of their pictures, each filling its tile
+  by?: { field: string; unit: TimeUnit }; // under a heading for each year, month or day of a date the list is ordered by
   // Pictures dropped, pasted or chosen, each a record made by this command, given what's
   // given besides, each of its parts, like picture and picture_width, in the field named.
   paste?: { command: string; fields: Record<string, string>; given?: Record<string, unknown> };
-  name?: string; // what the screen's paste and add pictures buttons name them by
+  name?: string; // what the screen's paste and add pictures buttons name them by, and its timeline
 }) {
   const ui = useUI();
   const links = useLinks();
   const params = useParams();
   const [title, ...rest] = Object.keys(columns);
   const counted = tally ? rowsOf(tally.view.data?.[tally.list]) : [];
-  const rows = rowsOf(view.data?.[list]);
+  const listed = view.data?.[list];
+  const rows = rowsOf(listed);
   const addresses = useAddresses(rows, picture, 640);
   const taking = useTakingPictures(paste, name);
+  // Its headings, worked out once each time the list changes.
+  const groups = useMemo(() => (by ? timeGroups(rowsOf(listed), by.field, by.unit) : undefined), [listed, by?.field, by?.unit]);
+  useDatedInView(name ?? "", groups);
   // Hidden when empty is hidden until there's something to show, not drawn while it loads.
   if (hideEmpty && (view.status !== "live" || rows.length === 0)) return null;
   const sum = (card: Row) => {
@@ -2869,6 +2876,7 @@ export function Cards({
     <ui.Cards
       status={view.status}
       mosaic={mosaic || undefined}
+      groups={groups?.map((g): CardGroup => ({ id: datedId(name ?? "", g.key), title: g.title, first: g.first, count: g.count }))}
       cards={rows.map((row) => {
         const to = link ? rowLink(link, row, params, keyed, named) : undefined;
         return {
@@ -2890,6 +2898,100 @@ export function Cards({
     />
   );
   return taking ? taking(shown, rows.length === 0) : shown;
+}
+
+// What cards under headings by a date and their timeline share, by the cards' name: their
+// headings' keys, and the one at the top of what's in view as they're scrolled.
+interface Dated {
+  keys: string[];
+  inView: string;
+  listening: Set<() => void>;
+}
+const datedByName = new Map<string, Dated>();
+function datedOf(name: string): Dated {
+  let found = datedByName.get(name);
+  if (!found) datedByName.set(name, (found = { keys: [], inView: "", listening: new Set() }));
+  return found;
+}
+function datedId(name: string, key: string): string {
+  return `dated-${encodeURIComponent(name)}-${key}`;
+}
+function tellInView(dated: Dated, key: string) {
+  if (dated.inView === key) return;
+  dated.inView = key;
+  for (const changed of dated.listening) changed();
+}
+
+// Watches what scrolls the cards, and tells which heading reaches the top of it, a
+// little under it, at most once a frame.
+function useDatedInView(name: string, groups: { key: string }[] | undefined) {
+  useEffect(() => {
+    if (!groups || groups.length === 0) return;
+    const dated = datedOf(name);
+    dated.keys = groups.map((g) => g.key);
+    let asked = 0;
+    const look = () => {
+      asked = 0;
+      const first = document.getElementById(datedId(name, groups[0]!.key));
+      if (!first) return;
+      let scroller: HTMLElement | null = first.parentElement;
+      while (scroller && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement;
+      const top = scroller ? scroller.getBoundingClientRect().top : 0;
+      let seen = groups[0]!.key;
+      for (const g of groups) {
+        const heading = document.getElementById(datedId(name, g.key));
+        if (heading && heading.getBoundingClientRect().top <= top + 24) seen = g.key;
+      }
+      tellInView(dated, seen);
+    };
+    const soon = () => {
+      if (!asked) asked = requestAnimationFrame(look);
+    };
+    look();
+    document.addEventListener("scroll", soon, true);
+    window.addEventListener("resize", soon);
+    return () => {
+      if (asked) cancelAnimationFrame(asked);
+      document.removeEventListener("scroll", soon, true);
+      window.removeEventListener("resize", soon);
+    };
+  }, [name, groups]);
+}
+
+// timeline library.photos by picture_date: the years and months of the cards under
+// headings by that date on the same screen, named `cards`, each with how many it holds,
+// the one in view marked. One chosen scrolls the cards so its first heading is at the
+// top, placed from the counts above it, without what's above it drawn. The same as the
+// desktop's.
+export function DatedTimeline({ view, list, by, unit = "month", cards }: { view: ViewState; list: string; by: string; unit?: TimeUnit; cards: string }) {
+  const ui = useUI();
+  const listed = view.data?.[list];
+  const entries = useMemo(() => yearsOf(timeGroups(rowsOf(listed), by, unit), unit), [listed, by, unit]);
+  const dated = datedOf(cards);
+  const inView = useSyncExternalStore(
+    (changed) => {
+      dated.listening.add(changed);
+      return () => dated.listening.delete(changed);
+    },
+    () => dated.inView,
+  );
+  if (view.status !== "live" || entries.length === 0) return null;
+  const choose = (entry: string) => {
+    const key = dated.keys.find((k) => within(k, entry));
+    if (key === undefined) return;
+    document.getElementById(datedId(cards, key))?.scrollIntoView({ block: "start" });
+    tellInView(dated, key);
+  };
+  return (
+    <ui.DatedTimeline
+      entries={entries.map((entry, i) => ({
+        ...entry,
+        // A month, or a year when that's all it lists.
+        current: within(inView, entry.key) && (!entry.year || i + 1 === entries.length || entries[i + 1]!.year),
+        onChoose: () => choose(entry.key),
+      }))}
+    />
+  );
 }
 
 // Pictures dropped, pasted or chosen on cards, each a record made by their command, given

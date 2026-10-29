@@ -1267,6 +1267,11 @@ namespace one::language {
         // tile, every eight two blocks of four, the second the first mirrored.
         bool mosaic = false;
         location mosaic_where;
+        // by picture_date month: under a heading for each year, month or day of a date
+        // field the list is ordered by, a mosaic's tiles starting again under each.
+        std::optional<std::string> by;
+        std::string by_unit = "month";
+        location by_where;
         // add piece::create and paste: pictures dropped, pasted or chosen, each made a
         // record by add, its file in the picture.
         std::optional<qualified_name> add;
@@ -1358,6 +1363,10 @@ namespace one::language {
         location fresh_where;
         std::optional<qualified_name> opened;
         location opened_where;
+        // timeline library.photos by picture_date: instead, the years and months of cards
+        // under headings by that date on the same screen, each with how many it holds.
+        std::optional<std::string> by;
+        location by_where;
     };
 
     // copy issue_page "Copy issue": a button that copies everything a view holds, as
@@ -1684,6 +1693,17 @@ namespace one::language {
     }
 
     inline std::map<std::string, std::string> collage_fields(const collage_item& c, const view_each* layers) { return parts_fields(c.fields, layers, collage_parts()); }
+    // The cards a timeline by a date goes with: of the same list, under headings by it.
+    inline const cards_item* dated_cards(const std::vector<screen_item>& items, const timeline_item& t) {
+        for (const auto& item : items) {
+            if (auto* c = std::get_if<cards_item>(&item.node); c && c->view.text() == t.view.text() && c->list.value_or("") == t.list && c->by == t.by) return c;
+            if (auto* block = std::get_if<content_block>(&item.node)) {
+                if (auto* found = dated_cards(block->items, t)) return found;
+            }
+        }
+        return nullptr;
+    }
+
     // And cards': the picture in the field its picture line names, each other part in the
     // entity's field named like it, when it has one.
     inline std::map<std::string, std::string> cards_fields(const cards_item& c, const entity_declaration& rows) {

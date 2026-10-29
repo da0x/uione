@@ -6,7 +6,7 @@
 // the fields that keep them; several at once one step to undo, and a drop target while empty.
 
 import { fireEvent, render, waitFor } from "@testing-library/react";
-import { App, Cards, Link, PaperButton, StepLink, memorySource, mosaicRows, mosaicTile, screen as defineScreen, useView } from "../src/index.js";
+import { App, Cards, DatedTimeline, Link, PaperButton, StepLink, memorySource, mosaicRows, mosaicTile, screen as defineScreen, timeGroups, useView, within, yearsOf } from "../src/index.js";
 import { useNavigate } from "react-router";
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
@@ -152,6 +152,90 @@ describe("cards as a mosaic", () => {
     expect(drawn.getByRole("link", { name: "Clipping 11" }).getAttribute("href")).toBe("/pieces/c11");
     fireEvent.drop(drawn.container.querySelector(".one-cards-taking")!, { dataTransfer: { files: [new File(["abcd"], "harbor.jpg", { type: "image/jpeg" })], getData: () => "", types: ["Files"] } });
     await waitFor(() => expect(source.runs.some((r) => r.command === "studio::piece::create")).toBe(true));
+  });
+});
+
+describe("cards under a heading for each month", () => {
+  const at = (y: number, m: number, d: number) => new Date(Date.UTC(y, m - 1, d, 12));
+  // Newest first: three in October 2026, two in September, one in March, two in 2025, one with no date.
+  const dates = [at(2026, 10, 30), at(2026, 10, 12), at(2026, 10, 1), at(2026, 9, 20), at(2026, 9, 2), at(2026, 3, 8), at(2025, 12, 31), at(2025, 7, 4), undefined];
+  const pieces = dates.map((when, i) => ({ id: `c${i + 1}`, name: `Clipping ${i + 1}`, image: "", picture_date: when }));
+
+  it("are worked out in one pass in the list's order, and listed by year and month with their counts", () => {
+    const groups = timeGroups(pieces, "picture_date", "month");
+    expect(groups.map((g) => [g.key, g.title, g.first, g.count])).toEqual([
+      ["2026-10", "October 2026", 0, 3],
+      ["2026-09", "September 2026", 3, 2],
+      ["2026-03", "March 2026", 5, 1],
+      ["2025-12", "December 2025", 6, 1],
+      ["2025-07", "July 2025", 7, 1],
+      ["none", "No date", 8, 1],
+    ]);
+    expect(yearsOf(groups, "month").map((e) => `${e.title} ${e.count}`)).toEqual(["2026 6", "October 3", "September 2", "March 1", "2025 2", "December 1", "July 1", "No date 1"]);
+    expect(yearsOf(timeGroups(pieces, "picture_date", "year"), "year").map((e) => `${e.title} ${e.count}`)).toEqual(["2026 6", "2025 2", "No date 1"]);
+    const days = timeGroups(pieces, "picture_date", "day");
+    expect(days[0]!.title).toBe("October 30, 2026");
+    expect(yearsOf(days, "day").map((e) => `${e.title} ${e.count}`).slice(0, 3)).toEqual(["2026 6", "October 3", "September 2"]);
+    expect([within("2026-10-12", "2026-10"), within("2026-10", "2026"), within("2026-10", "2026-1"), within("2025-10", "2026")]).toEqual([true, true, false, false]);
+  });
+
+  it("head each month, a mosaic's tiles starting again under each, and a timeline marks the one in view and scrolls to the one chosen", async () => {
+    const source = memorySource({ files: true });
+    source.set("studio::room_page", { pieces }, "r1");
+    function Pieces() {
+      const page = useView("studio::room_page", "r1");
+      return (
+        <>
+          <Cards view={page} list="pieces" columns={{ name: "Name" }} picture="image" mosaic by={{ field: "picture_date", unit: "month" }} link="/pieces/:piece" name="/ cards pieces" />
+          <DatedTimeline view={page} list="pieces" by="picture_date" unit="month" cards="/ cards pieces" />
+        </>
+      );
+    }
+    // Each heading a thousand pixels under the one before, scrolled to by scrollIntoView.
+    let scrolled = 0;
+    const order = () => [...document.querySelectorAll("section > h2")];
+    const box = Element.prototype.getBoundingClientRect;
+    const into = Element.prototype.scrollIntoView;
+    Element.prototype.getBoundingClientRect = function (this: Element) {
+      const n = order().indexOf(this);
+      return { top: n < 0 ? 0 : n * 1000 - scrolled, left: 0, right: 0, bottom: 0, width: 0, height: 0, x: 0, y: 0, toJSON() {} } as DOMRect;
+    };
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled = order().indexOf(this) * 1000;
+    };
+    try {
+      const only = defineScreen({ title: "Pieces", route: "/" }, () => <Pieces />);
+      const drawn = render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
+      await waitFor(() => expect(drawn.getAllByRole("article").length).toBe(9));
+      expect(order().map((h) => h.textContent)).toEqual(["October 2026", "September 2026", "March 2026", "December 2025", "July 2025", "No date"]);
+      // September's first tile is the tall one at the left, as a mosaic's first is.
+      const september = drawn.getByRole("region", { name: "September 2026" }).querySelectorAll("article");
+      expect([september[0]!.style.gridColumn, september[0]!.style.gridRow, september[1]!.style.gridColumn]).toEqual(["1 / span 1", "1 / span 2", "2 / span 2"]);
+      const entries = () => drawn.getAllByRole("button").map((b) => `${b.textContent}${b.getAttribute("aria-current") ? " *" : ""}`);
+      await waitFor(() => expect(entries()).toEqual(["2026 6", "October 3 *", "September 2", "March 1", "2025 2", "December 1", "July 1", "No date 1"]));
+      // Scrolled past October and September, March is the one in view.
+      scrolled = 2010;
+      fireEvent.scroll(document);
+      await waitFor(() => expect(entries()[3]).toBe("March 1 *"));
+      // 2025 chosen scrolls its first month's heading to the top, and it's marked.
+      fireEvent.click(drawn.getByRole("button", { name: "2025 2" }));
+      expect(scrolled).toBe(3000);
+      await waitFor(() => expect(entries()[5]).toBe("December 1 *"));
+      fireEvent.click(drawn.getByRole("button", { name: "July 1" }));
+      expect(scrolled).toBe(4000);
+    } finally {
+      Element.prototype.getBoundingClientRect = box;
+      Element.prototype.scrollIntoView = into;
+    }
+  });
+
+  it("work out the months of twenty thousand rows quickly", () => {
+    const many = Array.from({ length: 20000 }, (_, i) => ({ id: `c${i}`, picture_date: new Date(Date.UTC(2026, 9, 30) - i * 3 * 3600 * 1000) }));
+    const started = performance.now();
+    const entries = yearsOf(timeGroups(many, "picture_date", "month"), "month");
+    const took = performance.now() - started;
+    expect(entries.filter((e) => !e.year).reduce((n, e) => n + e.count, 0)).toBe(20000);
+    expect(took).toBeLessThan(500);
   });
 });
 
