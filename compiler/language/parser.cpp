@@ -1983,6 +1983,8 @@ namespace one::language {
                         advance();
                         link.step_list = expect(token_kind::identifier, "which of the view's lists, like things").text;
                     }
+                } else if ((at_word("previous") || at_word("next")) && peek(1).kind == token_kind::string) {
+                    link.step = advance().text;  // link next "Next": through the list it was opened from
                 } else if (at(token_kind::route)) {
                     link.target = advance().text;
                 } else if (at(token_kind::anchor)) {

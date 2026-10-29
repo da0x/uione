@@ -4,7 +4,7 @@
 // An app is a list of screens. Each screen knows its own title and route, so the
 // app can build the routes and the navigation without anyone writing them twice.
 
-import { Component, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Component, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { CSSProperties, ComponentType, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { BrowserRouter, MemoryRouter, Route, Routes, matchPath, useLocation, useNavigationType, useParams } from "react-router";
@@ -300,6 +300,46 @@ export function App({ name, icon, screens: given, ui, data, location, authentica
 // keyboard, in view. An address opened afresh starts at its top.
 const placesLeft = new Map<string, { scroll: number; opened?: string }>();
 
+// The addresses each list on a page opens, in its order, by the list, as it last showed
+// them; and, for each address opened, those of the page it was opened from, kept as it's
+// stepped on from, so a record's screen steps through the list it was opened from. The
+// same as the desktop's.
+type Opens = Map<string, string[]>;
+const listsShown = new Map<string, Opens>();
+const openedAmong = new Map<string, Opens | undefined>();
+const amongListening = new Set<() => void>();
+export function useListOpens(key: string, addresses: string[] | undefined): void {
+  const { pathname, search } = useLocation();
+  const here = pathname + search;
+  const joined = addresses?.join("\n");
+  useEffect(() => {
+    if (addresses === undefined) return;
+    let opens = listsShown.get(here);
+    if (!opens) listsShown.set(here, (opens = new Map()));
+    opens.set(key, addresses);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [here, key, joined]);
+}
+// The address before or after this one in the list it was opened from, when one did,
+// or undefined; null at either end of it.
+export function useSteppedAmong(next: boolean): string | null | undefined {
+  const { pathname, search } = useLocation();
+  const here = pathname + search;
+  const opens = useSyncExternalStore(
+    (changed) => {
+      amongListening.add(changed);
+      return () => amongListening.delete(changed);
+    },
+    () => openedAmong.get(here),
+  );
+  for (const addresses of opens?.values() ?? []) {
+    const at = addresses.indexOf(here);
+    if (at < 0) continue;
+    return addresses[at + (next ? 1 : -1)] ?? null;
+  }
+  return undefined;
+}
+
 function Returning() {
   const { pathname, search, hash } = useLocation();
   const how = useNavigationType();
@@ -311,6 +351,12 @@ function Returning() {
     if (before !== undefined && before !== here) {
       if (how === "PUSH") placesLeft.set(before, { scroll: placesLeft.get(before)?.scroll ?? 0, opened: here });
       if (how === "REPLACE") for (const place of placesLeft.values()) if (place.opened === before) place.opened = here;
+      openedAmong.set(here, how === "PUSH" ? listsShown.get(before) : how === "REPLACE" ? openedAmong.get(before) : openedAmong.get(here));
+      amongListening.forEach((changed) => changed());
+    } else if (before === undefined) {
+      // The first page shown was opened from nothing.
+      openedAmong.delete(here);
+      amongListening.forEach((changed) => changed());
     }
     const page = document.scrollingElement ?? document.documentElement;
     const place = placesLeft.get(here);

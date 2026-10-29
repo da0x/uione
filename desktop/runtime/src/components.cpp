@@ -25,6 +25,16 @@ namespace one::desktop::runtime {
 
 		desktop::view quiet(std::string words) { return desktop::text(std::move(words), current_theme().quiet()); }
 
+		// What cards open, in their order, kept where the page is left, for a record opened
+		// from them to step through.
+		void opened_among(page& p, const std::string& list, const std::vector<card_model>& cards) {
+			if (cards.empty() || cards.front().address.empty()) return;
+			std::vector<std::string> addresses;
+			addresses.reserve(cards.size());
+			for (const auto& card : cards) addresses.push_back(card.address);
+			p.where_left().lists[list] = std::make_shared<const std::vector<std::string>>(std::move(addresses));
+		}
+
 		// Pictures come in, each a record made by the cards' add, given what the address
 		// names, its file in the picture, and its own size, its file's name, bytes, date and
 		// camera where the cards keep them; all one step to undo. The same as the web's.
@@ -797,6 +807,7 @@ namespace one::desktop::runtime {
 			auto groups = time_groups(rows, spec.by, spec.unit);
 			if (groups.empty()) return spec.hide_empty ? desktop::view() : !spec.add.empty() ? quiet("Nothing here yet. Drop pictures here to add them.").padding(edges(48, 0)) : quiet("Nothing here yet.");
 			auto all = cards_of(p, spec);
+			opened_among(p, "cards " + spec.list + " " + spec.link, all);
 			auto heading = t.strong();
 			heading.size = 22, heading.line_height = 1.25f;
 			std::vector<std::string> keys;
@@ -815,6 +826,7 @@ namespace one::desktop::runtime {
 			return desktop::view(std::move(made));
 		}
 		auto all = cards_of(p, spec);
+		opened_among(p, "cards " + spec.list + " " + spec.link, all);
 		if (all.empty()) return spec.hide_empty ? desktop::view() : !spec.add.empty() ? quiet("Nothing here yet. Drop pictures here to add them.").padding(edges(48, 0)) : quiet("Nothing here yet.");
 		return cards_shown(p, spec, std::move(all), rows_of(v, spec.list));
 	}

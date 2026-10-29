@@ -342,8 +342,8 @@ namespace studio at / {
 		}
 		toolbar {
 			group "Clipping" {
-				link previous in clippings_page.clippings "Previous" icon previous key left
-				link next in clippings_page.clippings "Next" icon next key right
+				link previous "Previous" icon previous key left
+				link next "Next" icon next key right
 			}
 			group "View" small at end {
 				zoom out "Smaller" icon zoom_out

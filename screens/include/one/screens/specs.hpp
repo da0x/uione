@@ -771,6 +771,9 @@ namespace one::screens {
 		std::string list;
 		std::string route;  // like /things/:thing
 		bool next = false;
+		// Or through the list the record was opened from, whichever it was, when one was;
+		// the view's list only when it wasn't.
+		bool opened = false;
 	};
 
 	// A chart's run of numbers: by its field and a name in it, like stats.cpu; its

@@ -1083,6 +1083,71 @@ TEST_CASE("a record's screen steps to the one before or after it in a list's own
     CHECK(messages(nameless) == std::vector<std::string>{"44: a link next steps from one record to another, so its screen's address names one, like /things/:thing"});
 }
 
+TEST_CASE("a record's screen steps through the list it was opened from when its link names none, or else the first whose rows open it, and says why when none does") {
+    const std::string pieces = R"(namespace studio at / {
+	entity poster {
+		title  text
+		year   number
+	}
+
+	view archive {
+		posters = each poster {
+			order by title
+			title  year
+		}
+	}
+
+	view by_year {
+		posters = each poster {
+			order by year descending
+			title  year
+		}
+	}
+
+	screen "Posters" /posters {
+		cards archive.posters link /posters/:poster {
+			title
+		}
+	}
+
+	screen "Years" /years {
+		table by_year.posters link /posters/:poster {
+			title
+			year
+		}
+	}
+
+	screen "{poster.title}" /posters/:poster {
+		link previous "Previous" icon previous key left
+		link next "Next" icon next key right
+	}
+}
+)";
+    CHECK(messages(project + pieces).empty());
+    auto files = built(project + pieces);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    // Through the list it was opened from, the archive's when it wasn't.
+    CHECK(web.find(R"(<StepLink view={archive} list="posters" to="/posters/:poster" opened icon="previous" keys={["left"]}>Previous</StepLink>)") != std::string::npos);
+    CHECK(web.find(R"(<StepLink view={archive} list="posters" to="/posters/:poster" next opened icon="next" keys={["right"]}>Next</StepLink>)") != std::string::npos);
+    CHECK(native.find(R"(step(p, {.view = archive, .list = "posters", .route = "/posters/:poster", .next = true, .opened = true}, "Next", "next", std::vector<std::string>{"right"}))") != std::string::npos);
+    // No list's rows open it.
+    std::string unopened = project + pieces;
+    unopened.replace(unopened.find(" link /posters/:poster {\n\t\t\ttitle\n\t\t}"), std::string(" link /posters/:poster").size(), "");
+    unopened.replace(unopened.find(" link /posters/:poster {\n\t\t\ttitle\n\t\t\tyear"), std::string(" link /posters/:poster").size(), "");
+    CHECK(messages(unopened) == std::vector<std::string>{"42: a link previous with no list steps through the one its record was opened from, and no list's rows open /posters/:poster; say which it steps through, like link previous in library.things",
+                                                        "43: a link next with no list steps through the one its record was opened from, and no list's rows open /posters/:poster; say which it steps through, like link next in library.things"});
+    // Only a table of each poster's own opens it: through the list it was opened from, and nothing else.
+    std::string own = project + pieces;
+    own.replace(own.find(" link /posters/:poster {\n\t\t\ttitle\n\t\t}"), std::string(" link /posters/:poster").size(), "");
+    own.replace(own.find("\tview by_year {"), std::string("\tview by_year {").size(), "\tview by_year per poster {");
+    own.replace(own.find("\tscreen \"Years\" /years {"), std::string("\tscreen \"Years\" /years {").size(), "\tscreen \"Years\" /years/:poster {");
+    CHECK(messages(own).empty());
+    CHECK(built(own)["desktop/src/screens/main.cpp"].find(R"(step(p, {.view = {}, .list = "", .route = "/posters/:poster", .next = true, .opened = true})") != std::string::npos);
+}
+
 TEST_CASE("a picture alone is all of a workspace's screen, its bars over it, zoomed by the screen's zoom buttons") {
     const std::string pieces = R"(namespace studio at / {
 	entity clipping {

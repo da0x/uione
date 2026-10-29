@@ -116,6 +116,9 @@ namespace one::screens {
 	struct place {
 		state<float> scroll;
 		std::string opened;
+		// The addresses each of its lists opens, in the order it shows them, as it was last
+		// built, by the list: for a record opened from one to step through.
+		std::map<std::string, std::shared_ptr<const std::vector<std::string>>> lists = {};
 	};
 
 	// A page that's open: the screen it shows, what its address said, and the views
@@ -132,6 +135,9 @@ namespace one::screens {
 		std::size_t screen() const { return screen_; }
 		const std::string& address() const { return address_; }
 		screens::place& where_left() { return *place_; }
+		// Where the page it was opened from was left, while there was one: kept as it's
+		// stepped on from, so its record steps through the list it was opened from.
+		const screens::place* opened_from() const { return from_.get(); }
 		const std::map<std::string, std::string>& params() const { return params_; }
 		std::string param(const std::string& name) const;
 		// What its address's query says, like ?is=Assigned to me&assignees=me.
@@ -263,6 +269,7 @@ namespace one::screens {
 		friend class navigator_base;
 		screens::source& source_;
 		std::shared_ptr<screens::place> place_ = std::make_shared<screens::place>();
+		std::shared_ptr<screens::place> from_;
 		std::optional<state<std::chrono::sys_seconds>> clock_;
 		listening ticking_;
 		std::size_t screen_;

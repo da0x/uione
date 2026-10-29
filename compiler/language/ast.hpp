@@ -712,7 +712,8 @@ namespace one::language {
         location built_where;
         std::vector<key_chord> keys;                   // key ctrl+o: opened by that key too
         // link next in library.things "Next": the same screen for the record after the
-        // one its address names, or before it, in that list's own order.
+        // one its address names, or before it, in that list's own order. With no list,
+        // link next "Next", in the list the record was opened from, whichever it was.
         std::string step;                              // previous or next
         std::optional<qualified_name> step_view;
         std::string step_list;
@@ -1695,6 +1696,21 @@ namespace one::language {
     }
 
     inline std::map<std::string, std::string> collage_fields(const collage_item& c, const view_each* layers) { return parts_fields(c.fields, layers, collage_parts()); }
+    // The lists on a screen whose rows each open a screen, like cards linking to
+    // /things/:thing: what a record's screen may have been opened from, in order.
+    struct opening_list {
+        qualified_name view;
+        std::string list;  // or none for the view's own rows
+        std::string link;
+    };
+    inline void lists_opening(const std::vector<screen_item>& items, std::vector<opening_list>& out) {
+        for (const auto& item : items) {
+            if (auto* c = std::get_if<cards_item>(&item.node); c && c->link) out.push_back({c->view, c->list.value_or(""), *c->link});
+            if (auto* t = std::get_if<table_item>(&item.node); t && t->link) out.push_back({t->view, t->list.value_or(""), *t->link});
+            if (auto* block = std::get_if<content_block>(&item.node)) lists_opening(block->items, out);
+        }
+    }
+
     // The cards a timeline by a date goes with: of the same list, under headings by it.
     inline const cards_item* dated_cards(const std::vector<screen_item>& items, const timeline_item& t) {
         for (const auto& item : items) {

@@ -251,6 +251,10 @@ namespace one::desktop::runtime {
 			for (const auto& [id, row] : by_id) {
 				if (!p.where_left().opened.empty() && row_link(spec.link, row, p.params(), spec.keyed, spec.named) == p.where_left().opened) options.start = id;
 			}
+			// What its rows open, in the order they're shown, for a record opened from it to step through.
+			std::vector<std::string> addresses;
+			for (const auto& row : model.rows) addresses.push_back(row_link(spec.link, row, p.params(), spec.keyed, spec.named));
+			p.where_left().lists["table " + spec.list + " " + spec.link] = std::make_shared<const std::vector<std::string>>(std::move(addresses));
 		}
 		// Put in order with Alt and the arrows while nothing typed hides some of them.
 		if (model.arranging) {

@@ -4040,3 +4040,57 @@ TEST("twenty thousand cards by a date have their months worked out, and the olde
 	CHECK(ms(months) < 200);
 	CHECK(ms(jump) < 500);
 }
+
+TEST("a record's screen steps through the list it was opened from, cards or a table in its own order, and else through the first list that opens it, not past either end") {
+	memory_source data;
+	// By title in the archive, and newest first by year.
+	list by_title, by_year;
+	const std::pair<const char*, int> posters[] = {{"Arches", 1990}, {"Bridges", 2010}, {"Canyons", 2000}, {"Dunes", 2020}};
+	for (int i = 0; i < 4; ++i) by_title.push_back(value(fields{{"id", std::format("p{}", i)}, {"title", posters[i].first}, {"year", posters[i].second}}));
+	for (int i : {3, 1, 2, 0}) by_year.push_back(by_title[static_cast<std::size_t>(i)]);
+	data.set("studio::archive", "", value(fields{{"posters", by_title}}));
+	data.set("studio::by_year", "", value(fields{{"posters", by_year}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Posters", "/posters", "", [](page& p) {
+		                     return items(cards(p, {.view = p.view("studio::archive"), .list = "posters", .columns = {{"title", "Title"}}, .link = "/posters/:poster"}));
+	                     }});
+	s.screens.push_back({"Years", "/years", "", [](page& p) {
+		                     return items(table(p, {.view = p.view("studio::by_year"), .list = "posters", .columns = {{"title", "Title"}, {"year", "Year"}}, .link = "/posters/:poster"}));
+	                     }});
+	s.screens.push_back({"Poster", "/posters/:poster", "", [](page& p) {
+		                     auto archive = p.view("studio::archive");
+		                     return items(step(p, {.view = archive, .list = "posters", .route = "/posters/:poster", .opened = true}, "Previous", "previous", {"left"}),
+		                                  step(p, {.view = archive, .list = "posters", .route = "/posters/:poster", .next = true, .opened = true}, "Next", "next", {"right"}));
+	                     }});
+	navigator nav(s, data);
+	auto steps = [&](const one::desktop::key_event& k, int times) {
+		std::vector<std::string> went;
+		for (int i = 0; i < times; ++i) {
+			built(nav);
+			if (!key(nav, k)) break;
+			went.push_back(nav.current().address());
+		}
+		return went;
+	};
+	// Opened from the years, newest first: Dunes, Bridges, Canyons, Arches; and it stops at the end.
+	nav.open("/years");
+	built(nav);
+	nav.open("/posters/p1");
+	CHECK((steps(right_key, 4) == std::vector<std::string>{"/posters/p2", "/posters/p0"}));
+	CHECK((steps(left_key, 4) == std::vector<std::string>{"/posters/p2", "/posters/p1", "/posters/p3"}));
+	// Back at the years, what was stepped to last is what was opened from it.
+	CHECK(nav.back());
+	CHECK(nav.current().where_left().opened == "/posters/p3");
+	// Opened from the cards, by title.
+	nav.open("/posters");
+	built(nav);
+	nav.open("/posters/p1");
+	CHECK((steps(right_key, 4) == std::vector<std::string>{"/posters/p2", "/posters/p3"}));
+	// Opened by its address alone, it steps through the archive the screen names.
+	navigator alone(s, data);
+	alone.open("/posters/p0");
+	built(alone);
+	CHECK(key(alone, right_key));
+	CHECK(alone.current().address() == "/posters/p1");
+}

@@ -1186,9 +1186,13 @@ namespace one::generators {
                     if (!link->step.empty()) {
                         // The record before or after this one, in a list's own order.
                         parts.components.insert("StepLink");
-                        out.line("<StepLink view={" + view_variable(parts, full_view(ns, link->step_view->text())) + "} list=" + web_detail::js_string(link->step_list.empty() ? "rows" : link->step_list) +
-                                 " to=" + web_detail::js_string(route_) + (link->step == "next" ? " next" : "") + icon + keys_of(link->keys) + ">" + live_text(parts, ns, link->label) +
-                                 "</StepLink>");
+                        // With none named, in the list it was opened from, or else the first that opens it.
+                        auto fallback = link->step_view ? std::nullopt : model_.first_opening(route_);
+                        std::string from = link->step_view ? "view={" + view_variable(parts, full_view(ns, link->step_view->text())) + "} list=" + web_detail::js_string(link->step_list.empty() ? "rows" : link->step_list) + " "
+                                           : fallback       ? "view={" + view_variable(parts, fallback->first) + "} list=" + web_detail::js_string(fallback->second.empty() ? "rows" : fallback->second) + " "
+                                                            : "";
+                        out.line("<StepLink " + from + "to=" + web_detail::js_string(route_) + (link->step == "next" ? " next" : "") + (link->step_view ? "" : " opened") + icon + keys_of(link->keys) +
+                                 ">" + live_text(parts, ns, link->label) + "</StepLink>");
                     } else if (!link->built.empty()) {
                         // What the site was built from: its release's notes, or its commit.
                         parts.components.insert("BuiltLink");

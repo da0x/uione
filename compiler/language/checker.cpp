@@ -150,6 +150,7 @@ namespace one::language {
         std::vector<std::string> targets_;  // the apps being built, which say what files a component needs
         std::map<std::string, scope> scopes_;  // by namespace, "" is the top level
         std::map<std::string, origin> routes_;
+        std::set<std::string> opened_routes_;  // the screens a list's rows open, as a record's
         // The app's Stripe webhook, which names Stripe's customer, and its namespace.
         const webhook_declaration* stripe_ = nullptr;
         std::string stripe_ns_;
@@ -304,6 +305,9 @@ namespace one::language {
                                            "; the first is at " + first_seen(it->second));
                     }
                 } else if (auto* s = std::get_if<screen_declaration>(&d.node)) {
+                    std::vector<opening_list> lists;
+                    lists_opening(s->items, lists);
+                    for (const auto& l : lists) opened_routes_.insert(full_route(ns, l.link));
                     std::vector<std::string> routes{full_route(ns, s->route)};
                     // A screen of markdown pages, like /docs/:page, is at /docs too, where
                     // it shows its first page.
@@ -2632,6 +2636,16 @@ namespace one::language {
         // the one after it in a list of them, so the list is of what the address names,
         // in a view the screen reads whole, not one per record.
         void step(const std::string& ns, const std::string& screen_route, const content_link& link, location where) {
+            // With no list, through the one it was opened from, so some list opens it.
+            if (!link.step_view) {
+                if (screen_route.rfind("/:") == std::string::npos) {
+                    error(where, "a link " + link.step + " steps from one record to another, so its screen's address names one, like /things/:thing");
+                } else if (!opened_routes_.contains(screen_route)) {
+                    error(where, "a link " + link.step + " with no list steps through the one its record was opened from, and no list's rows open " + screen_route +
+                                     "; say which it steps through, like link " + link.step + " in library.things");
+                }
+                return;
+            }
             const view_declaration* view = find(ns, *link.step_view, &scope::views);
             if (view && view->per) {
                 error(link.step_view->where, "view " + link.step_view->text() + " is one per " + *view->per + ", so its list changes with each record; step through a view of them all");

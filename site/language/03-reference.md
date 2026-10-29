@@ -2889,7 +2889,14 @@ issue::verify "Verify" when {
   where it was opened from. At either end the link is still there, but can't be
   followed, as it doesn't go around. The list is in a view of them all, not one per
   record, and it lists what the address names, posters here; a view of one list
-  names none, as in `link next in posters "Next"`. In a terminal, an arrow goes first
+  names none, as in `link next in posters "Next"`. `link next "Next"`, naming no
+  list, steps through the list the record was opened from, whichever it was: the
+  cards of the month they're under, a table sorted or searched as it was shown, or
+  another screen's list of them, in the order it showed them. Opened some other way,
+  as by an address typed or a link that isn't a list's, it steps through the first
+  list in the project whose rows open the screen, of a view of them all, and can't be
+  followed when there's none. Some list's rows open the screen, or a link that names
+  no list is an error. A terminal steps through that first list. In a terminal, an arrow goes first
   to what's beside what has the keyboard, as it does everywhere there, and steps
   when there's nothing that way.
 - A screen shown again while the app is open, gone back to or opened by a link, is

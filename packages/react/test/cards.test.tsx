@@ -6,8 +6,8 @@
 // the fields that keep them; several at once one step to undo, and a drop target while empty.
 
 import { fireEvent, render, waitFor } from "@testing-library/react";
-import { App, Cards, DatedTimeline, Link, Messages, PaperButton, StepLink, memorySource, mosaicRows, mosaicTile, screen as defineScreen, timeGroups, useView, within, yearsOf } from "../src/index.js";
-import { useNavigate } from "react-router";
+import { App, Cards, DatedTimeline, Link, Messages, PaperButton, StepLink, Table, memorySource, mosaicRows, mosaicTile, screen as defineScreen, timeGroups, useView, within, yearsOf } from "../src/index.js";
+import { useNavigate, useParams } from "react-router";
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
 import { alreadyIn, alreadySaid, takeInTurn } from "../src/workspace.js";
@@ -384,6 +384,78 @@ describe("a record's screen stepping through its list", () => {
     Object.defineProperty(page, "scrollTop", { configurable: true, get: () => scrolled, set: (to: number) => void (scrolled = to) });
     Object.defineProperty(page, "scrollHeight", { configurable: true, get: () => 5000 });
     Object.defineProperty(page, "clientHeight", { configurable: true, get: () => 600 });
+  });
+
+  it("steps through the list it was opened from, cards or a table in the order shown, and else through the one it names, not past either end", async () => {
+    const source = memorySource();
+    const posters = [
+      { id: "p0", title: "Arches", year: 1990 },
+      { id: "p1", title: "Bridges", year: 2010 },
+      { id: "p2", title: "Canyons", year: 2000 },
+      { id: "p3", title: "Dunes", year: 2020 },
+    ];
+    source.set("studio::archive", { posters });
+    source.set("studio::by_year", { posters: [3, 1, 2, 0].map((i) => posters[i]!) });
+    function Posters() {
+      const archive = useView("studio::archive");
+      return <Cards view={archive} list="posters" columns={{ title: "Title" }} link="/posters/:poster" />;
+    }
+    function Years() {
+      const years = useView("studio::by_year");
+      return <Table view={years} list="posters" columns={{ title: "Title", year: "Year" }} link="/posters/:poster" />;
+    }
+    function Poster() {
+      const archive = useView("studio::archive");
+      const { poster } = useParams();
+      return (
+        <>
+          <p>Showing {poster}</p>
+          <StepLink view={archive} list="posters" to="/posters/:poster" opened keys={["left"]}>
+            Previous
+          </StepLink>
+          <StepLink view={archive} list="posters" to="/posters/:poster" next opened keys={["right"]}>
+            Next
+          </StepLink>
+          <Link to="/years">Years</Link>
+          <Link to="/posters">Posters</Link>
+        </>
+      );
+    }
+    const screens = [
+      defineScreen({ title: "Posters", route: "/posters" }, () => <Posters />),
+      defineScreen({ title: "Years", route: "/years" }, () => <Years />),
+      defineScreen({ title: "Poster", route: "/posters/:poster" }, () => <Poster />),
+    ];
+    const drawn = render(<App name="studio" screens={screens} ui={plain} data={source} location="/years" />);
+    const showing = () => drawn.container.querySelector("p")?.textContent;
+    const next = () => drawn.getByText("Next").closest("button")!;
+    // Opened from the years, newest first: Dunes, Bridges, Canyons, Arches.
+    await waitFor(() => expect(drawn.getByText("Bridges")).toBeTruthy());
+    fireEvent.click(drawn.getByText("Bridges"));
+    await waitFor(() => expect(showing()).toBe("Showing p1"));
+    await waitFor(() => expect(next().disabled).toBe(false));
+    fireEvent.click(next());
+    await waitFor(() => expect(showing()).toBe("Showing p2"));
+    fireEvent.click(next());
+    await waitFor(() => expect(showing()).toBe("Showing p0"));
+    // The last of them, so it can't go on, though the archive has more after it.
+    await waitFor(() => expect(next().disabled).toBe(true));
+    // Opened from the cards, by title.
+    fireEvent.click(drawn.getByText("Posters"));
+    await waitFor(() => expect(drawn.getByText("Bridges")).toBeTruthy());
+    fireEvent.click(drawn.getByText("Bridges"));
+    await waitFor(() => expect(showing()).toBe("Showing p1"));
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    await waitFor(() => expect(showing()).toBe("Showing p2"));
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    await waitFor(() => expect(showing()).toBe("Showing p3"));
+    await waitFor(() => expect(next().disabled).toBe(true));
+    drawn.unmount();
+    // Opened by its address alone, through the archive it names.
+    const alone = render(<App name="studio" screens={screens} ui={plain} data={source} location="/posters/p0" />);
+    await waitFor(() => expect(alone.getByText("Next").closest("button")!.disabled).toBe(false));
+    fireEvent.click(alone.getByText("Next"));
+    await waitFor(() => expect(alone.container.querySelector("p")?.textContent).toBe("Showing p1"));
   });
 
   it("steps to the one before or after it in its list's own order, by its buttons or keys, and not past either end", async () => {

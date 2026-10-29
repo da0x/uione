@@ -1840,6 +1840,14 @@ namespace one::screens {
 	}
 
 	std::string stepped_to(page_base& p, const step_spec& spec) {
+		if (const place* from = spec.opened ? p.opened_from() : nullptr) {
+			for (const auto& [list, addresses] : from->lists) {
+				auto at = std::ranges::find(*addresses, p.address());
+				if (at == addresses->end()) continue;
+				if (spec.next ? at + 1 == addresses->end() : at == addresses->begin()) return "";
+				return *(spec.next ? at + 1 : at - 1);
+			}
+		}
 		const view_state& v = *spec.view;
 		std::size_t at = spec.route.rfind("/:");
 		if (v.status != status::ready || at == std::string::npos) return "";

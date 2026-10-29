@@ -10,7 +10,7 @@ import { createPortal } from "react-dom";
 import type { ReactElement, ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { partsOf } from "./keys.js";
-import { ShownPath, fill, useConfirmContext, useFill, usePageTitle, useSignIn, useSite } from "./app.js";
+import { ShownPath, fill, useConfirmContext, useFill, useListOpens, usePageTitle, useSignIn, useSite, useSteppedAmong } from "./app.js";
 import { hintOf, rememberGiven, setPicked as pickRow, useInGroup, useInOptions, useLastGiven, useOverRun, usePicturesHanded, useStyled, takeInTurn, alreadyIn, notAPicture, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
 import { useSaying } from "./said.js";
 import { PictureAlone, stepped, useAwakeOn, useSwipeStep } from "./alone.js";
@@ -74,17 +74,19 @@ function useFilled(): (to: string) => string {
 // At either end it's there, but can't be followed, as it doesn't go around.
 export function StepLink({
   view,
-  list,
+  list = "rows",
   to,
   next = false,
+  opened = false,
   icon,
   keys,
   children,
 }: {
-  view: ViewState;
-  list: string;
+  view?: ViewState; // the list stepped through, or, when it's opened from one, the list it's stepped through otherwise
+  list?: string;
   to: string; // the screen's route, its last parameter the record shown, like /things/:thing
   next?: boolean;
+  opened?: boolean; // through the list the record was opened from, whichever it was
   icon?: string;
   keys?: string[];
   children: ReactNode;
@@ -94,7 +96,9 @@ export function StepLink({
   const navigate = useNavigate();
   const tool = useTool();
   const off = useOff();
-  const target = view.status === "live" ? steppedTo(rowsOf(view.data?.[list]), to, params, next) : undefined;
+  const among = useSteppedAmong(next);
+  const target =
+    opened && among !== undefined ? (among ?? undefined) : view?.status === "live" ? steppedTo(rowsOf(view.data?.[list]), to, params, next) : undefined;
   const go = () => {
     if (target) void navigate(target, { replace: true });
   };
@@ -1809,6 +1813,8 @@ export function Table({
   const pressed: RowAction[] = actions.map((a) => (typeof a === "string" ? { name: a } : a)).filter((a) => a.allowed !== false);
   // The row whose button opened its form, while it's open.
   const [asking, setAsking] = useState<{ action: RowAction; row: Row }>();
+  // What its rows open, in the order they're shown, for a record's screen to step through.
+  useListOpens(`table ${list} ${link ?? ""}`, link ? sorted.map((row) => rowLink(link, row, params, keyed, named)) : undefined);
   // What's refused to someone signed out, like their own projects, means nothing to
   // them, so it isn't drawn; signing in shows it.
   if (view.status === "denied" && auth && !auth.person) return null;
@@ -2848,6 +2854,8 @@ export function Cards({
   const rows = rowsOf(listed);
   const addresses = useAddresses(rows, picture, 640);
   const taking = useTakingPictures(paste, name, () => rowsOf(view.data?.[list]).map((row) => String((picture && row[picture]) ?? "")));
+  // What its cards open, in order, for a record's screen to step through.
+  useListOpens(`cards ${list} ${link ?? ""}`, link ? rows.map((row) => rowLink(link, row, params, keyed, named)) : undefined);
   // Its headings, worked out once each time the list changes.
   const groups = useMemo(() => (by ? timeGroups(rowsOf(listed), by.field, by.unit) : undefined), [listed, by?.field, by?.unit]);
   useDatedInView(name ?? "", groups);

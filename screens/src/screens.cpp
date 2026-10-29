@@ -693,6 +693,7 @@ namespace one::screens {
 		auto p = page_at(address);
 		if (!p) return false;
 		if (!trail_.empty()) trail_.back()->place_->opened = address;
+		if (!trail_.empty()) p->from_ = trail_.back()->place_;
 		trail_.push_back(std::move(p));
 		changed_.set(changed_.peek() + 1);
 		return true;
@@ -708,6 +709,7 @@ namespace one::screens {
 		}
 		// The page it replaces is kept until the next, as it may be that page's own build
 		// replacing it, like a screen's on open.
+		p->from_ = trail_.back()->from_;
 		retired_ = std::move(trail_.back());
 		trail_.back() = std::move(p);
 		changed_.set(changed_.peek() + 1);
