@@ -2046,7 +2046,7 @@ form step::update "Save" {
   `robot`, `settings` and `workflow`; for what a front page offers too,
   `building`, `chart`, `cloud`, `code`, `connect`, `database`, `globe`, `layers`,
   `lock`, `people`, `shield` and `spark`; and for a drawing app's toolbar, `undo`,
-  `redo`, `save`, `paste`, `copy`, `crop`, `text`, `screenshot`, `picture`,
+  `redo`, `save`, `export`, `paste`, `copy`, `crop`, `text`, `screenshot`, `picture`,
   `gallery`, `fullscreen`, `sun`, `moon`, `check`, `close`, `raise`, `lower`,
   `rotate_left`, `rotate_right`, `flip_horizontal`, `flip_vertical`, `bold`,
   `smaller`, `larger`, `fill`, `fit`, `stretch`, `center`, `color` and `edges`. A

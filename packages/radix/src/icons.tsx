@@ -251,6 +251,12 @@ export const buttonIcons: Record<string, ReactNode> = {
       <path d="M2.5 10.5V14h11v-3.5" />
     </svg>
   ),
+  export: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8 10V2M4.5 5.5L8 2l3.5 3.5" />
+      <path d="M2.5 10.5V14h11v-3.5" />
+    </svg>
+  ),
   undo: (
     <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M3 6L9.5 6 10.41 6.12 11.25 6.47 11.97 7.03 12.53 7.75 12.88 8.59 13 9.5 12.88 10.41 12.53 11.25 11.97 11.97 11.25 12.53 10.41 12.88 9.5 13 6 13M6 3L3 6 6 9" />
