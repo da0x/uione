@@ -11,7 +11,7 @@ import type { ReactElement, ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { partsOf } from "./keys.js";
 import { ShownPath, fill, useConfirmContext, useFill, usePageTitle, useSignIn, useSite } from "./app.js";
-import { hintOf, setPicked as pickRow, useInGroup, useInOptions, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
+import { hintOf, setPicked as pickRow, useInGroup, useInOptions, useOverRun, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
 import type { BoardCard, CanvasRegion, ChartProps, FieldProps, Filtered, Hue, LandingFeature, LandingProps, LinkProps, PipelineRow, TrackStep } from "./contract.js";
 import { readValue, scaleTop, seriesOf, toneOfState, valueAt, type ChartUnit } from "./series.js";
 import { calendarGo, calendarOf, dateOf, dayOf, movedTo } from "./calendar.js";
@@ -1082,7 +1082,9 @@ export function Command({
   const off = inGroup && (groupOff || !when);
   const shown = (when || inGroup) && allowed;
   const sent = { ...(given ?? {}), ...(id === undefined ? {} : { id }) };
+  const overRun = useOverRun();
   const run = () => {
+    if (overRun?.(name, sent)) return;
     if (!thenOpen) return void runner.run(name, sent);
     // What it made, opened: its id in the route's last parameter.
     void replier.reply(name, sent).then((made) => {

@@ -69,6 +69,13 @@ export function Group({ name, small = false, across, atEnd = false, children }: 
 
 // options "Page" icon page { ... }: a tool that opens its lines, each a choice drawn with
 // what it's for, closing once one's chosen. The same as the desktop's.
+// What runs a button over a collage's picked layer, when the collage runs it its own
+// way, like deleting a group with all it holds: true when it has.
+export const OverRun = createContext<((name: string, sent: Record<string, unknown>) => boolean) | undefined>(undefined);
+export function useOverRun() {
+  return useContext(OverRun);
+}
+
 const InOptions = createContext<(() => void) | undefined>(undefined);
 export function useInOptions(): (() => void) | undefined {
   return useContext(InOptions);

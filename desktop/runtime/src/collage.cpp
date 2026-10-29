@@ -537,6 +537,24 @@ namespace one::desktop::runtime {
 			return b;
 		}
 
+		// A button over the picked layer run: the collage's delete of a group deletes all
+		// it holds with it, in one step.
+		void run_over(page& p, const collage_spec& spec, const placed& w, const value& layers, const std::string& name, const value& sent) {
+			std::string id = sent["id"].as_string();
+			bool group = std::ranges::any_of(layers.as_array(), [&](const value& l) { return l["id"].as_string() == id && holds_others(l); });
+			if (name != spec.remove || !group) return p.run(name, sent);
+			bool joined = false;
+			for (const auto& l : layers.as_array()) {
+				if (!w.inside(l["id"].as_string(), id)) continue;
+				value one = value(fields{{"id", l["id"]}});
+				if (std::exchange(joined, true)) one.fields["one:history"] = value("joined");
+				p.run(name, one);
+			}
+			value gone = sent;
+			gone.fields["one:history"] = value("joined");
+			p.run(name, gone);
+		}
+
 		// A group taken to `to`: each it holds carried with it, all one step to undo.
 		void place_carried(page& p, placed& w, const collage_spec& spec, model::box to, std::function<void(const answer&)> back = {}) {
 			bool joined = false;
@@ -1621,7 +1639,7 @@ namespace one::desktop::runtime {
 		if (!picked.empty() && !full && !w->crop && !w->editing) {
 			for (const auto& b : spec.over) {
 				if (auto shown = command_of(p, b)) {
-					for (const auto& k : b.keys) p.on_key(k, [&p, name = b.command, fields = shown->fields] { p.run(name, fields); });
+					for (const auto& k : b.keys) p.on_key(k, [&p, spec, w, layers, name = b.command, fields = shown->fields] { run_over(p, spec, *w, layers, name, fields); });
 					over.emplace_back(b, std::move(*shown));
 				}
 			}
@@ -1917,7 +1935,7 @@ namespace one::desktop::runtime {
 					        }
 				        }
 				        if (i < fitting.size()) p.kept<std::string>("collage do " + spec.key).set(fitting[i]);
-				        else p.run(over[i - fitting.size()].first.command, over[i - fitting.size()].second.fields);
+				        else run_over(p, spec, *w, layers, over[i - fitting.size()].first.command, over[i - fitting.size()].second.fields);
 				        return true;
 			        }
 			        model::point on{at.x, at.y};

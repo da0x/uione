@@ -24,7 +24,7 @@ import type { ViewState } from "./data.js";
 import { useUI } from "./ui.js";
 import { useSaying } from "./said.js";
 import { useSite } from "./app.js";
-import { OverLayer, choosePictures, hintOf, setChosen, setPicked, typing, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
+import { OverLayer, OverRun, choosePictures, hintOf, setChosen, setPicked, typing, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
 
 type Row = Record<string, unknown>;
 
@@ -1557,6 +1557,19 @@ export function Collage({
       H,
       layers.filter((l) => l["id"] !== moving && !inGroup(groupOf, str(l["id"]), moving) && !holdsOthers(l)).map((l) => whereIs(l)),
     );
+  // The collage's delete of a group, run by a button over it, deletes all it holds with
+  // it, in one step.
+  const deleteGroup = (name: string, sent: Record<string, unknown>) => {
+    const id = str(sent["id"]);
+    const group = layers.find((l) => str(l["id"]) === id);
+    if (name !== remove || !group || !holdsOthers(group)) return false;
+    void (async () => {
+      let joined = false;
+      for (const l of layers) if (inGroup(groupOf, str(l["id"]), id)) await runner.reply(name, { id: str(l["id"]), ...(joined ? { "one:history": "joined" } : {}) }), (joined = true);
+      await runner.reply(name, { ...sent, "one:history": "joined" });
+    })();
+    return true;
+  };
   // A group's gesture begun: where it and each it holds are.
   const carryFrom = (group: string, from: Box) => {
     w.carried = { group: from, from: new Map(layers.filter((l) => !holdsOthers(l) && inGroup(groupOf, str(l["id"]), group)).map((l) => [str(l["id"]), boxOf(l)])) };
@@ -2008,6 +2021,7 @@ export function Collage({
           }}
         >
           <OverLayer.Provider value>
+            <OverRun.Provider value={deleteGroup}>
             {w.crop ? (
               <CropTools
                 keep={keepCrop}
@@ -2019,6 +2033,7 @@ export function Collage({
             ) : (
               children
             )}
+            </OverRun.Provider>
           </OverLayer.Provider>
         </div>
       )}
