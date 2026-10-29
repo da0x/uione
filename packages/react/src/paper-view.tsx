@@ -831,6 +831,33 @@ export function Paper({
     void run(add, fieldsOf(made, fields));
   };
 
+  // Words pasted that run over several lines, as a document's paragraphs: the first
+  // put at the caret, and each after it a text block of its own, the last ending with
+  // what was after the caret. A kind where Enter types a new line, as code, keeps them.
+  const pasteParagraphs = (i: number, el: HTMLElement, pasted: string) => {
+    const b = shown[i]!;
+    const lines = pasted.split(/\r\n?|\n/).map((line, n) => (n === 0 ? line.trimEnd() : line.trim())).filter((line, n) => n === 0 || line !== "");
+    if (!add || !b.id || lines.length < 2 || kindOf(b.kind).enter) return false;
+    const words = wordsOf(el);
+    const { start, end } = caretIn(el);
+    const head = words.slice(0, start) + lines[0]!, tail = words.slice(end);
+    el.textContent = head;
+    written.current.set(b.id, head);
+    sent.current.set(b.id, head);
+    void run(write, fieldsOf({ id: b.id, words: head }, fields));
+    let position = b.position;
+    lines.slice(1).forEach((line, n) => {
+      position = between(position, shown[i + 1]?.position);
+      const last = n === lines.length - 2;
+      const made: Row = { position, words: last ? line + tail : line, kind: "text" };
+      if (parent && subject) made[parent] = subject;
+      made["one:history"] = "joined";
+      if (last) going.current = { position, at: line.length, known: new Set(shown.map((b) => b.id)) };
+      void run(add, fieldsOf(made, fields));
+    });
+    return true;
+  };
+
   // Backspace at a block's start: its words onto the end of the one before, and it
   // deleted. Before an equation, the caret only goes there.
   const joinBack = (i: number, el: HTMLElement) => {
@@ -1136,9 +1163,15 @@ export function Paper({
           eraseAcross(e.clipboardData.getData("text/plain"));
           return;
         }
-        // A picture pasted is a picture block after the caret's; words are typed.
+        // A picture pasted is a picture block after the caret's; words are typed, each
+        // paragraph a block.
         const pictures = [...e.clipboardData.files].filter((f) => f.type.startsWith("image/"));
-        if (!paste || pictures.length === 0) return;
+        if (pictures.length === 0) {
+          const k = caretIndex(), el = k >= 0 ? elements.current.get(shown[k]!.id) : undefined;
+          if (el && !readOnly && pasteParagraphs(k, el, e.clipboardData.getData("text/plain"))) e.preventDefault();
+          return;
+        }
+        if (!paste) return;
         e.preventDefault();
         void addPictures(pictures);
       }}

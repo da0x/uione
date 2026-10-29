@@ -100,6 +100,33 @@ describe("a paper", () => {
     expect(source.runs[1]).toMatchObject({ command: "studio::passage::create", input: { words: " what you see", kind: "quote", position: 1.5, poster: "p1", "one:history": "joined" } });
   });
 
+  it("makes each paragraph of words pasted a block of its own, the first at the caret, as one step", async () => {
+    const source = sourceWith([
+      { id: "b1", kind: "title", words: "A harbor", position: 1, align: "left" },
+      { id: "b2", kind: "text", words: "After", position: 2, align: "left" },
+    ]);
+    const drawn = renderPaper(source);
+    await waitFor(() => expect(blocks(drawn).length).toBe(2));
+    const block = blocks(drawn)[0]!;
+    block.focus();
+    caretAt(block, 8);
+    fireEvent.paste(block, { clipboardData: { files: [], getData: () => " at dawn\n\nThe boats go out.\r\nThe gulls follow.\n" } });
+    await waitFor(() => expect(source.runs).toHaveLength(3));
+    expect(source.runs[0]).toMatchObject({ command: "studio::passage::write", input: { id: "b1", words: "A harbor at dawn" } });
+    expect(source.runs[1]).toMatchObject({ command: "studio::passage::create", input: { words: "The boats go out.", kind: "text", position: 1.5, "one:history": "joined" } });
+    expect(source.runs[2]).toMatchObject({ command: "studio::passage::create", input: { words: "The gulls follow.", kind: "text", position: 1.75, "one:history": "joined" } });
+  });
+
+  it("keeps the lines of words pasted into code", async () => {
+    const source = sourceWith([{ id: "b1", kind: "code", words: "", position: 1, align: "left" }]);
+    const drawn = renderPaper(source);
+    await waitFor(() => expect(blocks(drawn).length).toBe(1));
+    const block = blocks(drawn)[0]!;
+    block.focus();
+    fireEvent.paste(block, { clipboardData: { files: [], getData: () => "one\ntwo" } });
+    expect(source.runs.some((r) => r.command === "studio::passage::create")).toBe(false);
+  });
+
   it("joins a block to the one before with Backspace at its start, deleting it, as one step", async () => {
     const source = sourceWith([
       { id: "b1", kind: "text", words: "One ", position: 1, align: "left" },
