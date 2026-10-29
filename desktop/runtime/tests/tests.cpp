@@ -3460,6 +3460,64 @@ TEST("a picture alone is all of its screen, fitted on black, its bars over it un
 	std::filesystem::remove_all(folder);
 }
 
+TEST("a picture alone fills its window, edge to edge, fitted on black, wide or tall, at any size and at any scale") {
+	auto folder = std::filesystem::temp_directory_path() / "uione-alone-fills";
+	std::filesystem::remove_all(folder);
+	std::filesystem::create_directories(folder / "files");
+	// A wide picture and a tall one, each white all over.
+	for (auto [name, w, h] : {std::tuple{"wide.png", 1800, 1000}, std::tuple{"tall.png", 1000, 1800}}) {
+		one::desktop::offscreen::write_png(folder / "files" / name, {w, h, std::vector<std::uint8_t>(std::size_t(w) * std::size_t(h) * 4, 255)});
+	}
+	struct kept_there : memory_source {
+		std::filesystem::path in;
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return in / kept; }
+	} data;
+	data.in = folder;
+	for (const char* name : {"wide.png", "tall.png"}) {
+		auto s = archive_of(1, data, {.view = {}, .list = "posters", .columns = {{"title", "Title"}}, .link = "/posters/:poster"});
+		s.screens.back().build = [name](page& p) {
+			auto archive = p.view("studio::archive");
+			return items(workspace(p, region{"toolbar", along(step(p, {.view = archive, .list = "posters", .route = "/posters/:poster", .next = true}, "Next", "next", {"right"}))},
+			                          region{"main", items(picture_alone(p, std::string("files/") + name, "/posters/:poster collage"))}, region{"status", along(text({words("Status")}))}));
+		};
+		navigator nav(s, data);
+		nav.open("/posters");
+		nav.open("/posters/p0");
+		kept_window window(nav);
+		for (auto [width, height, scale] : {std::tuple{900, 600, 1.0}, std::tuple{1600, 1000, 1.0}, std::tuple{1280, 800, 2.0}, std::tuple{700, 1100, 1.5}}) {
+			window.w.size = {width, height};
+			for (int built = 0; built < 3; ++built) {
+				window.update();
+				one::desktop::runtime::run_posted();
+			}
+			rest();
+			window.update();
+			auto drawn = one::desktop::offscreen::draw(window.w.size, scale, tested_theme().page, [&](one::desktop::canvas& c) {
+				one::desktop::detail::theme_in_use() = &tested_theme();
+				window.w.root->paint(c);
+			});
+			// Where it's white, in the window's own pixels, and so where the picture is.
+			int left = drawn.width, top = drawn.height, right = -1, bottom = -1;
+			for (int y = 0; y < drawn.height; ++y) {
+				for (int x = 0; x < drawn.width; ++x) {
+					const std::uint8_t* at = &drawn.rgba[(std::size_t(y) * std::size_t(drawn.width) + std::size_t(x)) * 4];
+					if (at[0] < 200 || at[1] < 200 || at[2] < 200) continue;
+					left = std::min(left, x), right = std::max(right, x), top = std::min(top, y), bottom = std::max(bottom, y);
+				}
+			}
+			bool wide = std::string(name) == "wide.png";
+			double fit = std::min(drawn.width / (wide ? 1800.0 : 1000.0), drawn.height / (wide ? 1000.0 : 1800.0));
+			double w = (wide ? 1800 : 1000) * fit, h = (wide ? 1000 : 1800) * fit;
+			CHECK_SAYING(std::abs((right - left + 1) - w) <= 2 && std::abs((bottom - top + 1) - h) <= 2,
+			             std::format("{} in {}x{} at {}: drawn {}x{} at {},{}, fitted is {:.0f}x{:.0f}", name, width, height, scale, right - left + 1, bottom - top + 1, left, top, w, h));
+			// Centered, so it touches two opposite edges of the window.
+			CHECK(std::abs(left - (drawn.width - 1 - right)) <= 2);
+			CHECK(std::abs(top - (drawn.height - 1 - bottom)) <= 2);
+		}
+	}
+	std::filesystem::remove_all(folder);
+}
+
 TEST("a picture alone is zoomed by Ctrl and its keys, its zoom buttons and a pinch, to 100% and back by a double click, and dragged about once it's larger, and stepping fits the next") {
 	auto folder = banded_picture(std::filesystem::temp_directory_path() / "uione-alone-zoomed");
 	struct kept_there : memory_source {
