@@ -4034,8 +4034,10 @@ namespace one::language {
         // pick is read; or a command run, as its button would.
         void verify_on_open(const std::string& ns, const on_open_item& opening, location where, const std::string& route) {
             if (!opening.route) {
-                if (opening.run.size() != 1 || !std::holds_alternative<button_item>(opening.run.front().node)) {
-                    error(where, "on open runs a command, like poster::create { width = screen.width } then open /posters/:poster, or opens a row, like open /posters/:poster for posters");
+                auto* choosing = opening.run.size() == 1 ? std::get_if<toggle_item>(&opening.run.front().node) : nullptr;
+                if (opening.run.size() != 1 || (!std::holds_alternative<button_item>(opening.run.front().node) && !(choosing && choosing->choice))) {
+                    error(where, "on open runs a command, like poster::create { width = screen.width } then open /posters/:poster, opens a row, like open /posters/:poster for posters, "
+                                 "or picks one of a choice, like toggle mode::edit");
                     return;
                 }
                 screen_items(ns, opening.run, route);

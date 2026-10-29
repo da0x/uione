@@ -1390,6 +1390,9 @@ namespace one::language {
         // board … when board_page.style == style::kanban: shown only while it holds, so
         // one screen shows a list as a board or a canvas, as a field says.
         expression_ptr when = nullptr;
+        // only when: in a toolbar, gone while it doesn't hold, rather than there but off,
+        // as for a mode the person switches the screen to.
+        bool only = false;
     };
 
     struct screen_declaration {

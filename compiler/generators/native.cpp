@@ -262,6 +262,9 @@ namespace one::generators {
                     for (const auto& v : b->given) {
                         if (v.value) (void)condition_of(parts, ns, *v.value, read);
                     }
+                } else if (auto* t = std::get_if<language::toggle_item>(&o->run.front().node)) {
+                    line = ".choose = " + str(route_ + " " + t->name) + ", .choice = " + str(*t->choice);
+                    if (o->run.front().when) line += ", .when = " + condition_of(parts, ns, *o->run.front().when, read);
                 }
                 // A command's own when is its button's, in its spec.
                 if (o->route && item.when) line += ", .when = " + condition_of(parts, ns, *item.when, read);
@@ -1908,7 +1911,7 @@ namespace one::generators {
                 // the toolbar keeps its shape.
                 bool toolbar = in_group_ || (std::holds_alternative<language::content_block>(item.node) &&
                                              std::get<language::content_block>(item.node).type == language::content_block::kind::group);
-                if (item.when && !grouped && toolbar) code = "p.off_unless(" + condition(parts, ns, *item.when) + ", [&] { return " + code + "; })";
+                if (item.when && !grouped && toolbar && !item.only) code = "p.off_unless(" + condition(parts, ns, *item.when) + ", [&] { return " + code + "; })";
                 else if (item.when && !grouped) code = "[&] { if (" + condition(parts, ns, *item.when) + ") return " + code + "; return view(); }()";
                 if (presses(item)) {
                     if (row.empty()) row_line = item.where.line;

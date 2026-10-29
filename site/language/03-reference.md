@@ -2538,6 +2538,11 @@ board project_page.issues by stage over project_page.stages link /:project/issue
 - In a toolbar, `when` doesn't hide: a group or a tool whose `when` doesn't hold is
   there, faint, and can't be pressed, nor its keys used, so the toolbar keeps its
   shape as what's picked changes. `group "Rotate" small when layer.picture != none`.
+  `only when` does hide, for a mode the person switches the screen to rather than
+  something picked: `group "Style" only when mode == mode::edit` is gone while the
+  page is read, and `toggle mode::edit "Edit" icon edit only when mode == mode::read`
+  is there only until it's pressed. Toggles, `undo`, `redo` and `full screen` take
+  either, like any line.
   A tool with no icon whose one given value is a color written `#rrggbb` is drawn
   as a circle of it, its words said when it's pointed at: `layer::write "White" {
   color = "#ffffff" }`. Tools side by side with the same words and icon are one, the
@@ -2595,7 +2600,10 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   poster.first_layer == none` opens the first row of the view's list the condition
   holds for, the row named by what it's of, as a pick is read. `on open
   poster::create { width = screen.width } then open /posters/:poster` runs a command,
-  as its button would. They're tried in order, and only the first that applies is
+  as its button would. `on open toggle mode::edit when document_page.written == 0`
+  picks one of a choice as its toggle would, so a new document opens to be written
+  and one with words in it, after `on open toggle mode::read`, to be read. They're
+  tried in order, and only the first that applies is
   done, once a visit, once every view they read is there; "Opening…" shows until
   then. What's opened takes the screen's place, so going back doesn't open it again.
 - `screen.width` and `screen.height` are the screen the app is shown on, in its own

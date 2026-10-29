@@ -1078,7 +1078,8 @@ TEST_CASE("on open, a screen opens the first row a condition holds for, or runs 
 )";
     CHECK(messages(source) == std::vector<std::string>{"24: a picked poster's row has no depth; add it to the list's block", "25: there's no screen at /nowhere/:poster to open",
                                                        "25: the screen is measured by screen.width and screen.height",
-                                                       "27: on open runs a command, like poster::create { width = screen.width } then open /posters/:poster, or opens a row, like open /posters/:poster for posters"});
+                                                       "27: on open runs a command, like poster::create { width = screen.width } then open /posters/:poster, opens a row, like open /posters/:poster for posters, "
+                                                       "or picks one of a choice, like toggle mode::edit"});
     std::string fine = source;
     for (const char* wrong : {" && poster.depth == 1", "\t\ton open open /nowhere/:poster for posters where poster.width == screen.size\n", "\t\ton open text \"Not a command\"\n"}) {
         fine.erase(fine.find(wrong), std::string(wrong).size());
@@ -1095,4 +1096,66 @@ TEST_CASE("on open, a screen opens the first row a condition holds for, or runs 
     auto spread = built(project + poster + "\n\tscreen \"Studio\" / {\n\t\tlayout workspace\n\t\ton open poster::create\n\t\tmain {\n\t\t\ttext \"Hello\"\n\t\t}\n\t}\n}\n");
     CHECK(spread["web/src/screens/main.tsx"].find(R"(<OnOpen ready={true} lines={[{ run: { name: "studio::poster::create" } }]} />)") != std::string::npos);
     CHECK(spread["desktop/src/screens/main.cpp"].find(R"(on_open(p, true, {opening{.run = command_button{.command = "studio::poster::create", .label = "Create"}}}))") != std::string::npos);
+}
+
+TEST_CASE("a mode the person switches to: only when takes a toolbar's line away, and on open picks the mode a screen starts in") {
+    const std::string source = project + R"(namespace studio at / {
+	enum mode {
+		read  "Read"
+		edit  "Edit"
+	}
+
+	entity poster {
+		title   text
+	}
+
+	command poster::create
+	command poster::rename {
+		changes title
+	}
+
+	view poster_page per poster {
+		title
+		named = count(poster where title != none)
+	}
+
+	screen "Poster" /posters/:poster {
+		layout workspace
+		on open toggle mode::edit when poster_page.named == 0
+		on open toggle mode::read
+		bar {
+			undo "Undo" icon undo key ctrl+z when mode == mode::edit
+		}
+		toolbar {
+			group "Edit" {
+				toggle mode::edit "Edit" icon edit only when mode == mode::read
+				toggle mode::read "Done" icon check only when mode == mode::edit
+			}
+			group "Write" only when mode == mode::edit {
+				poster::rename "Untitled" { title = none }
+			}
+			group "Kept" when mode == mode::edit {
+				poster::rename "Plain" { title = none }
+			}
+		}
+		main {
+			text "{poster_page.title}"
+		}
+	}
+}
+)";
+    CHECK(messages(source).empty());
+    auto files = built(source);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    // Picked on open, the first line that applies.
+    CHECK(web.find(R"({ choose: { name: "/posters/:poster mode", choice: "edit" }, when: ((posterPage.data?.["named"] ?? null) === 0) }, { choose: { name: "/posters/:poster mode", choice: "read" } })") != std::string::npos);
+    CHECK(native.find(R"(opening{.choose = "/posters/:poster mode", .choice = "read"})") != std::string::npos);
+    // Only when: gone, not off; when alone: there, but off.
+    CHECK(web.find(R"({((chosenMode === "read")) && (<>)") != std::string::npos);
+    CHECK(web.find(R"(<Applies when={((chosenMode === "edit"))}>)") != std::string::npos);
+    CHECK(web.find(R"(<Applies when={((chosenMode === "read"))}>)") == std::string::npos);
+    CHECK(native.find(R"(if ((same(value(p.chosen("/posters/:poster mode", "edit")), value("edit")))) return group(p, "Write")") != std::string::npos);
 }

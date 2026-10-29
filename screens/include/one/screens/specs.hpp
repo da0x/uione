@@ -366,9 +366,11 @@ namespace one::screens {
 	// collage, by what names it, carried out as it's next built.
 	// on open: one of what a screen does as it's opened, tried in order. A row opened:
 	// the first of a view's list `where` holds for, at `open` with its id. Or a command
-	// run, as its button would.
+	// run, as its button would. Or one of a choice picked, `choice` of `choose`.
 	struct opening {
 		std::optional<command_button> run = std::nullopt;
+		std::string choose = "";
+		std::string choice = "";
 		std::string open = "";
 		state<view_state> view = {};
 		std::string list = "";

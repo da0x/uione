@@ -15,7 +15,7 @@ import { useFiles, useRunner } from "./data.js";
 import type { ViewState } from "./data.js";
 import { useSaying } from "./said.js";
 import { pictureSize } from "./vectors.js";
-import { choosePictures, hintOf, setPicked, useKeys, useOff, useTool } from "./workspace.js";
+import { choosePictures, hintOf, setPicked, setToggled, useKeys, useOff, useTool } from "./workspace.js";
 import { useUI } from "./ui.js";
 import { kindOf } from "./paper/index.js";
 import type { Parts } from "./paper/index.js";
@@ -38,6 +38,22 @@ const str = (v: unknown) => (typeof v === "string" ? v : "");
 const sheetWidth = 816;
 const letterShape = 11 / 8.5;
 const pageGap = 28;
+// On a window narrower than a small screen's, as a phone's, a letter page shown whole
+// would set its words too small to read, so it's one page the room's width instead,
+// with a narrow margin.
+const narrowMargin = 18;
+const narrowQuery = "(max-width: 639.98px)";
+function useNarrow(): boolean {
+  return useSyncExternalStore(
+    (changed) => {
+      const query = window.matchMedia?.(narrowQuery);
+      query?.addEventListener("change", changed);
+      return () => query?.removeEventListener("change", changed);
+    },
+    () => window.matchMedia?.(narrowQuery).matches ?? false,
+    () => false,
+  );
+}
 
 // Room above and below each kind, as a book sets them; the same as the desktop's, and
 // added, rather than the larger taken, as a page's margins would be.
@@ -351,6 +367,7 @@ export function Paper({
   name,
   outline = false,
   outlineDrawer = false,
+  outlineToggle,
   warm = false,
   spread = false,
   readOnly = false,
@@ -372,6 +389,7 @@ export function Paper({
   name?: string; // what its insert buttons name it by
   outline?: boolean; // its title and headings listed beside it, the caret's section marked, each going there
   outlineDrawer?: boolean; // and as a drawer at its side, there while outline is, as a toggle says
+  outlineToggle?: string; // that toggle, turned off when a heading's chosen where the drawer fills the room
   warm?: boolean; // set on warm paper, as under a reading lamp: its page, sheet, ink and lines
   spread?: boolean; // its pages two at a time, side by side
   readOnly?: boolean; // read, not written on
@@ -978,22 +996,28 @@ export function Paper({
   // wider than the room there is, as a book's pages are shown whole on a small screen:
   // showing two at a time, or a narrower window, moves nothing from one page to another.
   // Its words are the reader's size on them, larger or smaller; the same as the desktop's.
+  // On a phone it's one page as wide as the room, as long as its words, set at the
+  // reader's size, edge to edge.
   const zoom = sizes[useSizeStep()] ?? 1;
-  const pagesAcross = spread ? 2 : 1;
-  const fit = Math.max(0.05, Math.min(1, Math.max(0, roomWidth - 56) / (sheetWidth * pagesAcross + (pagesAcross - 1) * pageGap)));
+  const narrow = useNarrow();
+  const pagesAcross = spread && !narrow ? 2 : 1;
+  const fit = narrow ? 1 : Math.max(0.05, Math.min(1, Math.max(0, roomWidth - 56) / (sheetWidth * pagesAcross + (pagesAcross - 1) * pageGap)));
   const size = zoom * fit;
-  const pageWidth = sheetWidth * fit;
-  const pageHeight = pageWidth * letterShape;
-  const margin = 72 * fit;
+  const pageWidth = narrow ? roomWidth : sheetWidth * fit;
+  const margin = narrow ? narrowMargin : 72 * fit;
+  const pageHeight = narrow ? Number.MAX_SAFE_INTEGER : pageWidth * letterShape;
   const placed = pagesOf(heights.map((height, i) => ({ kind: shown[i]?.kind ?? "text", height })), pageHeight, margin, size);
+  const writtenTo = shown.length === 0 ? margin : (placed.tops[shown.length - 1] ?? margin) + (heights[shown.length - 1] ?? 0);
   // Where a page is drawn, from its place in one column: side by side, two to a row.
-  const pageAt = (n: number) => (spread ? { left: (n % 2) * (pageWidth + pageGap), top: Math.floor(n / 2) * (pageHeight + pageGap) } : { left: 0, top: n * (pageHeight + pageGap) });
-  const rows = spread ? Math.ceil(placed.pages / 2) : placed.pages;
+  const pageAt = (n: number) => (pagesAcross === 2 ? { left: (n % 2) * (pageWidth + pageGap), top: Math.floor(n / 2) * (pageHeight + pageGap) } : { left: 0, top: n * (pageHeight + pageGap) });
+  const rows = pagesAcross === 2 ? Math.ceil(placed.pages / 2) : placed.pages;
+  const tall = narrow ? Math.max(writtenTo + 3 * margin, 240) : rows * pageHeight + (rows - 1) * pageGap;
   const sheet: CSSProperties = {
     position: "relative",
-    width: spread ? 2 * pageWidth + pageGap : pageWidth,
-    height: rows * pageHeight + (rows - 1) * pageGap,
-    margin: "28px auto",
+    width: pagesAcross === 2 ? 2 * pageWidth + pageGap : pageWidth,
+    height: tall,
+    ...(narrow && fills ? { minHeight: "100%" } : {}),
+    margin: narrow ? 0 : "28px auto",
     color: "var(--color-ink, #0e1726)",
   };
   const sheets = Array.from({ length: placed.pages }, (_, n) => (
@@ -1005,15 +1029,15 @@ export function Paper({
         left: pageAt(n).left,
         width: pageWidth,
         top: pageAt(n).top,
-        height: pageHeight,
+        height: narrow ? "100%" : pageHeight,
         background: "var(--color-surface, #fff)",
-        border: "1px solid var(--color-line, #dde2ea)",
-        borderRadius: 3,
-        boxShadow: "0 2px 0 rgba(0, 0, 0, 0.06)",
+        border: narrow ? "none" : "1px solid var(--color-line, #dde2ea)",
+        borderRadius: narrow ? 0 : 3,
+        boxShadow: narrow ? "none" : "0 2px 0 rgba(0, 0, 0, 0.06)",
         boxSizing: "border-box",
       }}
     >
-      <span style={{ position: "absolute", right: margin, bottom: margin / 2, transform: "translateY(50%)", fontSize: 13 * fit, color: "var(--color-muted, #5b6577)" }}>{n + 1}</span>
+      {!narrow && <span style={{ position: "absolute", right: margin, bottom: margin / 2, transform: "translateY(50%)", fontSize: 13 * fit, color: "var(--color-muted, #5b6577)" }}>{n + 1}</span>}
     </div>
   ));
 
@@ -1030,7 +1054,9 @@ export function Paper({
       aria-label="On this page"
       style={
         // As a drawer, it's the workspace's side, as wide and on the same surface.
-        outlineDrawer
+        outlineDrawer && narrow && fills
+          ? { position: "absolute", inset: 0, zIndex: 3, padding: 16, boxSizing: "border-box", overflowY: "auto", background: "var(--color-surface, #ffffff)" }
+          : outlineDrawer
           ? { width: 288, flexShrink: 0, padding: 12, boxSizing: "border-box", overflowY: "auto", background: "var(--color-surface, #ffffff)", borderLeft: "1px solid var(--color-line, #dde2ea)", ...(fills ? { margin: "-12px -12px -12px 0" } : { position: "sticky", top: 0, alignSelf: "flex-start" }) }
           : { width: 232, flexShrink: 0, padding: "28px 16px 16px 0", boxSizing: "border-box", ...(fills ? { overflowY: "auto" } : { position: "sticky", top: 0, alignSelf: "flex-start" }) }
       }
@@ -1054,6 +1080,8 @@ export function Paper({
                     clearAcross();
                     placeCaret(el, 0);
                     el.scrollIntoView?.({ block: "start", behavior: "smooth" });
+                    // Where the contents fill the room, choosing one is done with them.
+                    if (narrow && fills && outlineToggle) setToggled(outlineToggle, false);
                   }}
                   style={{
                     display: "block",
@@ -1080,7 +1108,7 @@ export function Paper({
     <div
       ref={room}
       className="one-paper"
-      style={{ ...(fills ? { height: "100%", overflowY: "auto" } : {}), flex: 1, minWidth: 0 }}
+      style={{ ...(fills ? { height: "100%", overflowY: "auto" } : {}), ...(fills && narrow ? { margin: -12, height: "calc(100% + 24px)" } : {}), flex: 1, minWidth: 0 }}
       onScroll={(e) => {
         if (progress && fills) readTo(e.currentTarget.scrollTop, e.currentTarget.scrollHeight - e.currentTarget.clientHeight);
       }}
@@ -1146,7 +1174,7 @@ export function Paper({
             block={b}
             place={(() => {
               const top = placed.tops[i] ?? 0, n = Math.floor(top / (pageHeight + pageGap)), at = pageAt(n);
-              return { top: at.top + top - n * (pageHeight + pageGap), left: at.left + margin, width: pageWidth - 2 * margin, tall: pageHeight - 2 * margin };
+              return { top: at.top + top - n * (pageHeight + pageGap), left: at.left + margin, width: pageWidth - 2 * margin, tall: narrow ? pageWidth : pageHeight - 2 * margin };
             })()}
             zoom={size}
             readOnly={readOnly}
@@ -1272,11 +1300,21 @@ function PaperBlock({
     alignSelf: "center",
     ...showing.words,
   };
-  // Placed where its page puts it, and telling how tall it is whenever that changes.
+  // Placed where its page puts it, and telling how tall it is whenever that changes:
+  // as it's drawn, and as it's laid out again, as when its font arrives.
   const box = useRef<HTMLDivElement | null>(null);
+  const tell = useRef(measured);
+  tell.current = measured;
   useLayoutEffect(() => {
     if (box.current) measured(box.current.offsetHeight);
   });
+  useEffect(() => {
+    const el = box.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const watching = new ResizeObserver(() => tell.current(el.offsetHeight));
+    watching.observe(el);
+    return () => watching.disconnect();
+  }, []);
   return (
     <div
       ref={box}

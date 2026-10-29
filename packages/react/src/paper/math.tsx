@@ -30,6 +30,10 @@ export const math: BlockKind = {
             e.preventDefault();
             toWords();
           }}
+          // A tap on a phone: its click is what lets the caret in, and the keyboard up.
+          onClick={() => {
+            if (!readOnly) toWords();
+          }}
         >
           <Equation written={words} displayed />
         </div>

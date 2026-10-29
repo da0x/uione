@@ -18,7 +18,7 @@ import "@fontsource-variable/literata/wght.css";
 import "@fontsource-variable/literata/wght-italic.css";
 import "@fontsource-variable/fraunces/wght.css";
 import "@fontsource-variable/fraunces/wght-italic.css";
-import { Children, Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
+import { Children, Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CSSProperties, ReactNode } from "react";
 import type { ButtonProps, ChoiceProps, ColorPickerProps, ComponentSet, OptionsProps, SliderProps } from "@uione/react";
@@ -524,6 +524,70 @@ function ColorPicker({ label, value, disabled, onSettle }: ColorPickerProps) {
       </div>
     </div>
   );
+}
+
+// A workspace's bar: the app's name in the middle, in the theme's heading font, as a
+// window's title is; the bar's lines at the start and light and dark at the end, each
+// side as wide as the other so the name stays centered. Where the lines don't fit
+// beside the name, as on a phone with many of them, the name is centered on a row of
+// its own above the rest.
+function WorkspaceBar({ site, children }: { site?: string; children: ReactNode }) {
+  const bar = useRef<HTMLDivElement>(null);
+  const lines = useRef<HTMLDivElement>(null);
+  const name = useRef<HTMLSpanElement>(null);
+  const [stacked, setStacked] = useState(false);
+  useLayoutEffect(() => {
+    const at = bar.current;
+    if (!at) return;
+    const measure = () => {
+      if (!lines.current || !name.current) return;
+      const room = (at.clientWidth - 24 - name.current.offsetWidth - 16) / 2;
+      setStacked(lines.current.scrollWidth > room);
+    };
+    measure();
+    const watching = new ResizeObserver(measure);
+    watching.observe(at);
+    if (lines.current) watching.observe(lines.current);
+    return () => watching.disconnect();
+  }, []);
+  return (
+    <div
+      ref={bar}
+      className={`grid shrink-0 items-center gap-x-2 gap-y-1 border-b border-line bg-surface px-3 ${stacked ? "grid-cols-[1fr_auto] pt-2.5 pb-1" : "h-11 grid-cols-[1fr_auto_1fr]"}`}
+    >
+      <span
+        ref={name}
+        className={`justify-self-center text-lg leading-none font-semibold whitespace-nowrap ${stacked ? "col-span-2" : "col-start-2 row-start-1"}`}
+        style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}
+      >
+        {site}
+      </span>
+      <div className={`min-w-0 ${stacked ? "" : "col-start-1 row-start-1"}`}>
+        <div ref={lines} className="flex w-max items-center gap-2">
+          {children}
+        </div>
+      </div>
+      <span className={`flex justify-end ${stacked ? "" : "col-start-3 row-start-1"}`}>
+        <ThemeToggle />
+      </span>
+    </div>
+  );
+}
+
+// A workspace is an app's window, so a tap in it never zooms the page, as a phone's
+// browser does to small text being typed in; the window stays as it was, its toolbar
+// where it is. Put back as it was when the workspace goes.
+function Unzoomed() {
+  useEffect(() => {
+    const meta = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
+    if (!meta) return;
+    const was = meta.content;
+    meta.content = "width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover";
+    return () => {
+      meta.content = was;
+    };
+  }, []);
+  return null;
 }
 
 export const radix: ComponentSet = {
@@ -2341,22 +2405,10 @@ export const radix: ComponentSet = {
   // along the bottom.
   Layout: ({ name, regions, site }) =>
     name === "workspace" ? (
-      <div className="fixed inset-0 flex min-h-0 flex-col bg-sunken text-ink">
+      <div className="fixed inset-0 flex min-h-0 touch-manipulation flex-col bg-sunken text-ink">
+        <Unzoomed />
         {regions.bar && (
-          // The app's name in the middle, in the theme's heading font, as a window's
-          // title is; the bar's lines at the start and light and dark at the end, each
-          // side as wide as the other so the name stays centered. On a phone there's
-          // no room for all three across, so the name is centered on a row of its own
-          // above the rest.
-          <div className="grid shrink-0 grid-cols-[1fr_auto] items-center gap-x-2 gap-y-1 border-b border-line bg-surface px-3 pt-2.5 pb-1 sm:h-11 sm:grid-cols-[1fr_auto_1fr] sm:py-0">
-            <span className="col-span-2 justify-self-center text-lg leading-none font-semibold sm:col-span-1 sm:col-start-2 sm:row-start-1" style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}>
-              {site}
-            </span>
-            <div className="flex min-w-0 items-center gap-2 sm:col-start-1 sm:row-start-1">{regions.bar}</div>
-            <span className="flex justify-end sm:col-start-3 sm:row-start-1">
-              <ThemeToggle />
-            </span>
-          </div>
+          <WorkspaceBar site={site}>{regions.bar}</WorkspaceBar>
         )}
         {regions.toolbar && (
           <div role="toolbar" className="flex shrink-0 items-stretch gap-1 overflow-x-auto border-b border-line bg-surface px-2 py-1 [&>[data-at-end]]:ml-auto [&>[data-at-end]~[data-at-end]]:ml-0">
