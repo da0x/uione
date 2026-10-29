@@ -362,6 +362,7 @@ namespace one::desktop::runtime {
 			return shown;
 		});
 		window.on_key = [&](const key_event& e) { return key(nav, e); };
+		window.on_key_first = [](const key_event& e) { return typed_into && typed_into(e); };
 		// Started with agents that stop when it quits, as publish starts its own, it asks
 		// before closing while they're working on something.
 		const char* stops = std::getenv("ONE_QUIT_STOPS_AGENTS");

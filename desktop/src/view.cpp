@@ -185,6 +185,10 @@ namespace one::desktop {
 	void deliver_key(window::state& w, const key_event& e) {
 		bring_up_to_date(w);
 		in_window context(w);
+		if (w.outside->on_key_first && w.outside->on_key_first(e)) {
+			w.redraw();
+			return;
+		}
 		if (w.root) {
 			if (e.is(keys::tab) || e.is(keys::left_tab)) {
 				std::vector<element*> all;

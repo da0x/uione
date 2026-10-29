@@ -98,6 +98,9 @@ namespace one::desktop {
 
 		// A key nothing in the view took, like Escape for going back.
 		std::function<bool(const key_event&)> on_key;
+		// A key before anything in the view hears it, like one typed into words being
+		// written, which a focused button would otherwise take.
+		std::function<bool(const key_event&)> on_key_first;
 
 		// Draws in the window, over its background and any view, each time it's drawn.
 		std::function<void(canvas&)> on_draw;

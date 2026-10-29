@@ -183,7 +183,7 @@ describe("a crop and words, in place", () => {
     expect(source.runs[0]).toMatchObject({ command: "studio::layer::crop", input: { id: "b0", crop_w: 1, crop_h: 1, x: 0, y: 0, w: 1600, h: 900 } });
   });
 
-  it("writes the picked words where they are, what's typed after them, kept with Enter as big as they now are", async () => {
+  it("writes the picked words where they are, what's typed after them, kept with Esc as big as they now are", async () => {
     const source = memorySource({ commands: { "studio::layer::write": (input) => ({ id: String(input["id"]) }) } });
     const drawn = renderPoster(source);
     await waitFor(() => expect(drawn.container.querySelector(".one-collage")).toBeTruthy());
@@ -192,7 +192,7 @@ describe("a crop and words, in place", () => {
     await act(async () => {});
     fireEvent.keyDown(window, { key: "End" });
     fireEvent.keyDown(window, { key: "!" });
-    fireEvent.keyDown(window, { key: "Enter" });
+    fireEvent.keyDown(window, { key: "Escape" });
     await waitFor(() => expect(source.runs.length).toBe(1));
     const sent = source.runs[0]!.input as Record<string, unknown>;
     expect(source.runs[0]!.command).toBe("studio::layer::write");
@@ -559,13 +559,13 @@ describe("a layer drawn on a collage", () => {
     await act(async () => {});
     expect(source.runs).toEqual([]);
     for (const key of ["H", "i"]) fireEvent.keyDown(window, { key });
-    fireEvent.keyDown(window, { key: "Enter", shiftKey: true });
-    for (const key of ["y", "o", "u"]) fireEvent.keyDown(window, { key });
-    expect(source.runs).toEqual([]);
     fireEvent.keyDown(window, { key: "Enter" });
+    for (const key of [" ", "y", "o", "u"]) fireEvent.keyDown(window, { key });
+    expect(source.runs).toEqual([]);
+    fireEvent.keyDown(window, { key: "Escape" });
     await waitFor(() => expect(source.runs.length).toBe(1));
     const made = source.runs[0]!.input as Record<string, number | string>;
-    expect(made).toMatchObject({ words: "Hi\nyou", size: 48, color: "#1d1d1f", x: 100, poster: "p1" });
+    expect(made).toMatchObject({ words: "Hi\n you", size: 48, color: "#1d1d1f", x: 100, poster: "p1" });
     expect(made["y"]).toBeLessThan(100);
     expect(made["w"]).toBeGreaterThan(0);
   });

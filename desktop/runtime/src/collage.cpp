@@ -707,8 +707,8 @@ namespace one::desktop::runtime {
 			}
 		}
 
-		// A key while words are written: Enter or Esc keeps them, Shift+Enter starts a
-		// new line, the arrows, Home and End move the caret, and the rest is typed.
+		// A key while words are written: Esc keeps them, Enter starts a new line, the
+		// arrows, Home and End move the caret, and the rest is typed.
 		bool written(placed::writing& e, const key_event& k) {
 			std::string& words = e.words;
 			std::size_t& at = e.caret;
@@ -724,7 +724,7 @@ namespace one::desktop::runtime {
 				return i;
 			};
 			bool typed = !k.text.empty() && !k.control && !k.alt && !k.super && k.text[0] != '\r';
-			bool new_line = k.is(keys::enter) && k.shift;
+			bool new_line = k.is(keys::enter) || k.is(keys::keypad_enter);
 			if (e.fresh && (typed || new_line || k.is(keys::backspace) || k.is(keys::delete_key))) words.clear(), at = 0, e.fresh = false;
 			e.fresh = e.fresh && !(k.is(keys::left) || k.is(keys::right) || k.is(keys::home) || k.is(keys::end));
 			if (new_line) words.insert(at++, 1, '\n');
@@ -1886,7 +1886,7 @@ namespace one::desktop::runtime {
 		if (w->editing) {
 			typing([&p, w, layers, spec](const key_event& k) {
 				if (!w->editing) return false;
-				if (k.is(keys::escape) || (k.is(keys::enter) && !k.shift)) {
+				if (k.is(keys::escape)) {
 					finish_writing(p, *w, layers, spec);
 					return true;
 				}

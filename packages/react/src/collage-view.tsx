@@ -1740,8 +1740,8 @@ export function Collage({
     return () => window.removeEventListener("keydown", down, true);
   });
 
-  // Words being written take every key: Enter or Esc keeps them, Shift+Enter starts a
-  // new line, the arrows, Home and End move the caret, and the rest is typed.
+  // Words being written take every key: Esc keeps them, Enter starts a new line, the
+  // arrows, Home and End move the caret, and the rest is typed.
   useEffect(() => {
     if (!w.editing) return;
     const down = (k: KeyboardEvent) => {
@@ -1749,13 +1749,13 @@ export function Collage({
       if (!e) return;
       k.preventDefault();
       k.stopPropagation();
-      if (k.key === "Escape" || (k.key === "Enter" && !k.shiftKey)) {
+      if (k.key === "Escape") {
         finishWriting();
         redraw((n) => n + 1);
         return;
       }
       const typed = k.key.length === 1 && !k.ctrlKey && !k.metaKey && !k.altKey;
-      const newLine = k.key === "Enter" && k.shiftKey;
+      const newLine = k.key === "Enter";
       if (e.fresh && (typed || newLine || k.key === "Backspace" || k.key === "Delete")) (e.words = ""), (e.caret = 0), (e.fresh = false);
       if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(k.key)) e.fresh = false;
       const chars = [...e.words];

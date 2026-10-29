@@ -1931,14 +1931,14 @@ TEST("a collage crops its picked picture in place, the background too, kept with
 		CHECK(data.runs().back().fields["crop_w"].as_double() == 1);
 		CHECK(data.runs().back().fields["crop_h"].as_double() == 1);
 	}
-	// The words picked and written: what's typed goes after them, Enter keeps them, and
+	// The words picked and written: what's typed goes after them, Esc keeps them, and
 	// they're sent as big as they now are.
 	p.pick("/ layer", "w1");
 	p.kept<std::string>("collage do / layer").set("edit");
 	(void)drawn(nav);
 	(void)drawn(nav);
 	CHECK(key(nav, one::desktop::key_event{.symbol = '!', .text = "!", .control = false}));
-	CHECK(key(nav, one::desktop::key_event{.symbol = one::desktop::keys::enter, .text = "", .control = false}));
+	CHECK(key(nav, one::desktop::key_event{.symbol = one::desktop::keys::escape, .text = "", .control = false}));
 	CHECK(data.runs().back().command == "studio::layer::write");
 	CHECK(data.runs().back().fields["words"].as_string() == "Harbor!");
 	CHECK(data.runs().back().fields["w"].as_double() > 200);
@@ -2075,17 +2075,18 @@ TEST("a collage's words made by typing where it's pressed, of several lines, onc
 	CHECK(typed("H"));
 	CHECK(typed("i"));
 	(void)built(nav);
-	CHECK(key(nav, one::desktop::key_event{.symbol = one::desktop::keys::enter, .text = "", .shift = true}));
+	CHECK(key(nav, one::desktop::key_event{.symbol = one::desktop::keys::enter, .text = ""}));
+	CHECK(typed(" "));
 	CHECK(typed("y"));
 	CHECK(typed("o"));
 	CHECK(typed("u"));
 	CHECK(data.runs().empty());
 	(void)built(nav);
-	CHECK(key(nav, one::desktop::key_event{.symbol = one::desktop::keys::enter, .text = ""}));
+	CHECK(key(nav, one::desktop::key_event{.symbol = one::desktop::keys::escape, .text = ""}));
 	CHECK(data.runs().size() == 1);
 	if (data.runs().empty()) return;
 	const value& made = data.runs().back().fields;
-	CHECK(made["words"].as_string() == "Hi\nyou");
+	CHECK(made["words"].as_string() == "Hi\n you");
 	CHECK(made["size"].as_double() == 48);
 	CHECK(made["color"].as_string() == "#1d1d1f");
 	CHECK(std::abs(made["x"].as_double() - 100) < 1);

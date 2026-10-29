@@ -2219,8 +2219,8 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     typing when tool == tool::text`, it's words typed where it's pressed, kept in the
     layer's `words` and `size`: a click puts a caret there, its line centered on it,
     as large as the draw gives, or a twelfth of the collage's height. Typing writes,
-    Shift+Enter starts a new line, and the arrows, Home and End move the caret.
-    Enter, Esc, or a click elsewhere keeps them, and only then are they made, as big
+    Enter starts a new line, and the arrows, Home and End move the caret. Esc or a
+    click elsewhere keeps them, and only then are they made, as big
     as they are, one step to undo; nothing typed makes nothing. Then, as with any
     draw, the choices its `when` reads go back to their first; one with no such
     choices keeps drawing by typing, so a click elsewhere begins the next words there.
@@ -2298,8 +2298,8 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     terminal draws no pictures, so it doesn't crop.
   - `write layer::write`: words are written where they are, as a press twice on them
     or an `edit words "Edit" icon edit key enter` button begins, with a caret moved by
-    a click, the arrows, Home and End, and Shift+Enter for a new line; Enter, Esc or a
-    click elsewhere keeps them, sending their `words`, `size` and their `x y w h` as big
+    a click, the arrows, Home and End, and Enter for a new line, as design programs
+    write; Esc or a click elsewhere keeps them, sending their `words`, `size` and their `x y w h` as big
     as they've been measured. Words resized by a corner get larger or smaller letters,
     sent the same way.
   - `add layer::create`: `add words "Text" icon text key t` makes words in the middle,
