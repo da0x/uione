@@ -9,6 +9,7 @@
 // page opens on it; and an offering standing alone as a letter, a narrow column of
 // words. No motion, no glow and no gradient: only type, rules and the theme's colors.
 
+import { useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { LandingFeature, LandingProps } from "@uione/react";
 import { Icon, grouped, heading } from "./parts.js";
@@ -174,10 +175,17 @@ function Hero(p: LandingProps) {
   );
 }
 
-// A launcher the page opens on: alone on the first screen, at its center.
+// A launcher the page opens on: alone on the first screen, at the center of the window
+// rather than of what's left under the bar, so it's raised by however far down it starts.
 function Opening({ group }: { group: Group }) {
+  const place = useRef<HTMLElement>(null);
+  const [raised, setRaised] = useState(0);
+  useLayoutEffect(() => {
+    const at = place.current;
+    if (at) setRaised(at.getBoundingClientRect().top + window.scrollY);
+  }, []);
   return (
-    <section className="flex min-h-[calc(100svh-10rem)] flex-col items-center justify-center gap-12 text-center">
+    <section ref={place} className="flex min-h-svh flex-col items-center justify-center gap-12 text-center" style={{ marginTop: -raised }}>
       {(group.heading?.overline !== undefined || group.heading?.title) && (
         <div className="flex flex-col items-center gap-3">
           <Quiet>{group.heading?.overline}</Quiet>
