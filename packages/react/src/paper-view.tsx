@@ -430,7 +430,8 @@ export function Paper({
     sent.current.set(id, firstSent.current);
     written.current.delete("");
   }
-  // How wide its place is, and how tall each block is, as the browser lays them out.
+  // How wide its place is, and how tall each block is, as the browser lays them out:
+  // its place measured once it's shown, since nothing is while it loads.
   const room = useRef<HTMLDivElement | null>(null);
   const [roomWidth, setRoomWidth] = useState(sheetWidth + 56);
   const [heights, setHeights] = useState<number[]>([]);
@@ -455,7 +456,7 @@ export function Paper({
     const watching = new ResizeObserver(measure);
     watching.observe(el);
     return () => watching.disconnect();
-  }, []);
+  }, [view.status === "loading"]);
   const [writingIn, setWritingIn] = useState<string | undefined>(undefined);
   const [, rebuilt] = useState(0);
 
