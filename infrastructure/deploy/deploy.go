@@ -198,8 +198,11 @@ func Run(ctx context.Context, o Options, tools Tools) (string, error) {
 		}
 		// The web app's packages, as its package.json names them: installed on a
 		// machine that builds only to deploy, and brought up to date where an earlier
-		// build left others, which would otherwise ship in their place.
-		if err := tools.Run(ctx, web, log, "yarn", "install", "--non-interactive"); err != nil {
+		// build left others, which would otherwise ship in their place. Every one is
+		// installed again, since a package copied from a folder, as uione's are while
+		// it's worked on, keeps its version as it changes, and yarn would keep the copy
+		// it made before.
+		if err := tools.Run(ctx, web, log, "yarn", "install", "--non-interactive", "--force"); err != nil {
 			return err
 		}
 		return tools.Run(ctx, web, log, "yarn", "build")

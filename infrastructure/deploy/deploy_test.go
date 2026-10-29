@@ -106,7 +106,7 @@ func TestADeployRunsEveryStepInOrderAndReportsEach(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []string{"api: go mod tidy", "infrastructure: go mod tidy", "open infrastructure production", "preview", "up",
-		"web: yarn install --non-interactive", "web: yarn build", "upload ui-one from web"}
+		"web: yarn install --non-interactive --force", "web: yarn build", "upload ui-one from web"}
 	if !reflect.DeepEqual(w.did, want) {
 		t.Errorf("the deploy did\n%v\nwant\n%v", w.did, want)
 	}
@@ -395,7 +395,7 @@ func TestAProjectWithNoBackendDeploysOnlyItsSite(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []string{"infrastructure: go mod tidy", "open infrastructure production", "preview", "up",
-		"web: yarn install --non-interactive", "web: yarn build", "upload ui-one from web"}
+		"web: yarn install --non-interactive --force", "web: yarn build", "upload ui-one from web"}
 	if !reflect.DeepEqual(w.did, want) {
 		t.Errorf("the deploy did\n%v\nwant\n%v", w.did, want)
 	}
