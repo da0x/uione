@@ -578,19 +578,52 @@ function WorkspaceBar({ site, end, children }: { site?: string; end?: ReactNode;
 }
 
 // A workspace is an app's window, so a tap in it never zooms the page, as a phone's
-// browser does to small text being typed in; the window stays as it was, its toolbar
-// where it is. Put back as it was when the workspace goes.
+// browser does to small text being typed in, and the page never pulls past its ends;
+// the window stays as it was, its toolbar where it is. Put back as it was when the
+// workspace goes.
 function Unzoomed() {
   useEffect(() => {
     const meta = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
-    if (!meta) return;
-    const was = meta.content;
-    meta.content = "width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover";
+    const was = meta?.content;
+    if (meta) meta.content = "width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover";
+    const root = document.documentElement.style, body = document.body.style;
+    const kept = [root.overscrollBehavior, body.overscrollBehavior, body.overflow];
+    root.overscrollBehavior = body.overscrollBehavior = "none";
+    body.overflow = "hidden";
     return () => {
-      meta.content = was;
+      if (meta && was !== undefined) meta.content = was;
+      [root.overscrollBehavior, body.overscrollBehavior, body.overflow] = kept as [string, string, string];
     };
   }, []);
   return null;
+}
+
+// What of the window can be seen: on a phone, above its keyboard while it's up, as far
+// down the page as the browser has moved it to show the caret. A workspace is that, so
+// its bar and toolbar stay in sight while it's written in.
+function useSeen(): CSSProperties | undefined {
+  const [seen, setSeen] = useState<CSSProperties>();
+  useEffect(() => {
+    const view = window.visualViewport;
+    if (!view) return;
+    const moved = () => setSeen(view.height < window.innerHeight - 1 || view.offsetTop > 0 ? { top: view.offsetTop, height: view.height, bottom: "auto" } : undefined);
+    moved();
+    view.addEventListener("resize", moved);
+    view.addEventListener("scroll", moved);
+    return () => {
+      view.removeEventListener("resize", moved);
+      view.removeEventListener("scroll", moved);
+    };
+  }, []);
+  return seen;
+}
+
+function WorkspaceWindow({ children }: { children: ReactNode }) {
+  return (
+    <div className="fixed inset-0 flex min-h-0 touch-manipulation flex-col bg-sunken text-ink" style={useSeen()}>
+      {children}
+    </div>
+  );
 }
 
 export const radix: ComponentSet = {
@@ -2415,7 +2448,7 @@ export const radix: ComponentSet = {
   // along the bottom.
   Layout: ({ name, regions, site }) =>
     name === "workspace" ? (
-      <div className="fixed inset-0 flex min-h-0 touch-manipulation flex-col bg-sunken text-ink">
+      <WorkspaceWindow>
         <Unzoomed />
         {regions.bar && (
           <WorkspaceBar site={site} end={regions.barEnd}>{regions.bar}</WorkspaceBar>
@@ -2437,7 +2470,7 @@ export const radix: ComponentSet = {
         </div>
         {/* One line on a wide screen; on a phone it wraps, so a message is read whole. */}
         {regions.status && <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-0.5 border-t border-line bg-surface px-3 py-1 text-xs text-muted sm:flex-nowrap sm:overflow-hidden sm:whitespace-nowrap">{regions.status}</div>}
-      </div>
+      </WorkspaceWindow>
     ) : name === "two_columns" ? (
       <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
         <div className="flex min-w-0 flex-col gap-10">{regions.main}</div>
