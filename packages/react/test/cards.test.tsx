@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Cards that take pictures: each dropped, pasted or chosen made a record by their
-// command, its file in the picture and its own size, name, bytes and date in the fields
-// that keep them; several at once one step to undo, and a drop target while empty.
+// command, its file in the picture and its own size, name, bytes, date and camera in
+// the fields that keep them; several at once one step to undo, and a drop target while empty.
 
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import { App, Cards, Link, PaperButton, StepLink, memorySource, mosaicRows, mosaicTile, screen as defineScreen, useView } from "../src/index.js";
@@ -12,10 +12,11 @@ import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
 import { takeInTurn } from "../src/workspace.js";
 import { vi } from "vitest";
+import { exif, jpeg } from "./photos.js";
 
 const paste = {
   command: "studio::piece::create",
-  fields: { picture: "image", picture_width: "picture_width", picture_height: "picture_height", name: "name", picture_bytes: "picture_bytes", picture_date: "picture_date" },
+  fields: { picture: "image", picture_width: "picture_width", picture_height: "picture_height", name: "name", picture_bytes: "picture_bytes", picture_date: "picture_date", picture_camera: "picture_camera" },
   given: { room: "r1" },
 };
 
@@ -48,9 +49,21 @@ describe("cards that take pictures", () => {
     fireEvent.drop(drawn.container.querySelector(".one-cards-taking")!, { dataTransfer: { files, getData: () => "", types: ["Files"] } });
     await waitFor(() => expect(source.runs.filter((r) => r.command === "studio::piece::create").length).toBe(2));
     const [first, second] = source.runs.filter((r) => r.command === "studio::piece::create").map((r) => r.input as Record<string, unknown>);
-    expect(first).toEqual({ room: "r1", image: expect.any(String), picture_width: 640, picture_height: 480, name: "harbor", picture_bytes: 4, picture_date: "2026-10-12T08:30:15Z" });
+    expect(first).toEqual({ room: "r1", image: expect.any(String), picture_width: 640, picture_height: 480, name: "harbor", picture_bytes: 4, picture_date: "2026-10-12T08:30:15Z", picture_camera: "" });
     expect(second).toMatchObject({ name: "Pasted image", picture_bytes: 2, "one:history": "joined" });
     expect(source.uploads.map((u) => u.file.name)).toEqual(["harbor.jpg", "image.png"]);
+  });
+
+  it("keep when a photo was taken and with what, as its camera says, in place of when its file changed", async () => {
+    const source = memorySource({ files: true, commands: { "studio::piece::create": () => ({ id: "n1" }) } });
+    source.set("studio::room_page", { pieces: [] }, "r1");
+    const drawn = renderCards(source);
+    await waitFor(() => expect(drawn.container.querySelector(".one-cards-taking")).toBeTruthy());
+    const photo = jpeg(exif({ orientation: 6, make: "Canon", model: "Canon EOS R5", taken: "2026:10:12 08:30:15", offset: "+02:00" }));
+    const files = [new File([photo], "harbor.jpg", { type: "image/jpeg", lastModified: Date.UTC(2026, 9, 20) })];
+    fireEvent.drop(drawn.container.querySelector(".one-cards-taking")!, { dataTransfer: { files, getData: () => "", types: ["Files"] } });
+    await waitFor(() => expect(source.runs.some((r) => r.command === "studio::piece::create")).toBe(true));
+    expect(source.runs.find((r) => r.command === "studio::piece::create")!.input).toMatchObject({ picture_date: "2026-10-12T06:30:15Z", picture_camera: "Canon EOS R5" });
   });
 
   it("make a record of each picture chosen by an add pictures button that names them", async () => {

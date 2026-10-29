@@ -359,7 +359,9 @@ canvas_line    ::= ("place" qualified | "at" NAME NAME ("size" NAME NAME)? | "si
                     | "paste" qualified "into" NAME | "picture" NAME | column+) END
 cards_line     ::= ("tally" qualified "." NAME "by" NAME "and" NAME | "filter" STRING filter ("color" NAME)? | "picture" NAME ("fit" | "fill")?
                   /* pictures dropped, pasted or chosen, each a record made by add, its file in the picture,
-                     its own size, its file's name, bytes and date each kept in the field named like it */
+                     its own size, upright, its file's name, bytes, date and camera each kept in the field named
+                     like it: picture_width, picture_height, name, picture_bytes, picture_date, when its camera
+                     says it was taken or else when its file last changed, and picture_camera, its make and model */
                   | "add" qualified | "paste"
                   | column+) END
 series         ::= NAME ("." NAME)? STRING ("percent" | "bytes" | "rate")?

@@ -174,7 +174,7 @@ function pictureOf(path: string, address: ((path: string) => Promise<string>) | 
     .then((r) => r.blob())
     .then(async (blob) => {
       const svg = await svgIn(blob);
-      if (svg === undefined) return void pictures.set(path, await createImageBitmap(blob));
+      if (svg === undefined) return void pictures.set(path, await createImageBitmap(blob, { imageOrientation: "from-image" }));
       vectors.set(path, await vectorImage(svg));
       pictures.set(path, "vector");
     })

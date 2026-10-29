@@ -212,7 +212,8 @@ namespace one::desktop::runtime {
 		std::string svg = {};   // its text, when it's an SVG
 		int width = 0, height = 0;
 		std::optional<long long> bytes = {};
-		std::string date = {};
+		std::string date = {};    // when it was taken, as its camera says, or else when its file last changed
+		std::string camera = {};  // the camera's make and model, as it says them
 		std::size_t index = 0, count = 1;
 		bool joined = false;
 	};

@@ -4618,7 +4618,8 @@ namespace one::language {
                     if (!f || (f->type && f->type->text() == part.type && !f->list)) continue;
                     static const std::map<std::string, std::string> kept{{"picture_width", "a pasted picture's width"}, {"picture_height", "a pasted picture's height"},
                                                                          {"name", "a pasted picture's file name"}, {"picture_bytes", "how many bytes a pasted picture is"},
-                                                                         {"picture_date", "when a pasted picture's file was last changed"}};
+                                                                         {"picture_date", "when a pasted picture was taken, or its file last changed"},
+                                                                         {"picture_camera", "the camera a pasted picture was taken with"}};
                     std::string what = part.type == std::string("number") ? "a number" : part.type == std::string("date") ? "a date" : "text";
                     error(cards.paste ? cards.paste_where : cards.add->where, card->name + "." + part.name + " keeps " + kept.at(part.name) + ", so it's " + what);
                 }

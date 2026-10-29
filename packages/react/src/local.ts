@@ -468,17 +468,18 @@ export function localSource(options: LocalOptions): LocalSource {
 }
 
 // A picture's copy no longer on its longer side than `longest`, decoded and drawn
-// smaller by the browser away from the page; nothing where it's that small already,
-// or the browser can't, as with an SVG some browsers won't decode.
+// smaller by the browser away from the page, the way up its camera says; nothing
+// where it's that small already, or the browser can't, as with an SVG some browsers
+// won't decode.
 async function smallerCopy(whole: Blob, longest: number): Promise<Blob | undefined> {
   if (typeof createImageBitmap !== "function" || typeof OffscreenCanvas !== "function") return undefined;
   try {
-    const size = await createImageBitmap(whole);
+    const size = await createImageBitmap(whole, { imageOrientation: "from-image" });
     const scale = longest / Math.max(size.width, size.height);
     const w = Math.max(1, Math.round(size.width * scale)), h = Math.max(1, Math.round(size.height * scale));
     size.close();
     if (scale >= 1) return undefined;
-    const small = await createImageBitmap(whole, { resizeWidth: w, resizeHeight: h, resizeQuality: "high" });
+    const small = await createImageBitmap(whole, { imageOrientation: "from-image", resizeWidth: w, resizeHeight: h, resizeQuality: "high" });
     const canvas = new OffscreenCanvas(w, h);
     canvas.getContext("2d")?.drawImage(small, 0, 0);
     small.close();

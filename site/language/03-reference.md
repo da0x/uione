@@ -2084,8 +2084,12 @@ form step::update "Save" {
   does. Each is made by `add`, given what the screen's address names, its file in
   the field `picture` names; its own size goes in `picture_width` and
   `picture_height`, its file's name, without its extension, in `name`, how many
-  bytes it is in `picture_bytes`, and when its file was last changed in
-  `picture_date`, each only when the entity has that field. Several at once are one
+  bytes it is in `picture_bytes`, when it was taken in `picture_date`, and the
+  camera it was taken with in `picture_camera`, each only when the entity has that
+  field, of that type: a number, text, a date and text. The date is the one its
+  camera wrote, with its offset from UTC when the camera says one, or else when its
+  file was last changed. The camera is its make and model, like `Fujifilm X-T5`,
+  the make said once when the model starts with it. Several at once are one
   step to undo, and cards with none yet still take them. A terminal can't be dropped
   on, so it doesn't take them.
 
@@ -2095,7 +2099,10 @@ form step::update "Save" {
   say how far they've got, like "Adding 12 of 40 pictures…", and say nothing once
   they're in, or what couldn't be taken. A card draws a smaller copy of its
   picture, made once and kept beside it, while `picture poster.preview` shows the
-  whole of it.
+  whole of it. A photo is drawn the way up its camera says it was held, wherever
+  it's drawn, on a card, a collage or a paper, whole or as a smaller copy, and its
+  own size is its size that way up. That's read from the file each time, never
+  kept in a field.
 - `picture poster.preview fit` shows the file a value holds, on its own, as wide as
   its place and 320 tall: a field of what's picked, like `poster`, or of a view per
   something, like `poster_page.preview`. All of it is fitted in, or, with `fill` or

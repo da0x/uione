@@ -15,6 +15,7 @@
 #include "check.hpp"
 #include "app_internal.hpp"
 #include "offscreen.hpp"
+#include "photos.hpp"
 #include "one/desktop/runtime/components.hpp"
 #include "one/desktop/runtime/markdown.hpp"
 #include "ui_internal.hpp"
@@ -1066,6 +1067,80 @@ TEST("cards take pictures chosen or dropped, each a record made by their add, it
 	built(nav);
 	CHECK(data.runs().size() == 3);
 	CHECK(data.runs()[1].fields["one:history"].is_null() && data.runs()[2].fields["one:history"].as_string() == "joined");
+	std::filesystem::remove_all(folder);
+}
+
+TEST("cards take a photo's date and camera as it says them, and its size the way up it was held, and the small copy they draw is that way up too") {
+	auto folder = std::filesystem::temp_directory_path() / "uione-cards-photos";
+	std::filesystem::remove_all(folder);
+	std::filesystem::create_directories(folder);
+	// 40 × 20, red on its left, held turned a quarter clockwise, so it's 20 × 40, red at its top.
+	std::vector<std::uint8_t> pixels;
+	for (int y = 0; y < 20; ++y) {
+		for (int x = 0; x < 40; ++x) pixels.insert(pixels.end(), {static_cast<std::uint8_t>(x < 20 ? 255 : 0), 0, static_cast<std::uint8_t>(x < 20 ? 0 : 255), 255});
+	}
+	auto bytes = photos::jpeg(40, 20, pixels, photos::exif({.orientation = 6, .make = "FUJIFILM", .model = "X-T5", .taken = "2026:10:12 08:30:15", .offset = "+02:00"}));
+	auto file = folder / "harbor.jpg";
+	std::ofstream(file, std::ios::binary).write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+	memory_source data;
+	data.set("studio::room_page", "r1", value(fields{{"pieces", list{}}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Pieces", "/:room", "", [](page& p) {
+		                     return items(cards(p, {.view = p.view("studio::room_page", p.param("room")),
+		                                            .list = "pieces",
+		                                            .columns = {{"name", "Name"}},
+		                                            .picture = "image",
+		                                            .add = "studio::piece::create",
+		                                            .fields = {{"picture", "image"}, {"picture_width", "picture_width"}, {"picture_height", "picture_height"}, {"picture_date", "picture_date"}, {"picture_camera", "picture_camera"}},
+		                                            .given = {{"room", p.param("room")}},
+		                                            .key = "/:room cards pieces",
+		                                            .paste = true}));
+	                     }});
+	navigator nav(s, data);
+	nav.open("/r1");
+	built(nav);
+	nav.current().kept<std::vector<std::string>>("pictures chosen /:room cards pieces").set({file.string()});
+	built(nav);
+	CHECK(data.runs().size() == 1);
+	if (data.runs().empty()) return;
+	const value& made = data.runs().front().fields;
+	CHECK(made["picture_width"].as_integer() == 20 && made["picture_height"].as_integer() == 40);
+	CHECK(made["picture_date"].as_string() == "2026-10-12T06:30:15Z");
+	CHECK(made["picture_camera"].as_string() == "FUJIFILM X-T5");
+	// Without a field for it, it isn't kept.
+	CHECK(!made.fields.contains("picture_bytes"));
+	// A card's small copy of a large one, named by its hash, is made upright, and kept by
+	// a name of its own, so one made before pictures were turned isn't drawn on its side.
+	std::vector<std::uint8_t> large;
+	for (int y = 0; y < 700; ++y) {
+		for (int x = 0; x < 1400; ++x) large.insert(large.end(), {static_cast<std::uint8_t>(x < 700 ? 255 : 0), 0, static_cast<std::uint8_t>(x < 700 ? 0 : 255), 255});
+	}
+	auto taken = photos::jpeg(1400, 700, large, photos::exif({.orientation = 6}));
+	std::string hash(64, 'b');
+	std::filesystem::create_directories(folder / "files");
+	std::ofstream(folder / "files" / hash, std::ios::binary).write(reinterpret_cast<const char*>(taken.data()), static_cast<std::streamsize>(taken.size()));
+	struct kept_there : memory_source {
+		std::filesystem::path in;
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return in / kept; }
+	} there;
+	there.in = folder;
+	there.set("studio::room_page", "r1", value(fields{{"pieces", list{value(fields{{"id", "c1"}, {"name", "Harbor"}, {"image", "files/" + hash}})}}}));
+	site shown{.name = "studio", .id = "org.uione.runtime-tests"};
+	shown.look = tested_theme();
+	shown.screens.push_back({"Pieces", "/:room", "", [](page& p) {
+		                         return items(cards(p, {.view = p.view("studio::room_page", p.param("room")), .list = "pieces", .columns = {{"name", "Name"}}, .picture = "image"}));
+	                         }});
+	navigator cards_nav(shown, there);
+	cards_nav.open("/r1");
+	(void)drawn(cards_nav);
+	auto small = one::desktop::picture::read(folder / "files" / "small" / (hash + "-640-upright.png"));
+	CHECK(small.has_value());
+	if (small) {
+		CHECK(small->width() == 320 && small->height() == 640);
+		CHECK(small->rgba()[0] > 180 && small->rgba()[2] < 80);  // red, its stored left, at its top
+	}
+	CHECK(!std::filesystem::exists(folder / "files" / "small" / (hash + "-640.png")));
 	std::filesystem::remove_all(folder);
 }
 

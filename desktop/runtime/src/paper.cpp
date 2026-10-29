@@ -1074,7 +1074,13 @@ namespace one::desktop::runtime {
 			if (kept) c.kept = **kept;
 			std::error_code failed;
 			if (auto bytes = std::filesystem::file_size(file, failed); !failed) c.bytes = static_cast<long long>(bytes);
-			if (auto changed = std::filesystem::last_write_time(file, failed); !failed) {
+			// When it was taken and with what, as its camera wrote, read without decoding it;
+			// or when its file was last changed.
+			auto facts = desktop::facts_of(file);
+			c.camera = facts.camera();
+			if (auto taken = facts.when()) {
+				c.date = std::format("{:%FT%T}Z", *taken);
+			} else if (auto changed = std::filesystem::last_write_time(file, failed); !failed) {
 				auto at = std::chrono::floor<std::chrono::seconds>(std::chrono::clock_cast<std::chrono::system_clock>(changed));
 				c.date = std::format("{:%FT%T}Z", at);
 			}

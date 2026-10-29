@@ -86,7 +86,8 @@ namespace studio at / {
 	}
 
 	// A picture kept to go on posters later, made of one dropped, pasted or chosen: its
-	// file, its own size, its file's name, how many bytes it is and when it was last changed.
+	// file, its own size, its file's name, how many bytes it is, when it was taken and
+	// the camera it was taken with.
 	entity clipping {
 		name            text
 		image           file
@@ -94,6 +95,7 @@ namespace studio at / {
 		picture_height  number  = 0
 		picture_bytes   number  = 0
 		picture_date    date
+		picture_camera  text
 	}
 
 	command clipping::create
@@ -194,7 +196,7 @@ namespace studio at / {
 	}
 
 	view clipping_page per clipping {
-		name  image  picture_bytes
+		name  image  picture_bytes  picture_date  picture_camera
 	}
 
 	view notes_page per poster {
@@ -349,7 +351,7 @@ namespace studio at / {
 			picture clipping_page.image fit alone
 		}
 		status {
-			text "{clipping_page.name}, {clipping_page.picture_bytes} bytes"
+			text "{clipping_page.name}, taken {clipping_page.picture_date} with {clipping_page.picture_camera}"
 		}
 	}
 

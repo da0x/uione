@@ -1653,11 +1653,14 @@ namespace one::language {
         return all;
     }
 
-    // Cards': a picture made a record keeps its file, its own size, its file's name, how
-    // many bytes it is and when it was last changed, each where the entity has a field for it.
+    // Cards': a picture made a record keeps its file, its own size, upright, its file's
+    // name, how many bytes it is, when it was taken, as its camera says, or else when its
+    // file was last changed, and the camera's make and model, each where the entity has
+    // a field for it.
     inline const std::vector<collage_part>& cards_parts() {
         static const std::vector<collage_part> all{
-            {"picture", "file"}, {"picture_width", "number"}, {"picture_height", "number"}, {"name", "text"}, {"picture_bytes", "number"}, {"picture_date", "date"},
+            {"picture", "file"},          {"picture_width", "number"}, {"picture_height", "number"}, {"name", "text"},
+            {"picture_bytes", "number"}, {"picture_date", "date"},     {"picture_camera", "text"},
         };
         return all;
     }

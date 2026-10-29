@@ -206,7 +206,10 @@ namespace one::desktop::runtime {
 				if (longest <= 0) return desktop::picture::read(file).value_or(desktop::picture());
 				std::string name = file.filename().string();
 				bool hashed = name.size() == 64 && name.find_first_not_of("0123456789abcdef") == std::string::npos;
-				std::filesystem::path beside = file.parent_path() / "small" / std::format("{}-{}.png", name, longest);
+				// One turned by its camera is kept by another name, so a copy made before
+				// pictures were turned upright isn't drawn on its side.
+				bool turned = hashed && desktop::facts_of(file).orientation != 1;
+				std::filesystem::path beside = file.parent_path() / "small" / std::format("{}-{}{}.png", name, longest, turned ? "-upright" : "");
 				if (hashed) {
 					if (auto read = desktop::picture::read(beside)) return *read;
 				}

@@ -24,8 +24,8 @@ namespace one::desktop::runtime {
 		desktop::view quiet(std::string words) { return desktop::text(std::move(words), current_theme().quiet()); }
 
 		// Pictures come in, each a record made by the cards' add, given what the address
-		// names, its file in the picture, and its own size, its file's name, bytes and date
-		// where the cards keep them; all one step to undo. The same as the web's.
+		// names, its file in the picture, and its own size, its file's name, bytes, date and
+		// camera where the cards keep them; all one step to undo. The same as the web's.
 		void add_pictures(page& p, const cards_spec& spec, const std::vector<coming_picture>& pictures) {
 			for (const auto& picture : pictures) {
 				value made = value::map();
@@ -38,6 +38,7 @@ namespace one::desktop::runtime {
 				keep("name", value(picture_name(picture.file)));
 				if (picture.bytes) keep("picture_bytes", value(*picture.bytes));
 				if (!picture.date.empty()) keep("picture_date", value(picture.date));
+				if (!picture.camera.empty()) keep("picture_camera", value(picture.camera));
 				if (picture.joined) made.fields["one:history"] = value("joined");
 				run_with_picture(p, spec.add, made, spec.fields.at("picture"), picture, [](const answer&) {});
 			}

@@ -89,6 +89,7 @@ add_library(one_desktop
 	src/choices.cpp
 	src/clipboard.cpp
 	src/dragging.cpp
+	src/exif.cpp
 	src/surface.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/../screens/src/editing.cpp
 	src/field.cpp

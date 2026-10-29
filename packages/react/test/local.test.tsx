@@ -402,7 +402,8 @@ describe("a local app's files", () => {
       const path = await source.files.upload(new File(["a large photo"], "harbor.jpg", { type: "image/jpeg" }), () => {});
       const made = (await source.run("x::note::create", { picture: path })) as CommandReply;
       expect(await source.files.small!(path, 640)).toBe("blob:7");
-      expect(decoded).toEqual([undefined, { resizeWidth: 640, resizeHeight: 480, resizeQuality: "high" }]);
+      // Both times turned the way up its camera says it was held.
+      expect(decoded).toEqual([{ imageOrientation: "from-image" }, { imageOrientation: "from-image", resizeWidth: 640, resizeHeight: 480, resizeQuality: "high" }]);
       expect((await store.file(`${path} small 640`))!.size).toBe("640x480".length);
       // Read again, it's the one kept, not drawn again.
       await localSource({ name: "x", packages: [notes], store }).files.small!(path, 640);

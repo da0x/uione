@@ -26,6 +26,7 @@
 #include "one/desktop/ui.hpp"
 #include "app_internal.hpp"
 #include "offscreen.hpp"
+#include "photos.hpp"
 #include "fonts.hpp"
 #include "ui_internal.hpp"
 
@@ -883,6 +884,169 @@ TEST("a toolbar: large tool buttons with their words, small ones, one on and one
 		root->paint(c);
 		c.finish();
 	});
+}
+
+namespace {
+
+	// A picture `width` × `height` whose every pixel says where it is: red its column,
+	// green its row, so a pixel turned shows where it came from.
+	std::vector<std::uint8_t> placed_pixels(int width, int height, int step = 40) {
+		std::vector<std::uint8_t> rgba;
+		for (int y = 0; y < height; ++y) {
+			for (int x = 0; x < width; ++x) rgba.insert(rgba.end(), {static_cast<std::uint8_t>(x * step), static_cast<std::uint8_t>(y * step), 0, 255});
+		}
+		return rgba;
+	}
+
+	std::pair<int, int> came_from(const one::desktop::picture& p, int x, int y) {
+		const auto& rgba = p.rgba();
+		std::size_t at = (static_cast<std::size_t>(y) * p.width() + x) * 4;
+		return {rgba[at] / 40, rgba[at + 1] / 40};
+	}
+
+}  // namespace
+
+TEST("a photo's EXIF is read from a JPEG, a PNG, a WebP or a TIFF without decoding it: when it was taken, with what, and which way up") {
+	photos::said said{.orientation = 6, .make = "FUJIFILM", .model = "X-T5", .taken = "2026:10:12 08:30:15", .offset = "+02:00"};
+	auto block = photos::exif(said);
+	auto jpeg = photos::jpeg(16, 8, placed_pixels(16, 8, 15), block);
+	for (const auto& bytes : {jpeg, photos::png(4, 3, placed_pixels(4, 3), block), photos::webp(block, true), photos::webp(block, false), block}) {
+		auto facts = one::desktop::facts_of(bytes);
+		CHECK(facts.orientation == 6);
+		CHECK(facts.make == "FUJIFILM" && facts.model == "X-T5");
+		CHECK(facts.camera() == "FUJIFILM X-T5");
+		CHECK(facts.taken == "2026:10:12 08:30:15" && facts.offset == "+02:00");
+		CHECK(facts.when() && std::format("{:%FT%T}Z", *facts.when()) == "2026-10-12T06:30:15Z");
+	}
+	// Its numbers most significant byte first, as Motorola's order says.
+	said.little = false;
+	CHECK(one::desktop::facts_of(photos::exif(said)).camera() == "FUJIFILM X-T5");
+	CHECK(one::desktop::facts_of(photos::exif(said)).orientation == 6);
+	// From its file, reading only the start of it.
+	auto file = std::filesystem::temp_directory_path() / "uione-exif.jpg";
+	std::ofstream(file, std::ios::binary).write(reinterpret_cast<const char*>(jpeg.data()), static_cast<std::streamsize>(jpeg.size()));
+	CHECK(one::desktop::facts_of(file).camera() == "FUJIFILM X-T5");
+	// Measured and drawn the way up it was held: 8 × 16, its stored left side its top.
+	auto size = one::desktop::picture::size_of(file);
+	CHECK(size && size->first == 8 && size->second == 16);
+	auto read = one::desktop::picture::read(file);
+	CHECK(read && read->width() == 8 && read->height() == 16);
+	if (read) {
+		const auto& rgba = read->rgba();
+		CHECK(rgba[0] < 60 && rgba[1] > 20);  // stored at its bottom left: column 0, row 7
+		std::size_t last = (static_cast<std::size_t>(15) * 8 + 7) * 4;
+		CHECK(rgba[last] > 180 && rgba[last + 1] < 60);  // stored at its top right
+	}
+	std::filesystem::remove(file);
+	// None, in a picture that says nothing, or one that isn't a picture.
+	auto plain = one::desktop::facts_of(photos::jpeg(4, 4, placed_pixels(4, 4), {}));
+	CHECK(plain.orientation == 1 && plain.camera().empty() && !plain.when());
+	CHECK(one::desktop::facts_of(std::vector<std::uint8_t>{'h', 'e', 'l', 'l', 'o'}).orientation == 1);
+	CHECK(one::desktop::facts_of(std::filesystem::temp_directory_path() / "uione-no-such-photo.jpg").orientation == 1);
+}
+
+TEST("a photo is drawn the way up its camera says, each of EXIF's eight, mirrored and turned") {
+	// Where the pixel drawn at the top left, top right and bottom left comes from in the
+	// 3 × 2 it's stored as, for each.
+	struct way {
+		int orientation, width, height;
+		std::pair<int, int> top_left, top_right, bottom_left;
+	};
+	for (const way& w : {way{1, 3, 2, {0, 0}, {2, 0}, {0, 1}}, way{2, 3, 2, {2, 0}, {0, 0}, {2, 1}}, way{3, 3, 2, {2, 1}, {0, 1}, {2, 0}}, way{4, 3, 2, {0, 1}, {2, 1}, {0, 0}},
+	                     way{5, 2, 3, {0, 0}, {0, 1}, {2, 0}}, way{6, 2, 3, {0, 1}, {0, 0}, {2, 1}}, way{7, 2, 3, {2, 1}, {2, 0}, {0, 1}}, way{8, 2, 3, {2, 0}, {2, 1}, {0, 0}}}) {
+		auto shown = one::desktop::picture::decode(photos::png(3, 2, placed_pixels(3, 2), photos::exif({.orientation = w.orientation})));
+		CHECK(shown.has_value());
+		if (!shown) continue;
+		CHECK_SAYING(shown->width() == w.width && shown->height() == w.height, std::format("orientation {}", w.orientation));
+		CHECK_SAYING(came_from(*shown, 0, 0) == w.top_left, std::format("orientation {}", w.orientation));
+		CHECK_SAYING(came_from(*shown, shown->width() - 1, 0) == w.top_right, std::format("orientation {}", w.orientation));
+		CHECK_SAYING(came_from(*shown, 0, shown->height() - 1) == w.bottom_left, std::format("orientation {}", w.orientation));
+	}
+	// One EXIF doesn't count is left as it's stored.
+	auto odd = one::desktop::picture::decode(photos::png(3, 2, placed_pixels(3, 2), photos::exif({.orientation = 9})));
+	CHECK(odd && odd->width() == 3);
+}
+
+TEST("an EXIF block cut short, or made wrong anywhere, is read as far as it's sound, never past what's there, and never for long") {
+	photos::said said{.orientation = 8, .make = "Canon", .model = "Canon EOS R5", .taken = "2026:01:02 03:04:05", .offset = "-05:30"};
+	CHECK(one::desktop::facts_of(photos::exif(said)).camera() == "Canon EOS R5");
+	CHECK(std::format("{:%FT%T}Z", *one::desktop::facts_of(photos::exif(said)).when()) == "2026-01-02T08:34:05Z");
+	auto jpeg = photos::jpeg(8, 8, placed_pixels(8, 8), photos::exif(said));
+	auto png = photos::png(3, 2, placed_pixels(3, 2), photos::exif(said));
+	auto webp = photos::webp(photos::exif(said), true);
+	auto started = std::chrono::steady_clock::now();
+	// Cut short at every length.
+	for (const auto* whole : {&jpeg, &png, &webp}) {
+		for (std::size_t n = 0; n <= whole->size(); ++n) {
+			auto facts = one::desktop::facts_of(std::span(whole->data(), n));
+			CHECK(facts.orientation >= 1 && facts.orientation <= 8);
+			CHECK(facts.make.size() <= 256 && facts.model.size() <= 256);
+		}
+	}
+	// A byte made wrong, again and again, anywhere, as a damaged file would be.
+	std::uint32_t seed = 12345;
+	auto next = [&] { return seed = seed * 1664525u + 1013904223u; };
+	for (const auto* whole : {&jpeg, &png, &webp}) {
+		for (int i = 0; i < 4000; ++i) {
+			auto damaged = *whole;
+			for (int k = 0; k < 1 + static_cast<int>(next() % 4); ++k) damaged[next() % damaged.size()] = static_cast<std::uint8_t>(next() >> 24);
+			auto facts = one::desktop::facts_of(damaged);
+			CHECK(facts.orientation >= 1 && facts.orientation <= 8);
+			(void)facts.when();
+			(void)facts.camera();
+		}
+	}
+	// What a hostile one says: a directory of 65535 entries, offsets past its end, a
+	// text as long as can be said, segments and chunks that say they're empty or larger
+	// than anything, and a directory that points to itself.
+	auto block = photos::exif(said);
+	auto broken = [&](std::size_t at, std::vector<std::uint8_t> with) {
+		auto b = block;
+		for (std::size_t i = 0; i < with.size(); ++i) b[at + i] = with[i];
+		return one::desktop::facts_of(b);
+	};
+	CHECK(broken(8, {0xff, 0xff}).orientation >= 1);
+	CHECK(broken(4, {0xff, 0xff, 0xff, 0x7f}).camera().empty());
+	CHECK(broken(4, {8, 0, 0, 0}).camera() == "Canon EOS R5");
+	CHECK(broken(10 + 4, {0xff, 0xff, 0xff, 0xff}).make.empty());
+	CHECK(broken(10 + 8, {0xff, 0xff, 0xff, 0xff}).make.empty());
+	auto self = block;
+	for (std::size_t i = 10; i + 12 <= self.size(); i += 12) {
+		if (self[i] == 0x69 && self[i + 1] == 0x87) self[i + 8] = 8, self[i + 9] = self[i + 10] = self[i + 11] = 0;
+	}
+	CHECK(one::desktop::facts_of(self).orientation == 8);
+	std::vector<std::uint8_t> empty_segment{0xff, 0xd8, 0xff, 0xe0, 0x00, 0x00};
+	CHECK(one::desktop::facts_of(empty_segment).orientation == 1);
+	std::vector<std::uint8_t> padded(4096, 0xff);
+	padded[1] = 0xd8;
+	CHECK(one::desktop::facts_of(padded).orientation == 1);
+	auto huge = png;
+	huge[33] = huge[34] = huge[35] = huge[36] = 0xff;
+	CHECK(one::desktop::facts_of(huge).orientation == 8);  // read as far as the file goes
+	huge[8] = huge[9] = huge[10] = huge[11] = 0xff;
+	CHECK(one::desktop::facts_of(huge).orientation == 1);  // a chunk before it says it's larger than the file
+	auto riff = webp;
+	riff[34] = riff[35] = riff[36] = riff[37] = 0xff;
+	CHECK(one::desktop::facts_of(riff).orientation >= 1);
+	// A date that isn't one, or a camera's empty one, isn't when it was taken.
+	for (std::string taken : {"0000:00:00 00:00:00", "2026:13:01 00:00:00", "2026:02:30 10:00:00", "2026-10-12 08:30:15", "    :  :     :  :  ", "2026:10:12"}) {
+		CHECK_SAYING(!(one::desktop::photo_facts{.taken = taken}.when()), taken);
+	}
+	CHECK(std::chrono::steady_clock::now() - started < std::chrono::seconds(10));
+}
+
+TEST("a camera is its make and model, the make said once when the model starts with it") {
+	using one::desktop::photo_facts;
+	CHECK((photo_facts{.make = "Canon", .model = "Canon EOS R5"}.camera() == "Canon EOS R5"));
+	CHECK((photo_facts{.make = "NIKON CORPORATION", .model = "NIKON Z 6"}.camera() == "NIKON Z 6"));
+	CHECK((photo_facts{.make = "Apple", .model = "iPhone 15 Pro"}.camera() == "Apple iPhone 15 Pro"));
+	CHECK((photo_facts{.make = "samsung", .model = "SAMSUNG SM-S918B"}.camera() == "SAMSUNG SM-S918B"));
+	CHECK((photo_facts{.make = "Leica"}.camera() == "Leica"));
+	CHECK((photo_facts{.model = "X100VI"}.camera() == "X100VI"));
+	// Without an offset, it's when it was where this runs.
+	photo_facts here{.taken = "2026:07:01 12:00:00"};
+	auto local = std::chrono::local_days(std::chrono::year(2026) / 7 / 1) + std::chrono::hours(12);
+	CHECK(here.when() && *here.when() == std::chrono::floor<std::chrono::seconds>(std::chrono::current_zone()->to_sys(local, std::chrono::choose::earliest)));
 }
 
 int main() { return check::run(); }

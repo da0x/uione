@@ -38,13 +38,13 @@ export function svgSize(svg: string): { w: number; h: number } | undefined {
   return w > 0 && h > 0 ? { w, h } : undefined;
 }
 
-// A picture's own size, an SVG's as it says and any other's as it's read; nothing when
-// it isn't one that can be read.
+// A picture's own size, an SVG's as it says and any other's as it's read, the way up
+// its camera says it was held; nothing when it isn't one that can be read.
 export async function pictureSize(file: Blob): Promise<{ w: number; h: number } | undefined> {
   const svg = await svgIn(file);
   if (svg !== undefined) return svgSize(svg);
   try {
-    const bitmap = await createImageBitmap(file);
+    const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
     const size = { w: bitmap.width, h: bitmap.height };
     bitmap.close();
     return size;

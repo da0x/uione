@@ -15,6 +15,7 @@ import { hintOf, rememberGiven, setPicked as pickRow, useInGroup, useInOptions, 
 import { useSaying } from "./said.js";
 import { PictureAlone, stepped, useAwakeOn } from "./alone.js";
 import { pictureSize } from "./vectors.js";
+import { cameraOf, factsOf, takenAt } from "./exif.js";
 import type { BoardCard, CanvasRegion, ChartProps, FieldProps, Filtered, Hue, LandingFeature, LandingProps, LinkProps, PipelineRow, TrackStep } from "./contract.js";
 import { readValue, scaleTop, seriesOf, toneOfState, valueAt, type ChartUnit } from "./series.js";
 import { calendarGo, calendarOf, dateOf, dayOf, movedTo } from "./calendar.js";
@@ -2891,7 +2892,7 @@ export function Cards({
 
 // Pictures dropped, pasted or chosen on cards, each a record made by their command, given
 // what the address names, its file in the picture, and its own size, its file's name,
-// bytes and date where the cards keep them; all one step to undo. The same as the
+// bytes, date and camera where the cards keep them; all one step to undo. The same as the
 // desktop's. What it gives is the cards wrapped in what takes them, a drop target even
 // while there are none.
 function useTakingPictures(paste: { command: string; fields: Record<string, string>; given?: Record<string, unknown> } | undefined, name: string | undefined) {
@@ -2917,7 +2918,10 @@ function useTakingPictures(paste: { command: string; fields: Record<string, stri
       const called = file.name.replace(/\.[^.]+$/, "");
       keep("name", !called || called === "image" || called === "Pasted" ? "Pasted image" : called);
       keep("picture_bytes", file.size);
-      keep("picture_date", new Date(Math.floor(file.lastModified / 1000) * 1000).toISOString().replace(".000Z", "Z"));
+      // When it was taken, as its camera says, or else when its file last changed.
+      const facts = await factsOf(file);
+      keep("picture_date", takenAt(facts) ?? new Date(Math.floor(file.lastModified / 1000) * 1000).toISOString().replace(".000Z", "Z"));
+      keep("picture_camera", cameraOf(facts));
       if (!first) made["one:history"] = "joined";
       first = false;
       await runner.run(paste.command, made);
