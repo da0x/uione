@@ -760,12 +760,23 @@ namespace one::desktop {
 				draw_icon(c, icon_, {area.x + (area.width - size) / 2, area.y + (area.height - size) / 2, size, size}, ink);
 				if (hovered) tooltip(c, t);
 			}
-			// Its words in a dark tag under it, over whatever's there.
+			// Its words in a dark tag under it, over whatever's there; beside it where under
+			// would run off the window, as by a column of tools at its edge; and always in it.
 			void tooltip(canvas& c, const theme& t) {
 				text_style s = t.quiet();
 				s.color = t.page;
 				auto named = lay_out({label_, s}, 0, detail::layout_scale());
-				rect under{frame.x + (frame.width - named.width()) / 2 - 8, frame.bottom() + 6, named.width() + 16, named.height() + 8};
+				float w = named.width() + 16, h = named.height() + 8;
+				auto window = c.size();
+				float wide = static_cast<float>(window.width), tall = static_cast<float>(window.height);
+				rect under{frame.x + (frame.width - w) / 2, frame.bottom() + 6, w, h};
+				if (under.x < 4 || under.right() > wide - 4) {
+					float beside = frame.right() + 6 + w <= wide - 4 ? frame.right() + 6 : frame.x - 6 - w;
+					under = {beside, frame.y + (frame.height - h) / 2, w, h};
+				}
+				under.x = std::clamp(under.x, 4.f, std::max(4.f, wide - w - 4));
+				if (under.bottom() > tall - 4) under.y = frame.y - 6 - h;
+				under.y = std::max(4.f, under.y);
 				color behind = t.ink;
 				c.later([named = std::move(named), under, behind](canvas& on) {
 					on.box(under, {.fill = behind, .radius = 6});
