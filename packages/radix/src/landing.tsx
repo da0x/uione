@@ -1,8 +1,8 @@
 // Copyright 2026 Daher Alfawares
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// Front pages, in six designs: waveform, studio, aurora, grid, relay and
-// constellation. Each draws the same parts, a hero, what the site offers, the
+// Front pages, in seven designs: waveform, studio, aurora, grid, relay,
+// constellation and folio. Each draws the same parts, a hero, what the site offers, the
 // sentence it stands for, its steps and what it asks, in its own way, in the theme's
 // colors: its accent, and the accent turned either way around the color wheel for a
 // gradient, so every app's front page is its own. Motion stops for anyone who asks
@@ -11,6 +11,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { LandingFeature, LandingProps } from "@uione/react";
 import { Constellation } from "./constellation.js";
+import { Folio } from "./folio.js";
 import { Icon, Over, grouped, heading, titles } from "./parts.js";
 
 const gradient = "linear-gradient(90deg, var(--one-landing-1), var(--color-accent) 55%, var(--one-landing-3))";
@@ -581,7 +582,7 @@ function Relay(p: LandingProps) {
   );
 }
 
-const designs: Record<string, (p: LandingProps) => ReactNode> = { waveform: Waveform, studio: Studio, aurora: Aurora, grid: Grid, relay: Relay, constellation: Constellation };
+const designs: Record<string, (p: LandingProps) => ReactNode> = { waveform: Waveform, studio: Studio, aurora: Aurora, grid: Grid, relay: Relay, constellation: Constellation, folio: Folio };
 // The designs that place the screen's other items, like its tables, themselves; the
 // others have them first.
 const placing = new Set(["relay"]);

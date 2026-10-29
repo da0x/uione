@@ -603,8 +603,8 @@ export interface LandingFeature {
   features: LandingFeature[];
 }
 
-// A front page in one of uione's designs: waveform, studio, aurora, grid, relay or
-// constellation. Its hero's title, the short line over it, its words and its links;
+// A front page in one of uione's designs: waveform, studio, aurora, grid, relay,
+// constellation or folio. Its hero's title, the short line over it, its words and its links;
 // its sections of words, as what it offers; its statement, the one sentence that
 // stands for the site; its sections as steps, done one after another; and the rest,
 // like a section with a form, as what it asks of its reader.

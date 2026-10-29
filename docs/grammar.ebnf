@@ -232,7 +232,7 @@ screen_place   ::= "under" ROUTE STRING END
 /* under /:project/boards/:board "{issue_page.board.title}": the page above it, though its
    address doesn't say so; layout two_columns: how its regions are laid out, or layout
    workspace: filling the window, with a bar, a toolbar, tools down its left, main, side and a status line */
-/* landing waveform | studio | aurora | grid | relay | constellation: a front page drawn in one of uione's designs */
+/* landing waveform | studio | aurora | grid | relay | constellation | folio: a front page drawn in one of uione's designs */
 screen_block   ::= "{" NEWLINE? screen_item* "}"
 given          ::= "{" NEWLINE? ((NAME "=" expression)+ END)* "}"
 /* opacity from 0 to 1: on a screen's button, any value along a slider, its command run as it's let go;

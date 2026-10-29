@@ -2694,8 +2694,8 @@ namespace one::language {
             // there are any, and each region one its layout has, once.
             // landing grid: a front page drawn in one of uione's designs, which lays it out.
             if (s.landing) {
-                static const std::set<std::string, std::less<>> designs{"waveform", "studio", "aurora", "grid", "relay", "constellation"};
-                if (!designs.contains(*s.landing)) error(s.landing_where, "landing is waveform, studio, aurora, grid, relay or constellation");
+                static const std::set<std::string, std::less<>> designs{"waveform", "studio", "aurora", "grid", "relay", "constellation", "folio"};
+                if (!designs.contains(*s.landing)) error(s.landing_where, "landing is waveform, studio, aurora, grid, relay, constellation or folio");
                 if (s.layout) error(s.layout_where, "a landing page is laid out by its design, so it says no layout");
             }
             front_page(s.items, s.landing.has_value(), nullptr);
