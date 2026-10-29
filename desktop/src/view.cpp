@@ -218,7 +218,14 @@ namespace one::desktop {
 				w.redraw();
 				return;
 			}
-			if (!e.control && !e.alt && !e.super && move_focus(w, e)) return;
+			// A key the window's own lines take, like left for the previous picture, is
+			// theirs before it moves the keyboard to what's beside.
+			if (w.outside->on_key && w.outside->on_key(e)) {
+				w.redraw();
+				return;
+			}
+			if (!e.control && !e.alt && !e.super) move_focus(w, e);
+			return;
 		}
 		if (w.outside->on_key && w.outside->on_key(e)) w.redraw();
 	}

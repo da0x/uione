@@ -3518,6 +3518,68 @@ TEST("a picture alone fills its window, edge to edge, fitted on black, wide or t
 	std::filesystem::remove_all(folder);
 }
 
+TEST("on a picture alone, left and right step through the list whatever has the keyboard, its bar's link, a step's button or a zoom button") {
+	auto folder = banded_picture(std::filesystem::temp_directory_path() / "uione-alone-keys");
+	struct kept_there : memory_source {
+		std::filesystem::path in;
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return in / kept; }
+	} data;
+	data.in = folder;
+	auto s = archive_of(12, data, {.view = {}, .list = "posters", .columns = {{"title", "Title"}}, .link = "/posters/:poster"});
+	s.screens.back().build = [](page& p) {
+		auto archive = p.view("studio::archive");
+		return items(workspace(p, region{"bar", along(link(p, "Posters", "/posters", "gallery", {"escape"}))},
+		                          region{"toolbar", along(step(p, {.view = archive, .list = "posters", .route = "/posters/:poster"}, "Previous", "previous", {"left"}),
+		                                                  step(p, {.view = archive, .list = "posters", .route = "/posters/:poster", .next = true}, "Next", "next", {"right"}),
+		                                                  collage_button(p, {.key = "/posters/:poster collage", .does = "zoom in", .label = "Larger", .icon = "zoom_in"}),
+		                                                  collage_button(p, {.key = "/posters/:poster collage", .does = "zoom out", .label = "Smaller", .icon = "zoom_out"}))},
+		                          region{"main", items(picture_alone(p, "files/banded.png", "/posters/:poster collage"))}));
+	};
+	navigator nav(s, data);
+	nav.open("/posters");
+	nav.open("/posters/p0");
+	one::desktop::app::state app;
+	one::desktop::window outer(std::make_unique<one::desktop::window::state>());
+	auto& w = outer.internals();
+	w.outside = &outer;
+	w.owner = &app;
+	w.size = {900, 600};
+	w.look = tested_theme();
+	w.build = [&nav] { return drawn(nav); };
+	outer.on_key = [&nav](const one::desktop::key_event& e) { return key(nav, e); };
+	auto update = [&] {
+		one::desktop::detail::theme_in_use() = &tested_theme();
+		w.needs_building = true;
+		one::desktop::bring_up_to_date(w);
+	};
+	update();
+	wake();
+	update();
+	std::size_t count = focusable_in(*w.root).size();
+	CHECK_SAYING(count >= 5, std::format("{} take the keyboard", count));
+	// Each of them given the keyboard in turn, right steps on, and left back and on again.
+	for (std::size_t i = 0; i < count; ++i) {
+		wake();
+		update();
+		auto all = focusable_in(*w.root);
+		for (auto* e : all) e->focused = false;
+		all[i]->focused = true;
+		std::string before = nav.current().address();
+		one::desktop::deliver_key(w, right_key);
+		update();
+		CHECK_SAYING(nav.current().address() == std::format("/posters/p{}", i + 1), std::format("right with {} of {} focused went to {}, from {}", i, count, nav.current().address(), before));
+		auto again = focusable_in(*w.root);
+		for (auto* e : again) e->focused = false;
+		again[std::min(i, again.size() - 1)]->focused = true;
+		one::desktop::deliver_key(w, left_key);
+		update();
+		CHECK(nav.current().address() == std::format("/posters/p{}", i));
+		one::desktop::deliver_key(w, right_key);
+		update();
+	}
+	std::filesystem::remove_all(folder);
+}
+
 TEST("a picture alone is zoomed by Ctrl and its keys, its zoom buttons and a pinch, to 100% and back by a double click, and dragged about once it's larger, and stepping fits the next") {
 	auto folder = banded_picture(std::filesystem::temp_directory_path() / "uione-alone-zoomed");
 	struct kept_there : memory_source {

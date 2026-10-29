@@ -108,6 +108,20 @@ describe("a picture alone on its screen", () => {
     expect(drawn.container.querySelector<HTMLElement>("[data-region=toolbar]")!.hidden).toBe(false);
   });
 
+  it("steps by its keys whatever has the keyboard, its zoom button or its step's own", async () => {
+    const drawn = renderAlone("/clippings/c0");
+    await shown(drawn);
+    const larger = drawn.getByText("Larger").closest("button")!;
+    larger.focus();
+    expect(document.activeElement).toBe(larger);
+    fireEvent.keyDown(larger, { key: "ArrowRight" });
+    await waitFor(() => expect(drawn.container.querySelector(".one-picture-alone img")?.getAttribute("src")).toContain("c1"));
+    const next = drawn.getByText("Next").closest("a, button") as HTMLElement;
+    next.focus();
+    fireEvent.keyDown(next, { key: "ArrowRight" });
+    await waitFor(() => expect(drawn.container.querySelector(".one-picture-alone img")?.getAttribute("src")).toContain("c2"));
+  });
+
   it("is zoomed by Ctrl and its keys, its zoom buttons and the wheel with Ctrl, to 100% and back by a double click, and dragged about once it's larger", async () => {
     const drawn = renderAlone("/clippings/c0");
     const picture = await shown(drawn);

@@ -662,6 +662,37 @@ TEST("the chosen row and the scroll stay where they were when the view is built 
 	CHECK(opened == "issue-9");  // gone, so the nearest that's left
 }
 
+TEST("a key the window's lines take is theirs before it moves the keyboard to what's beside, and one they don't take still moves it") {
+	one::desktop::detail::theme_in_use() = &tested_theme();
+	one::desktop::app::state app;
+	one::desktop::window outer(std::make_unique<one::desktop::window::state>());
+	auto& w = outer.internals();
+	w.outside = &outer;
+	w.owner = &app;
+	w.size = {400, 100};
+	w.build = [] { return one::desktop::row(one::desktop::button("First", [] {}).autofocus(), one::desktop::button("Second", [] {})).spacing(8); };
+	int stepped = 0;
+	outer.on_key = [&](const one::desktop::key_event& e) {
+		if (!e.is(one::desktop::keys::right)) return false;
+		++stepped;
+		return true;
+	};
+	w.needs_building = true;
+	one::desktop::bring_up_to_date(w);
+	auto& first = *w.root->children[0];
+	auto& second = *w.root->children[1];
+	CHECK(first.focused);
+	// Right is the window's: it's run, and the keyboard stays where it was.
+	one::desktop::deliver_key(w, key(one::desktop::keys::right));
+	CHECK(stepped == 1);
+	CHECK(first.focused);
+	CHECK(!second.focused);
+	// l isn't, so it moves the keyboard on, as the arrows otherwise do.
+	one::desktop::deliver_key(w, {.symbol = 'l', .text = "l"});
+	CHECK(stepped == 1);
+	CHECK(second.focused);
+}
+
 TEST("a page shown again is scrolled where it was left once what it holds reaches that far, what it was left from given the keyboard and brought into view") {
 	one::desktop::detail::theme_in_use() = &tested_theme();
 	one::desktop::state<float> left(300);
