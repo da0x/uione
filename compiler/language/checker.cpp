@@ -2291,8 +2291,11 @@ namespace one::language {
             const entity_declaration* subject = v.per && *v.per != "user" ? find_entity(ns, qualified_name{{*v.per}, where}) : nullptr;
             context plain{ns, nullptr, nullptr, {}, true, subject};
             for (const auto& value : v.values) {
-                if (counted_rows(v, value).list) {
-                    verify_row_count(v, value);
+                if (auto counted = counted_rows(v, value); counted.list) {
+                    verify_row_count(v, value, counted);
+                } else if (auto summed = summed_rows(v, value); summed.list) {
+                    verify_row_count(v, value, summed);
+                    verify_row_sum(ns, summed, value);
                 } else {
                     verify_view_value(plain, value);
                 }
@@ -2518,9 +2521,9 @@ namespace one::language {
         // unread = count(changes where created_at > seen): the rows of one of the view's
         // own lists, each test a field its rows hold, compared with another of the
         // view's values.
-        void verify_row_count(const view_declaration& v, const view_value& value) {
+        void verify_row_count(const view_declaration& v, const view_value& value, const row_count& counted) {
             snake_parts(*value.name, value.where);
-            auto [list, w] = counted_rows(v, value);
+            auto [list, w] = counted;
             if (!w) return;
             auto holds = [&](const std::string& name) {
                 return std::any_of(list->rows.begin(), list->rows.end(), [&](const view_value& row) {
@@ -2529,7 +2532,7 @@ namespace one::language {
             };
             auto valued = [&](const std::string& name) {
                 return std::any_of(v.values.begin(), v.values.end(), [&](const view_value& other) {
-                    return other.name && *other.name == name && &other != &value && !counted_rows(v, other).list;
+                    return other.name && *other.name == name && &other != &value && !counted_rows(v, other).list && !summed_rows(v, other).list;
                 });
             };
             std::function<void(const expression&)> test = [&](const expression& e) {
@@ -2556,6 +2559,18 @@ namespace one::language {
                 }
             };
             test(*w->condition);
+        }
+
+        // size = sum(clippings).picture_bytes: a number its rows hold, listed in its block.
+        void verify_row_sum(const std::string& ns, const row_sum& summed, const view_value& value) {
+            const entity_declaration* rows = listed_entity(ns, *summed.list);
+            const field* f = rows ? find_field(*rows, summed.field) : nullptr;
+            bool held = std::ranges::any_of(summed.list->rows, [&](const view_value& row) { return row.name ? *row.name == summed.field : written(*row.value) == summed.field; });
+            if (rows && (!f || !f->type || f->type->text() != "number" || f->list)) {
+                error(value.value->where, "sum adds up a number, and " + rows->name + " holds no number " + summed.field);
+            } else if (!held) {
+                error(value.value->where, *summed.list->name + "'s rows don't hold " + summed.field + "; list it in its block to add it up");
+            }
         }
 
         // stage.title, a field through what it points at, is snake_case in each part.

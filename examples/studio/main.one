@@ -188,6 +188,9 @@ namespace studio at / {
 			order by created_at descending
 			name  image  picture_bytes
 		}
+		// How many there are, and how many bytes they take together.
+		total = count(clippings)
+		size = sum(clippings).picture_bytes
 	}
 
 	view notes_page per poster {
@@ -313,6 +316,7 @@ namespace studio at / {
 			}
 		}
 		status {
+			text "{clippings_page.total} clippings, {clippings_page.size} bytes"
 			messages
 		}
 	}

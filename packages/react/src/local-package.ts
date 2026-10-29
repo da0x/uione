@@ -285,11 +285,25 @@ export interface Listing {
   values: ValueOf[];
 }
 
+// A row of one of a view's lists compared with another of its values, by ==, !=, <,
+// <=, > or >=, as in ["created_at", ">", "seen"].
+export type RowTest = [string, string, string];
+
+// How many rows of one of its lists pass every test, or, with a field, what that field
+// of theirs adds up to: what its list holds, after its limit.
+export interface Tallied {
+  name: string;
+  list: string;
+  field: string;
+  tests: RowTest[];
+}
+
 export class ViewDescription {
   perKind = ""; // the entity it has a document per, if any
   readonly copies: [string, string][] = [];
   readonly counts: [string, Query][] = [];
   readonly lists: Listing[] = [];
+  readonly tallies: Tallied[] = [];
 
   constructor(readonly name: string) {}
 
@@ -310,6 +324,14 @@ export class ViewDescription {
   }
   count(name: string, rows: Query): this {
     this.counts.push([name, rows]);
+    return this;
+  }
+  tally(name: string, list: string, tests: RowTest[] = []): this {
+    this.tallies.push({ name, list, field: "", tests });
+    return this;
+  }
+  total(name: string, list: string, field: string, tests: RowTest[] = []): this {
+    this.tallies.push({ name, list, field, tests });
     return this;
   }
   order(keys: By | string | (By | string)[]): this {
@@ -758,6 +780,15 @@ export class LocalPackage {
         }
         return out;
       });
+    }
+    for (const t of v.tallies) {
+      const passing = ((document[t.list] as Row[] | undefined) ?? []).filter((row) =>
+        t.tests.every(([field, op, other]) => {
+          const c = compare(row[field], document[other]);
+          return op === "==" ? c === 0 : op === "!=" ? c !== 0 : op === "<" ? c < 0 : op === "<=" ? c <= 0 : op === ">" ? c > 0 : c >= 0;
+        }),
+      );
+      document[t.name] = t.field ? passing.reduce((sum, row) => sum + (typeof row[t.field] === "number" ? (row[t.field] as number) : 0), 0) : passing.length;
     }
     return document;
   }

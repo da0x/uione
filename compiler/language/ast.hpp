@@ -1578,6 +1578,27 @@ namespace one::language {
         return {};
     }
 
+    // size = sum(clippings).picture_bytes: what a number of a view's own list's rows adds
+    // up to, of the rows that pass, as a count's do. The list, its where, and the field.
+    struct row_sum : row_count {
+        std::string field;
+    };
+
+    inline row_sum summed_rows(const view_declaration& v, const view_value& value) {
+        auto* total = std::get_if<member_expression>(&value.value->node);
+        auto* call = total ? std::get_if<call_expression>(&total->object->node) : nullptr;
+        auto* callee = call ? std::get_if<name_expression>(&call->callee->node) : nullptr;
+        if (!callee || callee->name.text() != "sum" || call->arguments.size() != 1) return {};
+        const expression& argument = *call->arguments[0];
+        auto* w = std::get_if<where_expression>(&argument.node);
+        auto* source = std::get_if<name_expression>(&(w ? *w->source : argument).node);
+        if (!source || source->name.parts.size() != 1) return {};
+        for (const auto& each : v.each) {
+            if (each.name && *each.name == source->name.parts[0]) return {{&each, w}, total->member};
+        }
+        return {};
+    }
+
     // A collage's parts: what each is, the type it's kept as, and whether it's of the
     // view rather than its layers. A layer must have a place; every other part is drawn
     // when it's there.

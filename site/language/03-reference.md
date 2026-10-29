@@ -1002,6 +1002,10 @@ view book_page per book {
   another of the view's values, joined by `&&`. Nothing comes before everything, so
   before someone has ever looked, all of it counts. It counts what the list holds,
   after its `limit`.
+- `size = sum(clippings).picture_bytes` adds up a number the rows of the view's own
+  list `clippings` hold, listed in its block, like how many bytes its pictures take;
+  a `where` keeps the rows it adds up as a count's does. It needs `storage local`,
+  for now.
 - `public` lets anyone read it, signed in or not.
 - In a view per entity, `readers member` lets the people a member names read each
   document: everyone with a role in the project the entity is held within. `public

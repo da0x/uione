@@ -179,6 +179,16 @@ namespace one::local {
 		return *this;
 	}
 
+	view_description& view_description::tally(std::string tally_name, std::string list, std::vector<row_test> tests) {
+		tallies.push_back({std::move(tally_name), std::move(list), "", std::move(tests)});
+		return *this;
+	}
+
+	view_description& view_description::total(std::string total_name, std::string list, std::string field, std::vector<row_test> tests) {
+		tallies.push_back({std::move(total_name), std::move(list), std::move(field), std::move(tests)});
+		return *this;
+	}
+
 	view_description& view_description::order(std::vector<by> keys) {
 		last(*this, "an order").order = std::move(keys);
 		return *this;
@@ -199,7 +209,7 @@ namespace one::local {
 		return *this;
 	}
 
-	view_description view(std::string name) { return view_description{.name = std::move(name), .per_kind = {}, .copies = {}, .counts = {}, .lists = {}}; }
+	view_description view(std::string name) { return view_description{.name = std::move(name), .per_kind = {}, .copies = {}, .counts = {}, .lists = {}, .tallies = {}}; }
 
 	command_description& command_description::creates(std::string on) {
 		entity = std::move(on);
@@ -401,6 +411,22 @@ namespace one::local {
 				shown.push_back(std::move(out));
 			}
 			document.fields[l.name] = value(std::move(shown));
+		}
+		for (const auto& t : v.tallies) {
+			auto passes = [&](const value& row) {
+				return std::ranges::all_of(t.tests, [&](const view_description::row_test& test) {
+					int c = compare(row[test.field], document[test.other]);
+					return test.op == "==" ? c == 0 : test.op == "!=" ? c != 0 : test.op == "<" ? c < 0 : test.op == "<=" ? c <= 0 : test.op == ">" ? c > 0 : c >= 0;
+				});
+			};
+			long long count = 0;
+			double sum = 0;
+			for (const value& row : document[t.list].as_array()) {
+				if (!passes(row)) continue;
+				++count;
+				if (numeric(row[t.field])) sum += row[t.field].as_double();
+			}
+			document.fields[t.name] = t.field.empty() ? value(count) : value(sum);
 		}
 		return document;
 	}

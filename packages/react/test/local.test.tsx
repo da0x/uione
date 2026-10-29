@@ -70,6 +70,9 @@ function library() {
     .copy("title", "title")
     .copy("author", "author")
     .count("times_lent", where("library::loan", "book", subject))
+    .tally("listed", "loans")
+    .tally("latest", "loans", [["number", ">=", "times_lent"]])
+    .total("numbers", "loans", "number")
     .list("loans", where("library::loan", "book", subject))
     .order("-number")
     .fields(["number", "member", "returned_at"]);
@@ -167,7 +170,7 @@ describe("a local package", () => {
     expect(desk[0]!["book.title"]).toBe("Emma");
   });
 
-  it("copies the book onto its page, counts and lists its loans, and has no page for no book", async () => {
+  it("copies the book onto its page, counts and lists its loans, counts and adds up the loans it lists, and has no page for no book", async () => {
     const a = await app();
     await a.ok("library::book::create", book("Dune", "SCI-0001"));
     for (let i = 0; i < 3; i++) {
@@ -177,6 +180,8 @@ describe("a local package", () => {
     const page = a.shown("library::book_page", "SCI-0001")!;
     expect(page["title"]).toBe("Dune");
     expect(page["times_lent"]).toBe(3);
+    // Of those it lists: all of them, those numbered from how many there are, and their numbers added up.
+    expect([page["listed"], page["latest"], page["numbers"]]).toEqual([3, 1, 6]);
     const loans = page["loans"] as Row[];
     expect(loans.map((l) => l["number"])).toEqual([3, 2, 1]);
     expect(loans[0]!["returned_at"]).toBeTruthy();
