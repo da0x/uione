@@ -2221,8 +2221,9 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     as large as the draw gives, or a twelfth of the collage's height. Typing writes,
     Shift+Enter starts a new line, and the arrows, Home and End move the caret.
     Enter, Esc, or a click elsewhere keeps them, and only then are they made, as big
-    as they are, one step to undo; nothing typed makes nothing. A click elsewhere
-    while it still draws by typing begins the next words there.
+    as they are, one step to undo; nothing typed makes nothing. Then, as with any
+    draw, the choices its `when` reads go back to their first; one with no such
+    choices keeps drawing by typing, so a click elsewhere begins the next words there.
   - `in drawing_page.layers by layer`: its rows are objects held in layers, as a
     drawing program's are: the rows of another list of its view, each with its
     `name` and `depth`, each object naming its own by a field that points at one.
