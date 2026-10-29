@@ -55,6 +55,14 @@ namespace one::screens {
 
 	// A button that runs a command with fields, like Close issue. It isn't there for
 	// someone it isn't allowed, and says it's working while the command's on its way.
+	// opacity from 0 to 1: a button's value along a slider, from what it is now, its
+	// command run with where it's let go.
+	struct command_slide {
+		std::string field;
+		double from = 0, to = 1, by = 0.01;
+		value now = {};
+	};
+
 	struct command_button {
 		std::string command;
 		std::string label;
@@ -69,6 +77,7 @@ namespace one::screens {
 		bool pressed = false;                // drawn pressed, like a choice already made
 		std::string then_open = "";          // a route like /:poster, opened with what it made
 		std::string about = "";              // among options, what it's for, said beside it
+		std::optional<command_slide> slide = std::nullopt;  // drawn as a slider, run as it's let go
 	};
 
 	// Links down the side to a part's pages, like a project's settings, beside what

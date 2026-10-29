@@ -157,26 +157,28 @@ namespace one::desktop {
 
 	namespace {
 
-		// A circle of no color, as a toolbar's swatch shows clear: a gray and white
-		// checkerboard, four squares across, its edge smooth; made once, larger than it's
-		// drawn so it stays sharp.
-		const picture& clear_circle() {
-			static const picture made = [] {
-				constexpr int side = 64;
-				std::vector<std::uint8_t> rgba(side * side * 4, 0);
-				for (int y = 0; y < side; ++y) {
-					for (int x = 0; x < side; ++x) {
-						float dx = x + 0.5f - side / 2.f, dy = y + 0.5f - side / 2.f;
-						float coverage = std::clamp(side / 2.f - std::sqrt(dx * dx + dy * dy) + 0.5f, 0.f, 1.f);
-						std::uint8_t shade = ((x / 16 + y / 16) % 2) ? 0xcc : 0xff;
-						std::size_t at = (static_cast<std::size_t>(y) * side + x) * 4;
-						rgba[at] = rgba[at + 1] = rgba[at + 2] = shade;
-						rgba[at + 3] = static_cast<std::uint8_t>(coverage * 255);
-					}
+		// A circle of no color, as a toolbar's swatch shows clear: a checkerboard of these
+		// two shades, four squares across, its edge smooth; made larger than it's drawn
+		// so it stays sharp.
+		picture clear_circle_of(std::uint8_t light, std::uint8_t dark) {
+			constexpr int side = 64;
+			std::vector<std::uint8_t> rgba(side * side * 4, 0);
+			for (int y = 0; y < side; ++y) {
+				for (int x = 0; x < side; ++x) {
+					float dx = x + 0.5f - side / 2.f, dy = y + 0.5f - side / 2.f;
+					float coverage = std::clamp(side / 2.f - std::sqrt(dx * dx + dy * dy) + 0.5f, 0.f, 1.f);
+					std::uint8_t shade = ((x / 16 + y / 16) % 2) ? dark : light;
+					std::size_t at = (static_cast<std::size_t>(y) * side + x) * 4;
+					rgba[at] = rgba[at + 1] = rgba[at + 2] = shade;
+					rgba[at + 3] = static_cast<std::uint8_t>(coverage * 255);
 				}
-				return picture::of(side, side, std::move(rgba));
-			}();
-			return made;
+			}
+			return picture::of(side, side, std::move(rgba));
+		}
+		// White and gray, or in a dark theme, gray and black; each made once.
+		const picture& clear_circle(bool dark) {
+			static const picture light = clear_circle_of(0xff, 0xcc), shaded = clear_circle_of(0x3d, 0x1a);
+			return dark ? shaded : light;
 		}
 
 		// Each child's parent, once a tree is put together.
@@ -741,7 +743,7 @@ namespace one::desktop {
 				// No color: a gray and white checkerboard in its circle, as clear is shown.
 				if (tool_.clear) {
 					rect circle{area.x + (area.width - 16) / 2, area.y + (area.height - 16) / 2, 16, 16};
-					c.picture(clear_circle(), circle, {0, 0, 1, 1}, tool_.off ? 0.35f : 1.f);
+					c.picture(clear_circle(dark(t)), circle, {0, 0, 1, 1}, tool_.off ? 0.35f : 1.f);
 					c.box(circle, {.border = t.line, .border_width = 1, .radius = 8});
 					if (hovered) tooltip(c, t);
 					return;

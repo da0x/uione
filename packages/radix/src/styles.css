@@ -76,6 +76,10 @@
  * takes the accent's place, so its links, tables and buttons all follow.
  */
 :root {
+  /* What's clear is shown as a checkerboard of these: white and gray, or in the dark,
+     gray and black. */
+  --checker-light: #ffffff;
+  --checker-dark: #cccccc;
   --hue-blue: #2457d6;
   --hue-blue-hover: #1c47b8;
   --hue-blue-soft: #e8eefc;
@@ -97,6 +101,8 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
+    --checker-light: #3d3d3d;
+    --checker-dark: #1a1a1a;
     --hue-blue: #7ea6ff;
     --hue-blue-hover: #a3c0ff;
     --hue-blue-soft: #16244a;
@@ -118,6 +124,8 @@
   }
 }
 :root[data-theme="dark"] {
+  --checker-light: #3d3d3d;
+  --checker-dark: #1a1a1a;
   --hue-blue: #7ea6ff;
   --hue-blue-hover: #a3c0ff;
   --hue-blue-soft: #16244a;

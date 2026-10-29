@@ -302,8 +302,10 @@ namespace one::terminal {
 	// Home and End to either end. It's kept as it's written; empty is the least.
 	struct number_range {
 		double from = 0, to = 100, by = 1;
+		bool percent = false;  // shown as a percent of the way, like 75% for 0.75 from 0 to 1
 	};
-	view slider(state<std::string> value, number_range range);
+	// A number slid along; `settled` told it each time it's let go, or changed by a key.
+	view slider(state<std::string> value, number_range range, std::function<void(const std::string&)> settled = {});
 
 	// A bar of btop's blocks, as wide as it's given, shared among its parts by how much
 	// each is, each in its own color; a part that's anything takes a block at least.

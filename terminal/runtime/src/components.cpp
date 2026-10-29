@@ -200,6 +200,19 @@ namespace one::terminal::runtime {
 			});
 		};
 		for (const auto& k : b.keys) p.on_key(k, run);
+		// Along a slider: its words, then the slider from what it is now, the command run
+		// with each change.
+		if (b.slide) {
+			const command_slide& s = *b.slide;
+			double now = s.now.is_null() ? s.to : std::clamp(s.now.as_double(), s.from, s.to);
+			state<std::string> held(std::format("{}", now));
+			auto settled = [&p, name = b.command, fields = shown->fields, field = s.field](const std::string& text) {
+				value sent = fields.is_null() ? value::map() : fields;
+				sent.fields[field] = value(std::strtod(text.c_str(), nullptr));
+				p.run(name, sent);
+			};
+			return terminal::row(terminal::text(shown->label), terminal::slider(held, {.from = s.from, .to = s.to, .by = s.by, .percent = s.from == 0 && s.to == 1}, std::move(settled)));
+		}
 		return terminal::button(shown->label, std::move(run), b.primary);
 	}
 

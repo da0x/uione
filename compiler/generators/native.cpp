@@ -259,7 +259,9 @@ namespace one::generators {
                     std::string made = command_of(parts, ns, *b);  // command(p, {...})
                     line = ".run = command_button" + made.substr(std::string("command(p, ").size(), made.size() - std::string("command(p, ").size() - 1);
                     if (b->when) (void)condition_of(parts, ns, *b->when, read);
-                    for (const auto& v : b->given) (void)condition_of(parts, ns, *v.value, read);
+                    for (const auto& v : b->given) {
+                        if (v.value) (void)condition_of(parts, ns, *v.value, read);
+                    }
                 }
                 // A command's own when is its button's, in its spec.
                 if (o->route && item.when) line += ", .when = " + condition_of(parts, ns, *item.when, read);
@@ -781,8 +783,20 @@ namespace one::generators {
             }
             // What it's sent, worked out as the screen's built, and pressed while what it
             // would set is already so.
-            std::string given, same;
+            std::string given, same, slide;
             for (const auto& v : button.given) {
+                if (v.range) {
+                    // Along a slider from what it is now: on the picked row, or the entity
+                    // the address names, as a view per it holds it.
+                    std::string now = "value()";
+                    if (!on_pick.empty()) now = "field_of(" + on_pick + ", " + str(v.name) + ")";
+                    else if (named) {
+                        if (auto holding = model_.view_holding(ns, entity->name, v.name)) now = "at(" + view_variable(parts, *holding) + ", " + str(v.name) + ")";
+                    }
+                    std::string by = v.range->by.empty() ? "(" + v.range->to + " - " + v.range->from + ") / 100.0" : v.range->by;
+                    slide = ", .slide = command_slide{.field = " + str(v.name) + ", .from = " + v.range->from + ", .to = " + v.range->to + ", .by = " + by + ", .now = " + now + "}";
+                    continue;
+                }
                 std::set<std::string> read;
                 std::string value = condition_of(parts, ns, *v.value, read);
                 given += (given.empty() ? "" : ", ") + std::string("{") + str(v.name) + ", " + value + "}";
@@ -820,6 +834,7 @@ namespace one::generators {
             else if (!same.empty() && same != "-") out += ", .pressed = " + same;
             if (button.then_open) out += ", .then_open = " + str(model_.full_route(ns, *button.then_open));
             if (button.about) out += ", .about = " + str(*button.about);
+            out += slide;
             return out + "})";
         }
 

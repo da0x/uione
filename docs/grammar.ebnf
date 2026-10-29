@@ -235,6 +235,8 @@ screen_place   ::= "under" ROUTE STRING END
 /* landing waveform | studio | aurora | grid | relay | constellation: a front page drawn in one of uione's designs */
 screen_block   ::= "{" NEWLINE? screen_item* "}"
 given          ::= "{" NEWLINE? ((NAME "=" expression)+ END)* "}"
+/* opacity from 0 to 1: on a screen's button, any value along a slider, its command run as it's let go */
+button_given   ::= "{" NEWLINE? ((NAME ("=" expression | "from" "-"? NUMBER "to" "-"? NUMBER ("by" NUMBER)?))+ END)* "}"
 collage_line   ::= ("place" qualified | "reshape" qualified | "add" qualified | "crop" qualified | "write" qualified | "delete" qualified
                   | "snap" "to" "edges" | "clear" | "match" "colors" "when" expression | "empty" STRING | "over" NAME screen_block
                   /* its objects held in layers, another list of its view, each naming its own by a field */
@@ -335,7 +337,7 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? ("icon" NAME)? ("color" N
                  | "component" NAME END
                  /* a button, and the form it opens, issue::update "Edit" form "Save" { title } */
                  /* layer::scale "2×" { by = 2 }: what it's sent; on when: drawn pressed; then open: what it made, opened */
-                 | NAME ("::" NAME)+ ("along" qualified "." NAME | STRING? ("icon" NAME)? ("about" STRING)? key* given? ("on" "when" expression)? ("when" condition)?
+                 | NAME ("::" NAME)+ ("along" qualified "." NAME | STRING? ("icon" NAME)? ("about" STRING)? key* button_given? ("on" "when" expression)? ("when" condition)?
                                     ("then" "open" ROUTE)? ("form" STRING? "{" NEWLINE? form_line* "}")?) END
                  | "board" qualified "." NAME "by" NAME ("over" qualified "." NAME)? ("link" ROUTE)? ("when" expression)? ("{" NEWLINE? board_line* "}")? END
                  /* a list's rows on the days a date of theirs says, a week side by side, or a month's grid while it

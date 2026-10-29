@@ -3071,11 +3071,20 @@ namespace one::language {
             for (const auto& st : command->body) {
                 if (auto* input = std::get_if<input_statement>(&st.node)) inputs.insert(input->name);
             }
+            std::size_t slid = 0;
             for (const auto& v : button.given) {
                 if (!inputs.contains(v.name) && (!entity || !find_field(*entity, v.name)) && v.name != "id") {
                     error(v.where, command->name.text() + " has no field or input " + v.name + " to be given");
                 }
-                verify_condition(ns, *v.value, route);
+                if (v.value) verify_condition(ns, *v.value, route);
+                if (!v.range) continue;
+                // opacity from 0 to 1: a number, the least first, and one slider a button.
+                if (++slid == 2) error(v.where, "a button is one slider, so only one of its values goes from one number to another");
+                if (std::stod(v.range->from) >= std::stod(v.range->to)) error(v.range->where, "a slider goes from the least to the most, like from 0 to 1");
+                if (!v.range->by.empty() && std::stod(v.range->by) <= 0) error(v.range->where, "a slider's step is more than nothing, like by 0.05");
+                const field* f = entity ? find_field(*entity, v.name) : nullptr;
+                if (f && (!f->type || f->type->text() != "number")) error(v.where, v.name + " isn't a number, so it can't go along a slider");
+                if (button.then_open) error(v.where, "a slider runs its command each time it's let go, so it opens nothing after");
             }
         }
 
@@ -3309,7 +3318,7 @@ namespace one::language {
                 "lower",  "rotate_left", "rotate_right", "flip_horizontal", "flip_vertical", "check", "close", "paste", "save", "undo", "redo",
                 "text",   "screenshot", "picture", "gallery", "fullscreen", "sun", "moon", "bold", "smaller", "larger", "fill", "fit", "stretch",
                 "center", "color", "edges", "blend", "harmonize", "clear", "square", "rounded", "pointer", "rectangle", "ellipse", "line", "italic", "magic", "align_left", "align_center", "align_right",
-                "title", "heading", "quote", "equation", "book", "letters", "quill", "typewriter", "coffee", "eye", "eye_off", "chevron_right", "chevron_down", "spread", "contents", "calendar", "bell", "inbox", "previous", "next"};
+                "title", "heading", "quote", "equation", "book", "letters", "quill", "typewriter", "coffee", "eye", "eye_off", "opacity", "chevron_right", "chevron_down", "spread", "contents", "calendar", "bell", "inbox", "previous", "next"};
             if (name && !known.contains(*name)) error(where, "there's no icon " + *name + nearest(*name, {known.begin(), known.end()}));
         }
 

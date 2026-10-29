@@ -761,7 +761,8 @@ namespace one::language {
         }
 
         // { by = 2 }: what a button gives, each a field and a value worked out as it's pressed.
-        void parse_given(std::vector<field_value>& given) {
+        // A screen's button `slides`: one of its values may be any along a slider.
+        void parse_given(std::vector<field_value>& given, bool slides = false) {
             if (!at(token_kind::left_brace)) return;
             advance();
             while (in_block()) {
@@ -770,6 +771,24 @@ namespace one::language {
                     const std::size_t first = pos_;
                     value.where = peek().where;
                     value.name = expect(token_kind::identifier, "a field it's sent, like by").text;
+                    if (slides && at_word("from")) {
+                        // opacity from 0 to 1: any along a slider.
+                        number_range range;
+                        range.where = advance().where;
+                        range.from = signed_number("the least it may be, like from 0 to 1");
+                        if (!at_word("to")) fail(peek().where, "expected 'to' and the most it may be, like from 0 to 1");
+                        advance();
+                        range.to = signed_number("the most it may be, like from 0 to 1");
+                        range.by = "";
+                        if (at_word("by")) {
+                            advance();
+                            range.by = expect(token_kind::number, "the step between its values, like by 0.05").text;
+                        }
+                        value.range = std::move(range);
+                        cut(value, first);
+                        given.push_back(std::move(value));
+                        continue;
+                    }
                     expect(token_kind::assign, "'='");
                     value.value = parse_expression();
                     cut(value, first);
@@ -3123,8 +3142,9 @@ namespace one::language {
                     button.about = advance().text;
                 }
                 parse_keys(button.keys);
-                // { by = 2 }: what it's sent, each a field and a value worked out as it's pressed.
-                parse_given(button.given);
+                // { by = 2 }: what it's sent, each a field and a value worked out as it's
+                // pressed; or { opacity from 0 to 1 }, any along a slider.
+                parse_given(button.given, true);
                 // on when layer.weight >= 700: drawn pressed while it holds.
                 if (at_word("on") && peek(1).kind == token_kind::identifier && peek(1).text == "when") {
                     advance();

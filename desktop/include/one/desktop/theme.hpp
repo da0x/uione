@@ -41,6 +41,8 @@ namespace one::desktop {
 		text_style heading(float size = 22) const { return {.family = heading_family.empty() ? text_family : heading_family, .size = size, .weight = 600, .color = ink, .line_height = 1.3f}; }
 		text_style code() const { return {.family = code_family, .size = text_size - 1, .color = ink}; }
 	};
+	// Whether it's a dark theme: its words lighter than its page.
+	inline bool dark(const theme& t) { return t.ink.red + t.ink.green + t.ink.blue > t.page.red + t.page.green + t.page.blue; }
 
 	// The theme views are built and drawn with: the window's, while it builds and draws.
 	const theme& current_theme();

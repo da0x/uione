@@ -2448,6 +2448,13 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   One giving the screen's collage its width and height is drawn as a page of that
   shape. The choice that already holds is tinted, and choosing one closes the panel,
   as Esc or a press anywhere else does. A terminal lists the choices after the name.
+- A button's value may go along a slider instead of being one value:
+  `item::paint "Opacity" { opacity from 0 to 1 }` is its words and a slider from what
+  the value is now, on the picked row or the entity the address names, and its command
+  runs with where it's let go. It steps a hundredth of the way unless it says
+  `by 0.05`, and from 0 to 1 it says where it is as a percent. Only a screen's buttons
+  slide, one value each, and only a number. Inside `options`, it's a button that opens
+  the slider.
 - `group "Rotate" { ... }` in a toolbar is a named part of it, its name under its
   buttons and a line after it. Its buttons and links are tools: an icon over its words, or,
   in a `small` group, `group "Rotate" small { ... }`, an icon alone, in two rows

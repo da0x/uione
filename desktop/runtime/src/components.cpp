@@ -211,6 +211,22 @@ namespace one::desktop::runtime {
 		if (!off) {
 			for (const auto& k : b.keys) p.on_key(k, run);
 		}
+		// Along a slider: its words, then the slider from what it is now, the command run
+		// with where it's let go.
+		if (b.slide) {
+			const command_slide& s = *b.slide;
+			double now = s.now.is_null() ? s.to : std::clamp(s.now.as_double(), s.from, s.to);
+			state<std::string> held(std::format("{}", now));
+			auto settled = [&p, name = b.command, fields = shown->fields, field = s.field, off](const std::string& text) {
+				if (off) return;
+				value sent = fields.is_null() ? value::map() : fields;
+				sent.fields[field] = value(std::strtod(text.c_str(), nullptr));
+				p.run(name, sent);
+			};
+			desktop::view slid = desktop::slider(held, {.from = s.from, .to = s.to, .by = s.by, .percent = s.from == 0 && s.to == 1}, std::move(settled));
+			auto words = current_theme().quiet();
+			return desktop::row(desktop::text(label_now, words), std::move(slid).grow()).spacing(10).align(align::center).padding(edges(6, 8)).width(260);
+		}
 		// Among a tool's options, a choice: what it gives drawn small, a page of its shape
 		// or its icon, then its words and what it's for under them; tinted while it's what
 		// holds now, and closing the options once it's chosen.

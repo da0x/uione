@@ -135,19 +135,23 @@ function measured(words: string, size: number, face: string): { w: number; h: nu
   return { w: Math.max(1, ...lines.map((l) => measurer!.measureText(l).width)), h: Math.max(1, size * 1.2 * lines.length) };
 }
 
-// Where a clear collage has nothing, a gray and white checkerboard, as drawing programs
-// show what's clear: squares 8 pixels on a side. The same as the desktop's.
+// Where a clear collage has nothing, a checkerboard, as drawing programs show what's
+// clear: white and gray, or in the dark, gray and black, as the theme says; squares 8
+// pixels on a side. The same as the desktop's.
 function checkers(c: CanvasRenderingContext2D): CanvasPattern | string {
+  const style = getComputedStyle(c.canvas);
+  const light = style.getPropertyValue("--checker-light").trim() || "#fff";
+  const dark = style.getPropertyValue("--checker-dark").trim() || "#ccc";
   const tile = document.createElement("canvas");
   tile.width = tile.height = 16;
   const t = tile.getContext("2d");
-  if (!t) return "#fff";
-  t.fillStyle = "#fff";
+  if (!t) return light;
+  t.fillStyle = light;
   t.fillRect(0, 0, 16, 16);
-  t.fillStyle = "#ccc";
+  t.fillStyle = dark;
   t.fillRect(8, 0, 8, 8);
   t.fillRect(0, 8, 8, 8);
-  return c.createPattern(tile, "repeat") ?? "#fff";
+  return c.createPattern(tile, "repeat") ?? light;
 }
 
 // Each picture read once, by what names it, and what's drawn from it: turned and

@@ -618,6 +618,39 @@ TEST_CASE("a tool's options open its lines, each a choice with what it's for, a 
                                                         "45: options are buttons, each a choice, like drawing::resize \"Square\" { width = 1080  height = 1080 }"});
 }
 
+TEST_CASE("a button's value along a slider, from what it is on the picked row, its command run as it's let go") {
+    std::string body = R"(		layout workspace
+		toolbar {
+			group "Place" {
+				options "Across" icon fit {
+					layer::place "Across" { x from 0 to 1 }
+				}
+				layer::place "Down" { y from -10 to 10 by 0.5 }
+			}
+		}
+		main {
+			pick layer from poster_page.layers
+			collage poster_page.layers size width height {
+			}
+		}
+)";
+    std::string source = collage_screen(body);
+    CHECK(messages(source).empty());
+    auto files = built(source);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    CHECK(web.find(R"(slide={{ field: "x", from: 0, to: 1, by: (1 - 0) / 100, now: ()") != std::string::npos);
+    CHECK(web.find(R"(slide={{ field: "y", from: -10, to: 10, by: 0.5,)") != std::string::npos);
+    CHECK(native.find(R"(.slide = command_slide{.field = "x", .from = 0, .to = 1, .by = (1 - 0) / 100.0, .now = field_of()") != std::string::npos);
+    // One number, the least first, and nothing opened after.
+    std::string wrong = body;
+    wrong.replace(wrong.find("{ x from 0 to 1 }"), std::string("{ x from 0 to 1 }").size(), "{ x from 1 to 0  y from 0 to 1 }");
+    CHECK(messages(collage_screen(wrong)) == std::vector<std::string>{"48: a slider goes from the least to the most, like from 0 to 1",
+                                                                        "48: a button is one slider, so only one of its values goes from one number to another"});
+}
+
 TEST_CASE("a collage is a view's list as layers, as big as two of its values, placed by a command, with buttons over the picked layer") {
     const std::string fine = R"(		pick layer from poster_page.layers
 		collage poster_page.layers size width height {

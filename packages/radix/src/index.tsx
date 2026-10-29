@@ -21,7 +21,7 @@ import "@fontsource-variable/fraunces/wght-italic.css";
 import { Children, Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CSSProperties, ReactNode } from "react";
-import type { ButtonProps, ChoiceProps, ComponentSet, OptionsProps } from "@uione/react";
+import type { ButtonProps, ChoiceProps, ComponentSet, OptionsProps, SliderProps } from "@uione/react";
 import { Surface } from "@uione/react";
 import { highlight, highlightCodeBlocks } from "./highlight.js";
 import { MarkdownField, MarkdownText } from "./markdown.js";
@@ -411,6 +411,34 @@ function Choice({ label, about, swatch, icon, pressed, disabled, onClick }: Choi
         {about && <span className="text-xs leading-tight text-muted">{about}</span>}
       </span>
     </button>
+  );
+}
+
+// A button's value along a slider: its words, the slider, and where it is after it, the
+// command run each time it's let go.
+function Slider({ label, value, from, to, by, percent, disabled, onSettle }: SliderProps) {
+  const [now, setNow] = useState(value);
+  useEffect(() => setNow(value), [value]);
+  const settle = (n: number) => n !== value && onSettle(n);
+  const places = Math.max(0, -Math.floor(Math.log10(percent ? (by / (to - from)) * 100 : by) + 1e-9));
+  const said = percent ? `${(((now - from) / (to - from)) * 100).toFixed(places)}%` : now.toFixed(places);
+  return (
+    <label className="flex w-64 items-center gap-3 px-2 py-1.5 text-xs text-muted">
+      <span className="shrink-0">{label}</span>
+      <input
+        type="range"
+        min={from}
+        max={to}
+        step={by}
+        value={now}
+        disabled={disabled}
+        onChange={(event) => setNow(Number(event.target.value))}
+        onPointerUp={(event) => settle(Number(event.currentTarget.value))}
+        onKeyUp={(event) => settle(Number(event.currentTarget.value))}
+        className="h-6 min-w-0 flex-1 cursor-pointer accent-accent focus-visible:outline-hidden"
+      />
+      <output className="min-w-[4ch] text-right tabular-nums text-ink">{said}</output>
+    </label>
   );
 }
 
@@ -2068,8 +2096,8 @@ export const radix: ComponentSet = {
   Button: ({ kind = "secondary", disabled, error, onClick, children, icon, tool, pressed: on, hint, swatch }) => {
     // Drawn as an icon, its words still name it, and show when it's pointed at.
     const words = typeof children === "string" ? children : undefined;
-    // A color it gives, drawn as a circle of it, outlined so white shows; none, a gray
-    // and white checkerboard in its circle, as clear is shown.
+    // A color it gives, drawn as a circle of it, outlined so white shows; none, a
+    // checkerboard in its circle, as clear is shown.
     // A stroke's color or width, "line #rrggbb", "line none" or "width 4", as a short
     // slanted line of it, dotted for none.
     const line = swatch?.startsWith("line ") ? 2 : swatch?.startsWith("width ") ? Math.min(6, Math.max(1, Number(swatch.slice(6)))) : 0;
@@ -2083,7 +2111,7 @@ export const radix: ComponentSet = {
       <span
         aria-hidden="true"
         className="size-4 rounded-full border border-line"
-        style={swatch === "none" ? { background: "repeating-conic-gradient(#ccc 0 25%, #fff 0 50%) 0 0 / 8px 8px" } : { backgroundColor: swatch }}
+        style={swatch === "none" ? { background: "repeating-conic-gradient(var(--checker-dark) 0 25%, var(--checker-light) 0 50%) 0 0 / 8px 8px" } : { backgroundColor: swatch }}
       />
     ) : icon ? (
       buttonIcons[icon]
@@ -2283,6 +2311,7 @@ export const radix: ComponentSet = {
   // the first the longer.
   Options,
   Choice,
+  Slider,
 
   Group: ({ name, small, across, atEnd, children }) => (
     <div role="group" aria-label={name} data-at-end={atEnd ? "" : undefined} className="flex flex-col items-center justify-between gap-0.5 border-r border-line px-2 last:border-r-0 [&:has(>div:empty)]:hidden">

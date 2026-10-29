@@ -705,6 +705,20 @@ export interface ChoiceProps {
   onClick: () => void;
 }
 
+// A button's value along a slider, like opacity from 0 to 1: its words, the slider from
+// where it is, what it says beside it, a percent of the way from 0 to 1, and `onSettle`
+// told each time it's let go.
+export interface SliderProps {
+  label: string;
+  value: number;
+  from: number;
+  to: number;
+  by: number;
+  percent?: boolean;
+  disabled?: boolean;
+  onSettle: (value: number) => void;
+}
+
 // What was just done, like "Undid place", or why a command was turned down, said
 // until the next.
 export interface MessagesProps {
@@ -818,6 +832,7 @@ export interface ComponentSet {
   Group: ComponentType<GroupProps>;
   Options: ComponentType<OptionsProps>;
   Choice: ComponentType<ChoiceProps>;
+  Slider: ComponentType<SliderProps>;
   Messages: ComponentType<MessagesProps>;
   Layout: ComponentType<LayoutProps>;
   Dialog: ComponentType<DialogProps>;

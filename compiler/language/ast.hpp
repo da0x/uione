@@ -145,10 +145,19 @@ namespace one::language {
     };
 
     // A value given to a field of what a create statement makes: role = maintainer.
+    // from 0 to 100  by 5: the numbers something may be, each as written.
+    struct number_range {
+        std::string from, to, by = "1";
+        location where;
+    };
+
     struct field_value {
         std::string name;
         location where;
         expression_ptr value;
+        // opacity from 0 to 1: not one value but any along a slider, by a hundredth of
+        // the way unless it says its step.
+        std::optional<number_range> range;
         // What taking it out cuts: it and the space after it, or before it when it's
         // last on its line, or its whole line when it's alone on it.
         location cut_where;
@@ -319,10 +328,7 @@ namespace one::language {
         std::optional<std::string> after;
         // volume  number  from 0 to 100  by 5: the numbers it may hold, each as written,
         // drawn as a slider.
-        struct number_range {
-            std::string from, to, by = "1";
-            location where;
-        };
+        using number_range = language::number_range;
         std::optional<number_range> range;
         expression_ptr initial;               // = on_shelf
         std::optional<std::string> label;     // number  serial  "#": what every screen calls it, unless one says its own

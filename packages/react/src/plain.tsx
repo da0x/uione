@@ -152,6 +152,27 @@ export const plain: ComponentSet = {
     </button>
   ),
 
+  Slider: function PlainSlider({ label, value, from, to, by, disabled, onSettle }) {
+    const [now, setNow] = useState(value);
+    useEffect(() => setNow(value), [value]);
+    return (
+      <label>
+        {label}
+        <input
+          type="range"
+          min={from}
+          max={to}
+          step={by}
+          value={now}
+          disabled={disabled}
+          onChange={(event) => setNow(Number(event.target.value))}
+          onPointerUp={(event) => Number(event.currentTarget.value) !== value && onSettle(Number(event.currentTarget.value))}
+          onKeyUp={(event) => Number(event.currentTarget.value) !== value && onSettle(Number(event.currentTarget.value))}
+        />
+      </label>
+    );
+  },
+
   Messages: ({ text, problem }) => (
     <span role="status" data-problem={problem ? "" : undefined}>
       {text}

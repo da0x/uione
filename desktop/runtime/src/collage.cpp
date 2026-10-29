@@ -1006,20 +1006,21 @@ namespace one::desktop::runtime {
 			c.picture(drawn, {on.x - out, on.y - out, on.width + 2 * out, on.height + 2 * out}, {0, 0, 1, 1}, opacity_of(layer));
 		}
 
-		// Where a clear collage has nothing, a gray and white checkerboard, as drawing
-		// programs show what's clear: squares 8 window pixels on a side, made once for
-		// each size.
+		// Where a clear collage has nothing, a checkerboard, as drawing programs show
+		// what's clear: white and gray, or in a dark theme, gray and black; squares 8
+		// window pixels on a side, made once for each size.
 		void paint_checkers(desktop::canvas& c, desktop::rect on) {
 			int w = std::max(1, static_cast<int>(std::lround(on.width * c.scale()))), h = std::max(1, static_cast<int>(std::lround(on.height * c.scale())));
 			int side = std::max(1, static_cast<int>(std::lround(8 * c.scale())));
+			bool dark = desktop::dark(current_theme());
+			std::uint8_t light_shade = dark ? 0x3d : 0xff, dark_shade = dark ? 0x1a : 0xcc;
 			static kept_by<desktop::picture> made(4);
-			desktop::picture drawn = made.get(std::format("{} {} {}", w, h, side), [&] {
+			desktop::picture drawn = made.get(std::format("{} {} {} {}", w, h, side, dark), [&] {
 				std::vector<std::uint8_t> rgba(static_cast<std::size_t>(w) * h * 4, 255);
 				for (int y = 0; y < h; ++y) {
 					for (int x = 0; x < w; ++x) {
-						if ((x / side + y / side) % 2 == 0) continue;
 						std::size_t at = (static_cast<std::size_t>(y) * w + x) * 4;
-						rgba[at] = rgba[at + 1] = rgba[at + 2] = 0xcc;
+						rgba[at] = rgba[at + 1] = rgba[at + 2] = (x / side + y / side) % 2 == 0 ? light_shade : dark_shade;
 					}
 				}
 				return desktop::picture::of(w, h, std::move(rgba));

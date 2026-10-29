@@ -383,8 +383,10 @@ namespace one::desktop {
 	// as it's written, like a field's text; empty is the least.
 	struct number_range {
 		double from = 0, to = 100, by = 1;
+		bool percent = false;  // shown as a percent of the way, like 75% for 0.75 from 0 to 1
 	};
-	view slider(state<std::string> value, number_range range);
+	// A number slid along; `settled` told it each time it's let go, or changed by a key.
+	view slider(state<std::string> value, number_range range, std::function<void(const std::string&)> settled = {});
 	view edge(color c, float width = 3);      // a bar down a row's side, like how urgent it is
 	view icon(std::string name, color tint, float size = 16);  // one of the icons, alone, like database
 	view avatar(const std::string& name, float size = 24);  // a person's first letter in a color of theirs

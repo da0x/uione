@@ -145,6 +145,25 @@ describe("a workspace", () => {
     expect(screen.queryByText("16:9, for screens")).toBeNull();
   });
 
+  it("slides a button's value from what it is now, running its command with where it's let go", async () => {
+    const source = memorySource({ commands: { "studio::layer::paint": () => ({ id: "l1" }) } });
+    renderScreen(source, () => (
+      <Group name="Opacity">
+        <Options label="Opacity" icon="opacity">
+          <Command name="studio::layer::paint" id="l1" label="Opacity" slide={{ field: "opacity", from: 0, to: 1, by: 0.01, now: 0.5 }} />
+        </Options>
+      </Group>
+    ));
+    fireEvent.click(screen.getByRole("button", { name: "Opacity" }));
+    const slider = screen.getByRole("slider") as HTMLInputElement;
+    expect(slider.value).toBe("0.5");
+    fireEvent.change(slider, { target: { value: "0.75" } });
+    expect(source.runs.length).toBe(0);
+    fireEvent.pointerUp(slider);
+    await waitFor(() => expect(source.runs.length).toBe(1));
+    expect(source.runs[0]).toMatchObject({ command: "studio::layer::paint", input: { id: "l1", opacity: 0.75 } });
+  });
+
   it("says what an undo took back, and why a command was turned down", async () => {
     const source = memorySource({
       commands: {

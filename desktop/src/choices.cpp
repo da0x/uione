@@ -176,7 +176,10 @@ namespace one::desktop {
 
 		class slider_element : public element {
 		public:
-			slider_element(state<std::string> value, number_range range) : value_(std::move(value)), range_(range) { padding = edges(4, 2); }
+			slider_element(state<std::string> value, number_range range, std::function<void(const std::string&)> settled)
+			    : value_(std::move(value)), range_(range), settled_(std::move(settled)) {
+				padding = edges(4, 2);
+			}
 
 			bool focusable() const override { return true; }
 			one::desktop::cursor cursor() const override { return cursor::pointer; }
@@ -208,11 +211,16 @@ namespace one::desktop {
 				else if (e.is(keys::home)) set(range_.from);
 				else if (e.is(keys::end)) set(range_.to);
 				else return false;
+				if (settled_) settled_(value_.peek());
 				return true;
 			}
 			bool press(point at, int) override {
+				pressed_ = value_.peek();
 				drag(at);
 				return true;
+			}
+			void release(point, element*) override {
+				if (settled_ && value_.peek() != pressed_) settled_(value_.peek());
 			}
 			void drag(point at) override {
 				rect track = track_of(inner());
@@ -244,23 +252,31 @@ namespace one::desktop {
 				double scale = detail::layout_scale();
 				if (widest_ <= 0 || scale != widest_scale_) {
 					widest_ = 0;
-					for (double end : {range_.from, range_.to}) widest_ = std::max(widest_, lay_out({written(end, range_.by), current_theme().body()}, 0, scale).width());
+					for (double end : {range_.from, range_.to}) widest_ = std::max(widest_, lay_out({shown(end), current_theme().body()}, 0, scale).width());
 					widest_scale_ = scale;
 				}
 				return widest_;
 			}
 			const text_layout& number_laid() {
 				double scale = detail::layout_scale();
-				std::string shown = written(now(), range_.by);
-				if (!laid_ || scale != scale_ || shown != shown_) {
-					laid_ = lay_out({shown, current_theme().body()}, 0, scale);
+				std::string said = shown(now());
+				if (!laid_ || scale != scale_ || said != shown_) {
+					laid_ = lay_out({said, current_theme().body()}, 0, scale);
 					scale_ = scale;
-					shown_ = shown;
+					shown_ = said;
 				}
 				return *laid_;
 			}
+			// As it's said beside the bar: written to its step, or as a percent of the way.
+			std::string shown(double n) const {
+				if (!range_.percent || range_.to <= range_.from) return written(n, range_.by);
+				double of = range_.to - range_.from;
+				return written((n - range_.from) / of * 100, range_.by / of * 100) + "%";
+			}
 			state<std::string> value_;
 			number_range range_;
+			std::function<void(const std::string&)> settled_;
+			std::string pressed_;  // what it held as it was pressed
 			std::optional<text_layout> laid_;
 			std::string shown_;
 			double scale_ = 0, widest_scale_ = 0;
@@ -425,7 +441,9 @@ namespace one::desktop {
 		return view(std::make_unique<radio_element>(std::move(chosen), std::move(options), std::move(on_pick)));
 	}
 
-	view slider(state<std::string> value, number_range range) { return view(std::make_unique<slider_element>(std::move(value), range)); }
+	view slider(state<std::string> value, number_range range, std::function<void(const std::string&)> settled) {
+		return view(std::make_unique<slider_element>(std::move(value), range, std::move(settled)));
+	}
 
 	view picker(state<std::string> chosen, std::vector<option> options, state<bool> open, std::string placeholder) {
 		std::string now = chosen.peek();

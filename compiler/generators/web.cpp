@@ -1334,8 +1334,19 @@ namespace one::generators {
                     // What it's sent, worked out as the screen's drawn, and pressed while
                     // what it would set is already so: on the picked row, or the entity the
                     // address names, as a view per it holds it.
-                    std::string given, same;
+                    std::string given, same, slide;
                     for (const auto& v : button->given) {
+                        if (v.range) {
+                            // Along a slider from what it is now, as pressed is worked out.
+                            std::string now = "null";
+                            if (!on_pick.empty()) now = "(" + on_pick + "?.[" + web_detail::js_string(v.name) + "] ?? null)";
+                            else if (entity && !id.empty()) {
+                                if (auto holding = model_.view_holding(ns, entity->name, v.name)) now = "(" + view_variable(parts, *holding) + ".data?.[" + web_detail::js_string(v.name) + "] ?? null)";
+                            }
+                            std::string by = v.range->by.empty() ? "(" + v.range->to + " - " + v.range->from + ") / 100" : v.range->by;
+                            slide = " slide={{ field: " + web_detail::js_string(v.name) + ", from: " + v.range->from + ", to: " + v.range->to + ", by: " + by + ", now: " + now + " }}";
+                            continue;
+                        }
                         std::set<std::string> read;
                         std::string value = condition_of(parts, ns, *v.value, read);
                         given += (given.empty() ? "" : ", ") + web_detail::js_string(v.name) + ": " + value;
@@ -1373,7 +1384,7 @@ namespace one::generators {
                     if (button->about) then += " about=" + web_detail::js_string(*button->about);
                     std::string icon = button->icon ? " icon=" + web_detail::js_string(*button->icon) : "";
                     if (std::string swatch = screens::swatch_of(*button, collage_colors(ns)); !swatch.empty()) icon += " swatch=" + web_detail::js_string(swatch);
-                    out.line("<Command name=" + web_detail::js_string(command) + id + label + icon + keys_of(button->keys) + given + pressed + then + when + allowed(parts, ns, command) + " />");
+                    out.line("<Command name=" + web_detail::js_string(command) + id + label + icon + keys_of(button->keys) + given + slide + pressed + then + when + allowed(parts, ns, command) + " />");
                 } else if (auto* paper = std::get_if<language::paper_item>(&item.node)) {
                     // A list's rows as a sheet of paper, written on in place.
                     parts.components.insert("Paper");
@@ -1859,7 +1870,9 @@ namespace one::generators {
                         run += ", id: " + web_detail::js_name(entity->name + "_id");
                     }
                     std::string given;
-                    for (const auto& v : b->given) given += (given.empty() ? "" : ", ") + web_detail::js_string(v.name) + ": " + condition_of(parts, ns, *v.value, read);
+                    for (const auto& v : b->given) {
+                        if (v.value) given += (given.empty() ? "" : ", ") + web_detail::js_string(v.name) + ": " + condition_of(parts, ns, *v.value, read);
+                    }
                     if (!given.empty()) run += ", given: { " + given + " }";
                     if (b->then_open) run += ", thenOpen: " + web_detail::js_string(full_route(ns, *b->then_open));
                     line = "run: { " + run + " }";

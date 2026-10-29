@@ -1054,6 +1054,7 @@ export function Command({
   thenOpen,
   swatch,
   about,
+  slide,
 }: {
   name: string;
   id?: string;
@@ -1067,6 +1068,7 @@ export function Command({
   thenOpen?: string; // a route like /:poster, opened with what it made
   swatch?: string; // in a toolbar, drawn as a circle of this color, like #ffffff
   about?: string; // among a tool's options, what it's for, said beside it
+  slide?: { field: string; from: number; to: number; by: number; now: unknown }; // drawn as a slider from what it is now, run as it's let go
 }) {
   const ui = useUI();
   const runner = useConfirmedRunner();
@@ -1091,6 +1093,22 @@ export function Command({
   useKeys(keys, run, shown && !off && !runner.busy(name));
   if (!shown) return null;
   const words = says ?? label(action(name));
+  // Along a slider, from what it is now, run with where it's let go.
+  if (slide) {
+    const now = typeof slide.now === "number" ? Math.min(slide.to, Math.max(slide.from, slide.now)) : slide.to;
+    return (
+      <ui.Slider
+        label={words}
+        value={now}
+        from={slide.from}
+        to={slide.to}
+        by={slide.by}
+        percent={slide.from === 0 && slide.to === 1}
+        disabled={off || runner.busy(name)}
+        onSettle={(n) => void runner.run(name, { ...sent, [slide.field]: n })}
+      />
+    );
+  }
   // Among a tool's options, a choice, closing them once it's chosen.
   if (closeOptions) {
     return (

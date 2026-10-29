@@ -244,6 +244,22 @@ TEST("a drawing hears a press it takes, the moves while it's held, and the relea
 	CHECK(!one::desktop::drawing([](one::desktop::canvas&, one::desktop::rect) {}).take()->focusable());
 }
 
+TEST("a slider tells what it settled on as it's let go, not while it's held") {
+	one::screens::state<std::string> held("0.5");
+	std::vector<std::string> settled;
+	auto root = one::desktop::column(one::desktop::slider(held, {.from = 0, .to = 1, .by = 0.01, .percent = true}, [&](const std::string& n) { settled.push_back(n); })).take();
+	root->place({0, 0, 300, 40});
+	one::desktop::element* found = root->hit({10, 20});
+	CHECK(found != nullptr);
+	if (!found) return;
+	CHECK(found->press({10, 20}, 1));
+	CHECK(settled.empty());  // not while it's held
+	found->release({10, 20}, found);
+	CHECK(settled.size() == 1);
+	CHECK(settled.size() == 1 && settled[0] == held.peek());
+	CHECK(held.peek() != "0.5");
+}
+
 TEST("a picture drawn with no window holds what was drawn, a picture drawn into it too, and nothing where nothing was") {
 	std::vector<std::uint8_t> pixels;
 	for (int i = 0; i < 4; ++i) pixels.insert(pixels.end(), {0, 0, 255, 255});

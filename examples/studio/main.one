@@ -297,6 +297,9 @@ namespace studio at / {
 			group "Corners" small when layer.picture != none {
 				layer::arrange "Square" icon square { corners = 0 }
 				layer::arrange "Rounded" icon rounded { corners = 0.06 }
+				options "Roundness" icon rounded {
+					layer::arrange "Roundness" { corners from 0 to 0.5 }
+				}
 			}
 			group "Look" small {
 				poster::update "Match colors" icon magic { matched = 0 } on when poster_page.matched == 1 when poster_page.matched == 1

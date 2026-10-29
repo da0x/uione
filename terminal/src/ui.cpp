@@ -915,7 +915,8 @@ namespace one::terminal {
 
 		class slider_element : public element {
 		public:
-			slider_element(state<std::string> value, number_range range) : value_(std::move(value)), range_(range) {}
+			slider_element(state<std::string> value, number_range range, std::function<void(const std::string&)> settled)
+			    : value_(std::move(value)), range_(range), settled_(std::move(settled)) {}
 			bool focusable() const override { return true; }
 			extent measure_content(int width) override { return {std::min(width, 24 + 1 + widest()), 1}; }
 			void paint_content(canvas& c) override {
@@ -929,8 +930,8 @@ namespace one::terminal {
 					else if (i < knob) c.put(a.y, a.x + i, "■", {.foreground = color::blue});
 					else c.put(a.y, a.x + i, "■", {.dim = true, .foreground = color::bright_black});
 				}
-				std::string shown = written(now(), range_.by);
-				c.put(a.y, a.x + bar + 1 + widest() - display_width(shown), shown, {.bold = focused});
+				std::string said = shown(now());
+				c.put(a.y, a.x + bar + 1 + widest() - display_width(said), said, {.bold = focused});
 			}
 			bool handle_key(const key_press& e) override {
 				double steps = std::round((range_.to - range_.from) / range_.by), tenth = std::max(1.0, std::round(steps / 10));
@@ -941,11 +942,18 @@ namespace one::terminal {
 				else if (e.is(keys::home)) set(range_.from);
 				else if (e.is(keys::end)) set(range_.to);
 				else return false;
+				if (settled_) settled_(value_.peek());
 				return true;
 			}
 
 		private:
-			int widest() const { return std::max(display_width(written(range_.from, range_.by)), display_width(written(range_.to, range_.by))); }
+			int widest() const { return std::max(display_width(shown(range_.from)), display_width(shown(range_.to))); }
+			// As it's said beside the bar: written to its step, or as a percent of the way.
+			std::string shown(double n) const {
+				if (!range_.percent || range_.to <= range_.from) return written(n, range_.by);
+				double of = range_.to - range_.from;
+				return written((n - range_.from) / of * 100, range_.by / of * 100) + "%";
+			}
 			double now() const {
 				const std::string& text = value_.peek();
 				char* end = nullptr;
@@ -960,6 +968,7 @@ namespace one::terminal {
 			}
 			state<std::string> value_;
 			number_range range_;
+			std::function<void(const std::string&)> settled_;
 		};
 
 		class meter_element : public element {
@@ -1232,7 +1241,9 @@ namespace one::terminal {
 	view radio_buttons(state<std::string> chosen, std::vector<option> options, std::function<void(const std::string&)> on_pick) {
 		return made<radio_element>(std::move(chosen), std::move(options), std::move(on_pick));
 	}
-	view slider(state<std::string> value, number_range range) { return made<slider_element>(std::move(value), range); }
+	view slider(state<std::string> value, number_range range, std::function<void(const std::string&)> settled) {
+		return made<slider_element>(std::move(value), range, std::move(settled));
+	}
 	view graph(std::vector<double> values, double top, int rows, style look) { return made<graph_element>(std::move(values), top, rows, look); }
 	view meter(std::vector<meter_part> parts) { return made<meter_element>(std::move(parts)); }
 	style meter_look(std::size_t nth) {
