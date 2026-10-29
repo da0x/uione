@@ -2373,7 +2373,8 @@ export const radix: ComponentSet = {
           <main className="relative flex min-w-0 flex-1 flex-col gap-4 overflow-auto p-3">{regions.main}</main>
           {regions.side && <aside className="w-72 shrink-0 overflow-y-auto border-l border-line bg-surface p-3">{regions.side}</aside>}
         </div>
-        {regions.status && <div className="flex shrink-0 items-center gap-4 overflow-hidden whitespace-nowrap border-t border-line bg-surface px-3 py-1 text-xs text-muted">{regions.status}</div>}
+        {/* One line on a wide screen; on a phone it wraps, so a message is read whole. */}
+        {regions.status && <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-0.5 border-t border-line bg-surface px-3 py-1 text-xs text-muted sm:flex-nowrap sm:overflow-hidden sm:whitespace-nowrap">{regions.status}</div>}
       </div>
     ) : name === "two_columns" ? (
       <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
