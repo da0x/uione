@@ -202,6 +202,7 @@ namespace one::language {
         std::map<std::string, const view_each*> picks_;  // and its picks, each the list it picks a row of
         std::vector<const collage_item*> collages_;      // and its collages, which its collage buttons act on
         std::vector<const paper_item*> papers_;          // and its papers, which its insert buttons act on
+        std::vector<const cards_item*> cards_;           // and its cards, which its paste and add pictures buttons may go into
         bool in_toolbar_ = false;        // whether what's being checked is in a workspace's toolbar
 
         std::string prefix_of(const std::string& ns) const {
@@ -2773,10 +2774,12 @@ namespace one::language {
             picks(s.items);
             collages_.clear();
             papers_.clear();
+            cards_.clear();
             std::function<void(const std::vector<screen_item>&)> collages = [&](const std::vector<screen_item>& inside) {
                 for (const auto& item : inside) {
                     if (auto* c = std::get_if<collage_item>(&item.node)) collages_.push_back(c);
                     if (auto* paper = std::get_if<paper_item>(&item.node)) papers_.push_back(paper);
+                    if (auto* cards = std::get_if<cards_item>(&item.node)) cards_.push_back(cards);
                     if (auto* block = std::get_if<content_block>(&item.node)) collages(block->items);
                 }
             };
@@ -3663,15 +3666,17 @@ namespace one::language {
                             error(does->of_where, *does->of + " isn't a collage on this screen, or its pick; a picture is made of one" + like);
                         }
                     }
-                    // A picture pasted or chosen can go into the screen's paper too, when it says paste.
-                    bool into_paper = (does->does == kind::paste || does->does == kind::add_pictures) && std::ranges::any_of(papers_, [](const paper_item* p) { return p->paste; });
+                    // A picture pasted or chosen can go into the screen's paper or cards too, when they say paste.
+                    bool into_paper = (does->does == kind::paste || does->does == kind::add_pictures) &&
+                                      (std::ranges::any_of(papers_, [](const paper_item* p) { return p->paste; }) || std::ranges::any_of(cards_, [](const cards_item* c) { return c->paste; }));
                     bool can = does->of.has_value() || into_paper || std::ranges::any_of(collages_, [&](const collage_item* c) {
                         bool zooms = does->does == kind::zoom_in || does->does == kind::zoom_out || does->does == kind::zoom_fit;
                         return zooms || (does->does == kind::crop ? c->crop.has_value() : does->does == kind::edit_words ? c->write.has_value() : does->does == kind::ungroup ? c->group.has_value() : does->does == kind::group_picked ? c->group.has_value() && c->add.has_value() : does->does == kind::raise || does->does == kind::lower ? c->order.has_value() : takes_pictures ? c->paste : c->add.has_value());
                     });
                     if (!can) {
                         std::string needs = does->does == kind::crop ? "crop layer::crop" : does->does == kind::edit_words ? "write layer::write" : does->does == kind::ungroup ? "group layer::group" : does->does == kind::group_picked ? "group layer::group and add layer::create" : does->does == kind::raise || does->does == kind::lower ? "order layer::update" : takes_pictures ? "paste" : "add layer::create";
-                        error(item.where, "this screen has no collage that says " + needs + " for this button to use");
+                        bool pictures = does->does == kind::paste || does->does == kind::add_pictures;
+                        error(item.where, pictures ? "this screen has no collage, paper or cards that say paste for this button to use" : "this screen has no collage that says " + needs + " for this button to use");
                     }
                 } else if (auto* opening = std::get_if<on_open_item>(&item.node)) {
                     verify_on_open(ns, *opening, item.where, route);
@@ -4524,6 +4529,28 @@ namespace one::language {
             }
             // A picture on each card is a file each row holds.
             if (cards.picture) verify_picture(ns, *rows, cards.view, cards.list, *cards.picture, cards.picture_where);
+            // Pictures dropped, pasted or chosen, each made a record by add, the file in its
+            // picture, and each other part in the field named like it, of the part's type.
+            if (cards.add || cards.paste) {
+                const entity_declaration* card = listed_entity(ns, *rows);
+                if (cards.add) {
+                    verify_command_use(ns, *cards.add);
+                    const entity_declaration* on = find_command(ns, *cards.add);
+                    if (card && on && (on != card || cards.add->parts.back() != "create")) error(cards.add->where, "these cards are " + card->name + "s, so add names " + card->name + "::create");
+                }
+                if (!cards.paste) error(cards.add->where, "cards make records of pictures dropped or pasted on them, so add goes with paste");
+                else if (!cards.add) error(cards.paste_where, "pasted pictures are made records by the cards' add, so they say one too, like add " + (card ? card->name : std::string("piece")) + "::create");
+                else if (!cards.picture) error(cards.paste_where, "a pasted picture is kept in the field the cards' picture line names, like picture image");
+                for (const auto& part : cards_parts()) {
+                    const field* f = card && part.name != std::string("picture") ? find_field(*card, part.name) : nullptr;
+                    if (!f || (f->type && f->type->text() == part.type && !f->list)) continue;
+                    static const std::map<std::string, std::string> kept{{"picture_width", "a pasted picture's width"}, {"picture_height", "a pasted picture's height"},
+                                                                         {"name", "a pasted picture's file name"}, {"picture_bytes", "how many bytes a pasted picture is"},
+                                                                         {"picture_date", "when a pasted picture's file was last changed"}};
+                    std::string what = part.type == std::string("number") ? "a number" : part.type == std::string("date") ? "a date" : "text";
+                    error(cards.paste ? cards.paste_where : cards.add->where, card->name + "." + part.name + " keeps " + kept.at(part.name) + ", so it's " + what);
+                }
+            }
             if (cards.tally) {
                 if (const view_each* counted = named_list(ns, *cards.tally, cards.tally_list, route)) {
                     for (const auto& field : {cards.tally_by, cards.tally_and}) {

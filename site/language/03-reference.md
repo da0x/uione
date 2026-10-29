@@ -2062,6 +2062,16 @@ form step::update "Save" {
   boards to someone outside it. `picture preview fit` shows a file each row holds as
   a picture on top of its card, all of it fitted in, or, with `fill` or nothing
   said, filling its place. A terminal draws no pictures, so it can't show one.
+  `add clipping::create` and `paste` make a record of each picture dropped on the
+  cards, or pasted or chosen by the screen's `paste` and `add pictures` buttons,
+  which go to cards that say `paste` when the screen has no collage or paper that
+  does. Each is made by `add`, given what the screen's address names, its file in
+  the field `picture` names; its own size goes in `picture_width` and
+  `picture_height`, its file's name, without its extension, in `name`, how many
+  bytes it is in `picture_bytes`, and when its file was last changed in
+  `picture_date`, each only when the entity has that field. Several at once are one
+  step to undo, and cards with none yet still take them. A terminal can't be dropped
+  on, so it doesn't take them.
 - `picture poster.preview fit` shows the file a value holds, on its own, as wide as
   its place and 320 tall: a field of what's picked, like `poster`, or of a view per
   something, like `poster_page.preview`. All of it is fitted in, or, with `fill` or

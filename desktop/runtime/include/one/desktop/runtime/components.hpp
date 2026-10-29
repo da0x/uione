@@ -187,6 +187,18 @@ namespace one::desktop::runtime {
 	// Where a picture's bytes, like one pasted, are kept until they're sent: this person's
 	// own runtime folder, readable by them alone.
 	std::filesystem::path kept_for_now(const std::vector<std::uint8_t>& bytes);
+	// What a picture is called: its file's name without its extension, or Pasted image
+	// for one that came as bytes and was kept for now.
+	std::string picture_name(const std::filesystem::path& file);
+	// Pictures on the clipboard, as files or a picture's bytes kept for now.
+	std::vector<std::filesystem::path> clipboard_pictures();
+	// What a screen's paste or add pictures button handed what it names by `key`: the
+	// pictures chosen, or, for a paste, the clipboard's, said when there are none.
+	std::vector<std::filesystem::path> pictures_handed(page& p, const std::string& key);
+	// A view pictures are dropped on, as files or a browser's picture, outlined while
+	// they're over it; and those dropped on it since it was last built.
+	desktop::view pictures_target(page& p, desktop::view shown, const std::string& key);
+	std::vector<std::filesystem::path> pictures_dropped(page& p, const std::string& key);
 	desktop::view paper_button(page& p, paper_ask ask);
 	desktop::view paper_size(page& p, paper_ask ask);
 	// crop "Crop", edit words "Edit", add words "Text": asks the screen's collage.

@@ -919,6 +919,53 @@ TEST("cards: each with what it holds counted, and links opening it filtered") {
 	matches_golden("cards", {900, 520}, [&] { return drawn(nav); });
 }
 
+TEST("cards take pictures chosen or dropped, each a record made by their add, its file in their picture and its own size, name, bytes and date in the fields that keep them") {
+	auto folder = std::filesystem::temp_directory_path() / "uione-cards-pictures";
+	std::filesystem::remove_all(folder);
+	std::filesystem::create_directories(folder);
+	auto file = folder / "harbor.png";
+	one::desktop::offscreen::write_png(file, {6, 4, std::vector<std::uint8_t>(6 * 4 * 4, 200)});
+	using namespace std::chrono;
+	std::filesystem::last_write_time(file, clock_cast<file_clock>(sys_days{2026y / 10 / 12} + 8h + 30min + 15s));
+	memory_source data;
+	data.set("studio::room_page", "r1", value(fields{{"pieces", list{}}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Pieces", "/:room", "", [](page& p) {
+		                     return items(cards(p, {.view = p.view("studio::room_page", p.param("room")),
+		                                            .list = "pieces",
+		                                            .columns = {{"name", "Name"}},
+		                                            .picture = "image",
+		                                            .add = "studio::piece::create",
+		                                            .fields = {{"picture", "image"}, {"picture_width", "picture_width"}, {"picture_height", "picture_height"}, {"name", "name"}, {"picture_bytes", "picture_bytes"}, {"picture_date", "picture_date"}},
+		                                            .given = {{"room", p.param("room")}},
+		                                            .key = "/:room cards pieces",
+		                                            .paste = true}));
+	                     }});
+	navigator nav(s, data);
+	nav.open("/r1");
+	built(nav);
+	// Two chosen at once by an add pictures button, as the desktop's file chooser hands them over.
+	nav.current().kept<std::vector<std::string>>("pictures chosen /:room cards pieces").set({file.string(), (folder / "missing.png").string()});
+	built(nav);
+	CHECK(data.runs().size() == 1);
+	const value& made = data.runs().front().fields;
+	CHECK(data.runs().front().command == "studio::piece::create");
+	CHECK(made["room"].as_string() == "r1");
+	CHECK(made["image"].as_string() == "uploads/harbor.png");
+	CHECK(made["picture_width"].as_integer() == 6 && made["picture_height"].as_integer() == 4);
+	CHECK(made["name"].as_string() == "harbor");
+	CHECK(made["picture_bytes"].as_integer() == static_cast<long long>(std::filesystem::file_size(file)));
+	CHECK(made["picture_date"].as_string() == "2026-10-12T08:30:15Z");
+	CHECK(nav.current().told().peek() == "missing.png isn't a picture this can read.");
+	// The later of several is joined to the first, one step to undo.
+	nav.current().kept<std::vector<std::string>>("pictures chosen /:room cards pieces").set({file.string(), file.string()});
+	built(nav);
+	CHECK(data.runs().size() == 3);
+	CHECK(data.runs()[1].fields["one:history"].is_null() && data.runs()[2].fields["one:history"].as_string() == "joined");
+	std::filesystem::remove_all(folder);
+}
+
 namespace {
 
 	site with_issue() {

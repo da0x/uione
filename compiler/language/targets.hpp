@@ -101,7 +101,7 @@ namespace one::language {
         drawn_by{"collage.order", "a collage's layers raised and lowered", "web desktop"},
         drawn_by{"collage.paste", "pasting and dropping pictures on a collage", everywhere},
         drawn_by{"collage.screenshot", "a screenshot added to a collage", "web desktop"},
-        drawn_by{"pictures.choose", "pictures chosen from the device's files, onto a collage or a paper", "web desktop"},
+        drawn_by{"pictures.choose", "pictures chosen from the device's files, onto a collage, a paper or cards", "web desktop"},
         drawn_by{"calendar", "a list's rows on the days a date of theirs says, a week side by side", "web desktop terminal"},
         drawn_by{"notify", "a row whose time has come said by the system, whatever screen is open", "web desktop terminal"},
         drawn_by{"notify.buttons", "buttons on what the system says, acting on its row", "web desktop"},
@@ -148,6 +148,7 @@ namespace one::language {
         drawn_by{"cards.tally", "cards' tally", everywhere},
         drawn_by{"cards.filter", "cards' filter", everywhere},
         drawn_by{"cards.picture", "a picture on each card", "web desktop"},
+        drawn_by{"cards.paste", "pictures pasted and dropped on cards, each made a record", "web desktop"},
         drawn_by{"chart", "chart", everywhere},
         drawn_by{"monitor", "monitor", everywhere},
         drawn_by{"details", "details", everywhere},
@@ -317,6 +318,7 @@ namespace one::language {
                         if (n.tally) use("cards.tally");
                         if (!n.filters.empty()) use("cards.filter");
                         if (n.picture) use("cards.picture");
+                        if (n.paste) use("cards.paste");
                     } else if constexpr (std::is_same_v<T, chart_item>) {
                         use("chart");
                     } else if constexpr (std::is_same_v<T, monitor_item>) {

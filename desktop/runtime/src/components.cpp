@@ -4,6 +4,7 @@
 // What's on a screen, drawn: text and titles, the pages above, sections, links,
 // commands, cards and details, each from what one::screens works out of it.
 
+#include "one/desktop/picture.hpp"
 #include "one/desktop/runtime/components.hpp"
 #include "one/desktop/runtime/markdown.hpp"
 
@@ -11,6 +12,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <chrono>
+#include <filesystem>
 #include <format>
 #include <thread>
 
@@ -19,6 +22,36 @@ namespace one::desktop::runtime {
 	namespace {
 
 		desktop::view quiet(std::string words) { return desktop::text(std::move(words), current_theme().quiet()); }
+
+		// Pictures, each a record made by the cards' add, given what the address names, its
+		// file in the picture, and its own size, its file's name, bytes and date where the
+		// cards keep them; all one step to undo. The same as the web's.
+		void add_pictures(page& p, const cards_spec& spec, const std::vector<std::filesystem::path>& files) {
+			bool first = true;
+			for (const auto& file : files) {
+				auto read = desktop::picture::read(file);
+				if (!read) {
+					p.told().set(file.filename().string() + " isn't a picture this can read.");
+					continue;
+				}
+				value made = value::map();
+				for (const auto& [field, id] : spec.given) made.fields[field] = value(id);
+				auto keep = [&](const std::string& part, value held) {
+					if (auto field = spec.fields.find(part); field != spec.fields.end()) made.fields[field->second] = std::move(held);
+				};
+				keep("picture_width", value(read->width()));
+				keep("picture_height", value(read->height()));
+				keep("name", value(picture_name(file)));
+				std::error_code failed;
+				if (auto bytes = std::filesystem::file_size(file, failed); !failed) keep("picture_bytes", value(static_cast<long long>(bytes)));
+				if (auto changed = std::filesystem::last_write_time(file, failed); !failed) {
+					auto at = std::chrono::floor<std::chrono::seconds>(std::chrono::clock_cast<std::chrono::system_clock>(changed));
+					keep("picture_date", value(std::format("{:%FT%T}Z", at)));
+				}
+				if (!std::exchange(first, false)) made.fields["one:history"] = value("joined");
+				p.run(spec.add, made, attached_files{{spec.fields.at("picture"), {file.string()}}}, [](const answer&) {}, false);
+			}
+		}
 
 		// The short line over a front page's title, small and in the accent.
 		desktop::view overline(std::string words) {
@@ -347,6 +380,16 @@ namespace one::desktop::runtime {
 	}
 
 	desktop::view cards(page& p, cards_spec spec) {
+		// Pictures dropped, pasted or chosen, each a record, and a drop target even while
+		// there are none.
+		if (spec.paste && !spec.add.empty() && spec.fields.contains("picture")) {
+			auto handed = pictures_handed(p, spec.key);
+			if (handed.empty()) handed = pictures_dropped(p, spec.key);
+			if (!handed.empty()) add_pictures(p, spec, handed);
+			std::string key = spec.key;
+			spec.paste = false;
+			return pictures_target(p, cards(p, std::move(spec)), key);
+		}
 		const view_state& v = *spec.view;
 		// Hidden when empty is hidden until there's something to show, not drawn while it loads.
 		if (spec.hide_empty && v.status != status::ready) return {};
@@ -384,7 +427,7 @@ namespace one::desktop::runtime {
 			}
 			shown.push_back({card.id, desktop::column(std::move(inside)).spacing(8).padding(16).background({.fill = t.surface, .border = t.line, .border_width = 1, .radius = t.corners})});
 		}
-		if (shown.empty()) return spec.hide_empty ? desktop::view() : quiet("Nothing here yet.");
+		if (shown.empty()) return spec.hide_empty ? desktop::view() : !spec.add.empty() ? quiet("Nothing here yet. Drop pictures here to add them.").padding(edges(48, 0)) : quiet("Nothing here yet.");
 		// Cards with pictures are a gallery, side by side as many as fit, as on the web.
 		if (!spec.picture.empty()) {
 			std::vector<desktop::view> tiles;

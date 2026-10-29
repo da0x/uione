@@ -1159,13 +1159,9 @@ namespace one::generators {
             if (group_track_) out += ", .track = " + track_of(parts, ns, nullptr);
             // A pasted file makes a card as a create form here would, named from the file.
             if (c.paste && entity) {
-                std::string given, named;
+                std::string given = given_by_address(parts, ns, *entity, c.paste_into), named;
                 for (const auto& field : entity->fields) {
                     if ((field.name == "title" || field.name == "name") && named.empty() && field.type && field.type->text() == "text") named = field.name;
-                    if (!field.type || field.type->parts.size() != 1 || field.name == c.paste_into) continue;
-                    const std::string& points = field.type->parts[0];
-                    if (!screens::names_parameter(route_, points) || !model_.entity_named(ns, points)) continue;
-                    given += (given.empty() ? "" : ", ") + std::string("{") + str(field.name) + ", " + id_of(parts, points) + "}";
                 }
                 out += ", .paste = " + str(screens::full_command(ns, *c.paste)) + ", .paste_into = " + str(c.paste_into);
                 if (!named.empty()) out += ", .paste_named = " + str(named);
@@ -1234,6 +1230,22 @@ namespace one::generators {
             return out + ")";
         }
 
+        // What a record made on this screen is given as a create form here would be: each
+        // field pointing at what the address names, but the one a file goes in.
+        std::string given_by_address(screen_parts& parts, const std::string& ns, const language::entity_declaration& made, const std::string& into) {
+            std::string given;
+            for (const auto& field : made.fields) {
+                if (!field.type || field.type->parts.size() != 1 || field.name == into) continue;
+                const std::string& points = field.type->parts[0];
+                if (!screens::names_parameter(route_, points) || !model_.entity_named(ns, points)) continue;
+                given += (given.empty() ? "" : ", ") + std::string("{") + str(field.name) + ", " + id_of(parts, points) + "}";
+            }
+            return given;
+        }
+
+        // What a screen's paste and add pictures buttons name its cards by.
+        std::string cards_key(const language::cards_item& c) const { return route_ + " cards " + c.list.value_or(""); }
+
         std::string cards(screen_parts& parts, const std::string& ns, const language::cards_item& c) {
             const language::entity_declaration* entity = model_.listed(ns, c.view.text(), c.list);
             std::string columns;
@@ -1290,6 +1302,15 @@ namespace one::generators {
             if (!choices.empty()) out += ", .choices = {" + choices + "}";
             if (c.hide_empty) out += ", .hide_empty = true";
             if (c.picture) out += ", .picture = " + str(*c.picture) + (c.picture_sits == "fit" ? ", .fit = true" : "");
+            // Pictures dropped, pasted or chosen, each a record made by its add, given what the
+            // address names, each part in the field it's kept in.
+            if (c.paste && c.add && c.picture && entity) {
+                std::string fields, given = given_by_address(parts, ns, *entity, *c.picture);
+                for (const auto& [part, field] : language::cards_fields(c, *entity)) fields += (fields.empty() ? "" : ", ") + std::string("{") + str(part) + ", " + str(field) + "}";
+                out += ", .add = " + str(screens::full_command(ns, *c.add)) + ", .fields = {" + fields + "}";
+                if (!given.empty()) out += ", .given = {" + given + "}";
+                out += ", .key = " + str(cards_key(c)) + ", .paste = true";
+            }
             return out + "})";
         }
 
@@ -1525,7 +1546,7 @@ namespace one::generators {
         std::optional<std::string> row_named_;  // the row an on open line's where reads, by what it's of
         std::string collage_key_;     // what its collage buttons name its collage by
         std::string paper_key_;       // and its insert buttons its paper
-        bool screen_pastes_into_paper_ = false;  // its paste and add pictures buttons go into its paper, as it has no collage that pastes
+        std::optional<std::string> pictures_key_;  // and what its paste and add pictures buttons go into, a paper or cards that paste, as it has no collage that does
         std::optional<std::string> collage_over_;  // and the pick over it, which they may name
         const language::collage_item* collage_ = nullptr;  // and the collage itself, which its layers list
         bool at_end_said_ = false;    // a group at the toolbar's end has been written
@@ -1537,10 +1558,10 @@ namespace one::generators {
         };
         std::map<std::string, pick_of> picks_;
 
-        // A paste or add pictures button that goes into the screen's paper.
+        // A paste or add pictures button that goes into the screen's paper or cards.
         bool into_paper(const language::collage_button& b) const {
             using kind = language::collage_button::kind;
-            return screen_pastes_into_paper_ && (b.does == kind::paste || b.does == kind::add_pictures);
+            return pictures_key_ && (b.does == kind::paste || b.does == kind::add_pictures);
         }
 
         stream pages_file(const page_set& pages) const {
@@ -1870,9 +1891,9 @@ namespace one::generators {
                            (insert->keys.empty() ? "" : ", .keys = " + keys_of(insert->keys)) + ", .fields = value(std::map<std::string, value>{" + given + "})" +
                            (insert->sizes ? ", .sizes = " + std::to_string(insert->sizes) : "") + "})";
                 } else if (auto* does = std::get_if<language::collage_button>(&item.node); does && into_paper(*does)) {
-                    // Paste into the screen's paper, or pictures chosen from files: after the caret.
+                    // Paste into the screen's paper or cards, or pictures chosen from files.
                     bool chooses = does->does == language::collage_button::kind::add_pictures;
-                    code = "paper_button(p, {.key = " + str(paper_key_) + ", .label = " + str(language::label_of(*does)) + ", .icon = " + str(does->icon.value_or("")) +
+                    code = "paper_button(p, {.key = " + str(*pictures_key_) + ", .label = " + str(language::label_of(*does)) + ", .icon = " + str(does->icon.value_or("")) +
                            (does->keys.empty() ? "" : ", .keys = " + keys_of(does->keys)) + (chooses ? ", .chooses = true})" : ", .pastes = true})");
                 } else if (auto* does = std::get_if<language::collage_button>(&item.node)) {
                     std::string what = language::asked_of(*does, collage_over_), label = language::label_of(*does);
@@ -1992,10 +2013,14 @@ namespace one::generators {
                 collage_over_.reset();
                 collage_ = nullptr;
                 paper_key_ = route_ + " paper";
-                screen_pastes_into_paper_ = false;
+                pictures_key_.reset();
                 std::function<void(const std::vector<language::screen_item>&)> papers = [&](const std::vector<language::screen_item>& inside) {
                     for (const auto& item : inside) {
-                        if (auto* paper = std::get_if<language::paper_item>(&item.node)) paper_key_ = route_ + " paper " + paper->list, screen_pastes_into_paper_ = paper->paste;
+                        if (auto* paper = std::get_if<language::paper_item>(&item.node)) {
+                            paper_key_ = route_ + " paper " + paper->list;
+                            if (paper->paste) pictures_key_ = paper_key_;
+                        }
+                        if (auto* cards = std::get_if<language::cards_item>(&item.node); cards && cards->paste && !pictures_key_) pictures_key_ = cards_key(*cards);
                         if (auto* block = std::get_if<language::content_block>(&item.node)) papers(block->items);
                     }
                 };

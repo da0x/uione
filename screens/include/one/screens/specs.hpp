@@ -736,6 +736,14 @@ namespace one::screens {
 		bool hide_empty = false;                                  // not there while it has no cards, or can't be read
 		std::string picture = "";                                 // a file field's picture on top of each card
 		bool fit = false;                                         // all of it fitted in, or filling its place
+		// Pictures dropped, pasted or chosen, each a record made by `add`, given what's
+		// `given` besides, its file in the picture and the rest of its parts, its own size,
+		// its file's name, bytes and date, each in the field `fields` says.
+		std::string add = "";
+		std::map<std::string, std::string> fields = {};
+		std::map<std::string, std::string> given = {};
+		std::string key = "";  // what the screen's paste and add pictures buttons name them by
+		bool paste = false;
 	};
 
 	// A chart's run of numbers: by its field and a name in it, like stats.cpu; its

@@ -807,6 +807,78 @@ TEST_CASE("pictures dropped, pasted or taken from the screen are made by a colla
     CHECK(native.find(R"(collage_button(p, {.key = "/posters/:poster collage", .does = "screenshot", .label = "Screenshot", .icon = "screenshot"}))") != std::string::npos);
 }
 
+TEST_CASE("cards take pictures dropped, pasted or chosen, each a record made by their add, its file in their picture and its other parts in the fields named like them") {
+    const std::string clippings = R"(namespace studio at / {
+	entity poster {
+		title  text
+	}
+
+	entity clipping {
+		poster          poster  required
+		name            text
+		image           file
+		picture_width   number  = 0
+		picture_height  number  = 0
+		picture_bytes   number  = 0
+		picture_date    date
+	}
+
+	command clipping::create
+	command poster::create
+
+	view poster_page per poster {
+		title
+		clippings = each clipping in poster {
+			name  image
+		}
+	}
+
+	screen "Clippings" /posters/:poster {
+		layout workspace
+		toolbar {
+			group "Insert" {
+				paste "Paste" icon paste key ctrl+shift+v
+				add pictures "Pictures" icon picture
+			}
+		}
+		main {
+			cards poster_page.clippings {
+				picture image fit
+				name
+				add clipping::create
+				paste
+			}
+		}
+	}
+}
+)";
+    CHECK(messages(project + clippings).empty());
+    auto files = built(project + clippings);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    // The screen's paste and add pictures buttons go to the cards, as it has no collage or paper.
+    CHECK(web.find(R"(<PaperButton paper="/posters/:poster cards clippings" label="Paste" icon="paste" keys={["ctrl+shift+v"]} pastes />)") != std::string::npos);
+    CHECK(web.find(R"(<PaperButton paper="/posters/:poster cards clippings" label="Pictures" icon="picture" chooses />)") != std::string::npos);
+    CHECK(web.find(R"(paste={{ command: "studio::clipping::create", fields: { name: "name", picture: "image", picture_bytes: "picture_bytes", picture_date: "picture_date", picture_height: "picture_height", picture_width: "picture_width" }, given: { poster: posterId } }} name="/posters/:poster cards clippings" />)") != std::string::npos);
+    CHECK(native.find(R"(paper_button(p, {.key = "/posters/:poster cards clippings", .label = "Pictures", .icon = "picture", .chooses = true}))") != std::string::npos);
+    CHECK(native.find(R"(.add = "studio::clipping::create", .fields = {{"name", "name"}, {"picture", "image"}, {"picture_bytes", "picture_bytes"}, {"picture_date", "picture_date"}, {"picture_height", "picture_height"}, {"picture_width", "picture_width"}}, .given = {{"poster", poster_id}}, .key = "/posters/:poster cards clippings", .paste = true})") != std::string::npos);
+    // A part only where the entity keeps it, of the part's type; and add and paste go together, with a picture to keep.
+    std::string wrong = project + clippings;
+    wrong.replace(wrong.find("picture_bytes   number  = 0"), std::string("picture_bytes   number  = 0").size(), "picture_bytes   text");
+    wrong.replace(wrong.find("\t\t\t\tpicture image fit\n"), std::string("\t\t\t\tpicture image fit\n").size(), "");
+    CHECK(messages(wrong) == std::vector<std::string>{"45: a pasted picture is kept in the field the cards' picture line names, like picture image",
+                                                     "45: clipping.picture_bytes keeps how many bytes a pasted picture is, so it's a number"});
+    std::string alone = project + clippings;
+    alone.replace(alone.find("\t\t\t\tpaste\n\t\t\t}"), std::string("\t\t\t\tpaste\n").size(), "");
+    alone.replace(alone.find("add clipping::create"), std::string("add clipping::create").size(), "add poster::create");
+    CHECK(messages(alone) == std::vector<std::string>{"37: this screen has no collage, paper or cards that say paste for this button to use",
+                                                     "38: this screen has no collage, paper or cards that say paste for this button to use",
+                                                     "45: these cards are clippings, so add names clipping::create",
+                                                     "45: cards make records of pictures dropped or pasted on them, so add goes with paste"});
+}
+
 TEST_CASE("a collage reads each part from the field named like it, or from the one it says, and hands its runtimes which") {
     const std::string noted = R"(namespace studio at / {
 	entity poster {

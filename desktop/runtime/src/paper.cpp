@@ -797,10 +797,7 @@ namespace one::desktop::runtime {
 			// Pictures on the clipboard, as files or a picture's bytes, made blocks after the
 			// caret's; whether there were any.
 			bool pasted_pictures() {
-				std::vector<std::filesystem::path> files = desktop::clipboard_files();
-				if (files.empty()) {
-					if (auto bytes = desktop::clipboard_picture()) files.push_back(kept_for_now(*bytes));
-				}
+				std::vector<std::filesystem::path> files = clipboard_pictures();
 				if (files.empty()) return false;
 				add_pictures(files);
 				return true;
@@ -988,15 +985,63 @@ namespace one::desktop::runtime {
 		return desktop::tool_button(icon, hint_of(ask.label, ask.keys), std::move(press), {.off = off});
 	}
 
+	std::vector<std::filesystem::path> clipboard_pictures() {
+		std::vector<std::filesystem::path> files = desktop::clipboard_files();
+		if (files.empty()) {
+			if (auto bytes = desktop::clipboard_picture()) files.push_back(kept_for_now(*bytes));
+		}
+		return files;
+	}
+
+	std::vector<std::filesystem::path> pictures_handed(page& p, const std::string& key) {
+		// What a paste button asked: the clipboard's pictures.
+		if (auto asked = p.kept<bool>("pictures paste " + key); asked.get()) {
+			asked.set(false);
+			auto files = clipboard_pictures();
+			if (files.empty()) p.told().set("There's no picture on the clipboard to paste.");
+			return files;
+		}
+		// Pictures chosen by a button.
+		if (auto chosen = p.kept<std::vector<std::string>>("pictures chosen " + key); !chosen.get().empty()) {
+			std::vector<std::filesystem::path> files(chosen.peek().begin(), chosen.peek().end());
+			chosen.set({});
+			return files;
+		}
+		return {};
+	}
+
+	desktop::view pictures_target(page& p, desktop::view shown, const std::string& key) {
+		auto tick = p.kept<int>("pictures tick " + key);
+		tick.get();
+		auto dropped = p.kept<std::shared_ptr<std::vector<std::filesystem::path>>>("pictures dropped " + key, std::make_shared<std::vector<std::filesystem::path>>()).peek();
+		return desktop::file_target(
+		    std::move(shown),
+		    [&p, dropped, tick](desktop::dropped what, desktop::point) {
+			    if (!what.picture.empty()) what.files.push_back(kept_for_now(what.picture));
+			    if (what.files.empty() && !what.elsewhere.empty()) {
+				    p.told().set("That picture is on the web. Save it first, then drop it here.");
+				    return;
+			    }
+			    *dropped = what.files;
+			    tick.set(tick.peek() + 1);
+		    },
+		    {.border = current_theme().accent, .border_width = 3});
+	}
+
+	std::vector<std::filesystem::path> pictures_dropped(page& p, const std::string& key) {
+		auto dropped = p.kept<std::shared_ptr<std::vector<std::filesystem::path>>>("pictures dropped " + key, std::make_shared<std::vector<std::filesystem::path>>()).peek();
+		return std::exchange(*dropped, {});
+	}
+
 	desktop::view paper_button(page& p, paper_ask ask) {
 		auto asked = p.kept<std::optional<value>>("paper insert " + ask.key);
-		auto pasting = p.kept<bool>("paper paste " + ask.key);
+		auto pasting = p.kept<bool>("pictures paste " + ask.key);
 		std::function<void()> press = [asked, given = ask.fields] { asked.set(given); };
 		if (ask.pastes) press = [pasting] { pasting.set(true); };
 		// Pictures chosen in the desktop's own file chooser, which waits on the person,
-		// away from the window's thread, and handed back to the paper.
+		// away from the window's thread, and handed back to what the button names.
 		if (ask.chooses) {
-			press = [told = p.told(), chosen = p.kept<std::vector<std::string>>("paper chosen " + ask.key), title = ask.label] {
+			press = [told = p.told(), chosen = p.kept<std::vector<std::string>>("pictures chosen " + ask.key), title = ask.label] {
 				std::thread([told, chosen, title] {
 					auto files = desktop::chosen_files({.title = title, .pictures = true, .several = true});
 					post([told, chosen, files] {
@@ -1138,17 +1183,8 @@ namespace one::desktop::runtime {
 			else outline = desktop::column(std::move(listed)).padding(edges(around_sheet, 16, 16, 0)).width(232);
 		}
 		auto made = std::make_unique<paper_element>(p, spec, s, std::move(blocks), tick, due);
-		// What a paste button asked of it: the clipboard's pictures after the caret.
-		if (auto asked = p.kept<bool>("paper paste " + spec.key); asked.get()) {
-			asked.set(false);
-			if (!made->pasted_pictures()) p.told().set("There's no picture on the clipboard to paste.");
-		}
-		// Pictures chosen by a button, after the caret.
-		if (auto chosen = p.kept<std::vector<std::string>>("paper chosen " + spec.key); !chosen.get().empty()) {
-			std::vector<std::filesystem::path> files(chosen.peek().begin(), chosen.peek().end());
-			chosen.set({});
-			made->add_pictures(files);
-		}
+		// What a paste or add pictures button handed it, after the caret.
+		if (auto handed = pictures_handed(p, spec.key); !handed.empty()) made->add_pictures(handed);
 		// What an insert button asked of it.
 		if (auto asked = p.kept<std::optional<value>>("paper insert " + spec.key); asked.get()) {
 			value given = *asked.peek();
@@ -1162,27 +1198,11 @@ namespace one::desktop::runtime {
 		}
 		// Pictures dropped on it, as files or a browser's picture, are picture blocks after
 		// the caret's.
-		paper_element* taking = made.get();
-		desktop::view shown(std::move(made));
 		if (spec.paste) {
-			auto dropped = p.kept<std::shared_ptr<std::vector<std::filesystem::path>>>("paper dropped " + spec.key, std::make_shared<std::vector<std::filesystem::path>>()).peek();
-			if (!dropped->empty()) {
-				taking->add_pictures(*dropped);
-				dropped->clear();
-			}
-			shown = desktop::file_target(
-			    std::move(shown),
-			    [&p, dropped, tick](desktop::dropped what, desktop::point) {
-				    if (!what.picture.empty()) what.files.push_back(kept_for_now(what.picture));
-				    if (what.files.empty() && !what.elsewhere.empty()) {
-					    p.told().set("That picture is on the web. Save it first, then drop it here.");
-					    return;
-				    }
-				    *dropped = what.files;
-				    tick.set(tick.peek() + 1);
-			    },
-			    {.border = t.accent, .border_width = 3});
+			if (auto dropped = pictures_dropped(p, spec.key); !dropped.empty()) made->add_pictures(dropped);
 		}
+		desktop::view shown(std::move(made));
+		if (spec.paste) shown = pictures_target(p, std::move(shown), spec.key);
 		if (spec.fills) shown = desktop::scroll(std::move(shown)).grow();
 		if (!outline) return shown;
 		// A drawer takes its room from the page's, as the workspace's side does.

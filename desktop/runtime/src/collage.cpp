@@ -1561,6 +1561,11 @@ namespace one::desktop::runtime {
 		return file;
 	}
 
+	std::string picture_name(const std::filesystem::path& file) {
+		std::string name = file.stem().string();
+		return name.empty() || name.starts_with("one-picture-") ? "Pasted image" : name;
+	}
+
 	desktop::view picture_of(page& p, const std::string& kept, bool fit, float height) {
 		auto file = kept.empty() ? std::nullopt : p.file_here(kept);
 		desktop::picture shown = file ? picture_kept(*file) : desktop::picture();

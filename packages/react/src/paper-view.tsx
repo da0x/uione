@@ -15,7 +15,7 @@ import { useFiles, useRunner } from "./data.js";
 import type { ViewState } from "./data.js";
 import { useSaying } from "./said.js";
 import { pictureSize } from "./vectors.js";
-import { choosePictures, hintOf, setPicked, useKeys, useOff, useTool } from "./workspace.js";
+import { choosePictures, handPictures, hintOf, setPicked, useKeys, useOff, usePicturesHanded, useTool } from "./workspace.js";
 import { useUI } from "./ui.js";
 import { kindOf } from "./paper/index.js";
 import type { Parts } from "./paper/index.js";
@@ -124,24 +124,10 @@ function askInsert(name: string, given: Row) {
   insertListeners.forEach((changed) => changed());
 }
 
-// What a paper's paste buttons ask of it: the clipboard's pictures after the caret.
-const pastes = new Set<string>();
-function askPaste(name: string) {
-  pastes.add(name);
-  insertListeners.forEach((changed) => changed());
-}
-
-// What its add pictures buttons hand it: the pictures chosen, after the caret.
-const chosen = new Map<string, File[]>();
-function handChosen(name: string, files: File[]) {
-  chosen.set(name, files);
-  insertListeners.forEach((changed) => changed());
-}
-
 // insert "Equation" icon equation { kind = kind::math }: a block made after the caret's.
 // larger "Larger" and smaller "Smaller": the reader's page a step larger or smaller.
-// paste "Paste": what's on the clipboard, after the caret.
-// add pictures "Photo": pictures chosen from the device's files, after the caret.
+// paste "Paste": what's on the clipboard, after the caret, or into the screen's cards.
+// add pictures "Photo": pictures chosen from the device's files, the same.
 export function PaperButton({
   paper,
   label,
@@ -165,7 +151,7 @@ export function PaperButton({
   const tool = useTool() ?? "small";
   const step = useSizeStep();
   const off = useOff() || (by > 0 && step >= sizes.length - 1) || (by < 0 && step <= 0);
-  const press = () => (chooses ? choosePictures((files) => handChosen(paper, files)) : pasting ? askPaste(paper) : by ? resize(by) : askInsert(paper, given));
+  const press = () => (chooses ? choosePictures((files) => handPictures(paper, files)) : pasting ? handPictures(paper, "paste") : by ? resize(by) : askInsert(paper, given));
   useKeys(keys, press, !off);
   return (
     <ui.Button kind="secondary" icon={icon} tool={tool} disabled={off} hint={hintOf(label, keys)} onClick={press}>
@@ -594,47 +580,8 @@ export function Paper({
       await run(add, fieldsOf(made, fields));
     }
   };
-  // A paste button: the clipboard's pictures, read as the browser lets them be.
-  const pasteAsked = useSyncExternalStore(
-    (changed) => {
-      insertListeners.add(changed);
-      return () => insertListeners.delete(changed);
-    },
-    () => (name ? pastes.has(name) : false),
-    () => false,
-  );
-  useEffect(() => {
-    if (!pasteAsked || !name) return;
-    pastes.delete(name);
-    void (async () => {
-      try {
-        const items = await navigator.clipboard.read();
-        const pictures: File[] = [];
-        for (const item of items) {
-          const kind = item.types.find((t) => t.startsWith("image/"));
-          if (kind) pictures.push(new File([await item.getType(kind)], `Pasted.${kind.slice(6)}`, { type: kind }));
-        }
-        if (pictures.length === 0) return say({ text: "There's no picture on the clipboard to paste." });
-        await addPictures(pictures);
-      } catch {
-        say({ text: "This browser didn't let the page read the clipboard. Press Ctrl+V instead.", problem: true });
-      }
-    })();
-  }, [pasteAsked]);
-  // An add pictures button: the pictures chosen.
-  const picked = useSyncExternalStore(
-    (changed) => {
-      insertListeners.add(changed);
-      return () => insertListeners.delete(changed);
-    },
-    () => (name ? chosen.get(name) : undefined),
-    () => undefined,
-  );
-  useEffect(() => {
-    if (!picked || !name) return;
-    chosen.delete(name);
-    void addPictures(picked);
-  }, [picked]);
+  // A paste or add pictures button: the clipboard's pictures, or those chosen.
+  usePicturesHanded(name, addPictures);
 
   const goTo = (i: number, at: "start" | "end" | number) => {
     const b = shown[i];

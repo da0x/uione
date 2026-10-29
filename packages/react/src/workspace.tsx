@@ -437,3 +437,45 @@ export function choosePictures(chosen: (files: File[]) => void): void {
   document.body.appendChild(input);
   input.click();
 }
+
+// What a screen's paste and add pictures buttons hand what they go into, a paper or
+// cards, by what names it: the pictures chosen, or a paste, which reads the clipboard
+// as the browser lets it be read.
+const handed = new Map<string, File[] | "paste">();
+const handedListeners = new Set<() => void>();
+export function handPictures(name: string, files: File[] | "paste"): void {
+  handed.set(name, files);
+  handedListeners.forEach((changed) => changed());
+}
+
+// And what it's handed taken, by what names it.
+export function usePicturesHanded(name: string | undefined, take: (files: File[]) => void | Promise<void>): void {
+  const { say } = useSaying();
+  const asked = useSyncExternalStore(
+    (changed) => {
+      handedListeners.add(changed);
+      return () => handedListeners.delete(changed);
+    },
+    () => (name ? handed.get(name) : undefined),
+    () => undefined,
+  );
+  useEffect(() => {
+    if (!asked || !name) return;
+    handed.delete(name);
+    if (asked !== "paste") return void take(asked);
+    void (async () => {
+      try {
+        const items = await navigator.clipboard.read();
+        const pictures: File[] = [];
+        for (const item of items) {
+          const kind = item.types.find((t) => t.startsWith("image/"));
+          if (kind) pictures.push(new File([await item.getType(kind)], `Pasted.${kind.slice(6)}`, { type: kind }));
+        }
+        if (pictures.length === 0) return say({ text: "There's no picture on the clipboard to paste." });
+        await take(pictures);
+      } catch {
+        say({ text: "This browser didn't let the page read the clipboard. Press Ctrl+V instead.", problem: true });
+      }
+    })();
+  }, [asked]);
+}

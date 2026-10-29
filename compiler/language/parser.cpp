@@ -2922,6 +2922,20 @@ namespace one::language {
                             end_line();
                             continue;
                         }
+                        // add piece::create: what each picture dropped, pasted or chosen is made a record by.
+                        if (at_word("add") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::scope) {
+                            advance();
+                            cards.add = parse_qualified_name("the command each picture is made a record by, like piece::create");
+                            end_line();
+                            continue;
+                        }
+                        // paste: pictures dropped on them, or pasted or chosen by the screen's buttons, each made a record by add.
+                        if (at_word("paste") && (peek(1).kind == token_kind::newline || peek(1).kind == token_kind::right_brace)) {
+                            cards.paste_where = advance().where;
+                            cards.paste = true;
+                            end_line();
+                            continue;
+                        }
                         // tally project_page.issues by board and stage
                         if (at_word("tally") && peek(1).kind == token_kind::identifier) {
                             advance();

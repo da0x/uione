@@ -294,7 +294,7 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? ("icon" NAME)? ("color" N
                  | ("larger" | "smaller") STRING ("icon" NAME)? key* ("when" expression)? END
                  /* what the screen's collage does: crops its picked picture, writes its picked words, adds words,
                     pastes what's on the clipboard, adds a screenshot or pictures chosen from the device's files, or copies
-                    or saves it, or its picked layer, as a picture; paste and add pictures go into a paper that says paste */
+                    or saves it, or its picked layer, as a picture; paste and add pictures go into a paper or cards that say paste */
                  | ("crop" | "edit" "words" | "add" "words" | "add" "pictures" | "paste" | "screenshot" | "ungroup" | "group" "picked" | "raise" | "lower" | "zoom" ("in" | "out" | "to" "fit") | ("copy" | "save" | "cut") NAME "as" ("picture" | "svg")) STRING? ("icon" NAME)? key* ("when" expression)? END
                  /* what the screen does as it's opened, the first of its lines that applies: the first row of a
                     view's list the condition holds for opened, the row named by what it's of; or a command run */
@@ -354,7 +354,11 @@ pipeline_line  ::= (("lanes" | "path" | "status") "by" NAME | column+) END
 canvas_line    ::= ("place" qualified | "at" NAME NAME ("size" NAME NAME)? | "size" NAME NAME | "kind" NAME | "grid" NUMBER ("from" NUMBER NUMBER)?
                     | "regions" "by" NAME | "move" qualified ("along" qualified "." NAME)? | "resize" qualified
                     | "paste" qualified "into" NAME | "picture" NAME | column+) END
-cards_line     ::= ("tally" qualified "." NAME "by" NAME "and" NAME | "filter" STRING filter ("color" NAME)? | "picture" NAME ("fit" | "fill")? | column+) END
+cards_line     ::= ("tally" qualified "." NAME "by" NAME "and" NAME | "filter" STRING filter ("color" NAME)? | "picture" NAME ("fit" | "fill")?
+                  /* pictures dropped, pasted or chosen, each a record made by add, its file in the picture,
+                     its own size, its file's name, bytes and date each kept in the field named like it */
+                  | "add" qualified | "paste"
+                  | column+) END
 series         ::= NAME ("." NAME)? STRING ("percent" | "bytes" | "rate")?
 monitor_line   ::= ("title" field_path | "status" field_path | "since" field_path | "doing" field_path
                    | "progress" field_path "of" field_path | "seen" field_path NUMBER | "chart" series) END

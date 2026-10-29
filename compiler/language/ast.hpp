@@ -1255,6 +1255,11 @@ namespace one::language {
         std::optional<std::string> picture;
         std::string picture_sits = "fill";
         location picture_where;
+        // add piece::create and paste: pictures dropped, pasted or chosen, each made a
+        // record by add, its file in the picture.
+        std::optional<qualified_name> add;
+        bool paste = false;
+        location paste_where;
     };
 
     // chart agent_page.stats.cpu "CPU" percent: a run of numbers, newest last, drawn
@@ -1615,6 +1620,15 @@ namespace one::language {
         return all;
     }
 
+    // Cards': a picture made a record keeps its file, its own size, its file's name, how
+    // many bytes it is and when it was last changed, each where the entity has a field for it.
+    inline const std::vector<collage_part>& cards_parts() {
+        static const std::vector<collage_part> all{
+            {"picture", "file"}, {"picture_width", "number"}, {"picture_height", "number"}, {"name", "text"}, {"picture_bytes", "number"}, {"picture_date", "date"},
+        };
+        return all;
+    }
+
     // The field each part is kept in: the one the element names, or else the one named
     // like the part, when its rows hold it.
     inline std::map<std::string, std::string> parts_fields(const std::map<std::string, std::string>& said, const view_each* rows, const std::vector<collage_part>& parts) {
@@ -1634,6 +1648,16 @@ namespace one::language {
     }
 
     inline std::map<std::string, std::string> collage_fields(const collage_item& c, const view_each* layers) { return parts_fields(c.fields, layers, collage_parts()); }
+    // And cards': the picture in the field its picture line names, each other part in the
+    // entity's field named like it, when it has one.
+    inline std::map<std::string, std::string> cards_fields(const cards_item& c, const entity_declaration& rows) {
+        std::map<std::string, std::string> out;
+        if (c.picture) out["picture"] = *c.picture;
+        for (const auto& part : cards_parts()) {
+            if (part.name != std::string("picture") && std::ranges::any_of(rows.fields, [&](const field& f) { return f.name == part.name; })) out[part.name] = part.name;
+        }
+        return out;
+    }
     // And the one part of the page as a whole: its face, the type it's all set in, a value
     // of its view, kept on what the view is per.
     inline const collage_part& paper_face() {

@@ -85,6 +85,20 @@ namespace studio at / {
 		picture_height  number  = 0
 	}
 
+	// A picture kept to go on posters later, made of one dropped, pasted or chosen: its
+	// file, its own size, its file's name, how many bytes it is and when it was last changed.
+	entity clipping {
+		name            text
+		image           file
+		picture_width   number  = 0
+		picture_height  number  = 0
+		picture_bytes   number  = 0
+		picture_date    date
+	}
+
+	command clipping::create
+	command clipping::delete
+
 	command passage::create
 	command passage::delete
 	command passage::write {
@@ -169,6 +183,13 @@ namespace studio at / {
 		}
 	}
 
+	view clippings_page {
+		clippings = each clipping {
+			order by created_at descending
+			name  image  picture_bytes
+		}
+	}
+
 	view notes_page per poster {
 		title
 		passages = each passage in poster {
@@ -185,6 +206,7 @@ namespace studio at / {
 			redo "Redo" icon redo key ctrl+y key ctrl+shift+z
 			text "Posters"
 			link /gallery "Gallery" icon gallery key g
+			link /clippings "Clippings" icon picture
 		}
 		toolbar {
 			group "Poster" {
@@ -267,6 +289,31 @@ namespace studio at / {
 		cards posters link /posters/:poster {
 			picture preview fit
 			title
+		}
+	}
+
+	// Pictures kept to go on posters, each one dropped, pasted or chosen made a clipping.
+	screen "Clippings" /clippings {
+		layout workspace
+		bar {
+			link / "Posters" icon gallery key escape
+		}
+		toolbar {
+			group "Add" {
+				add pictures "Pictures" icon picture
+				paste "Paste" icon paste key ctrl+v
+			}
+		}
+		main {
+			cards clippings_page.clippings {
+				picture image fit
+				name
+				add clipping::create
+				paste
+			}
+		}
+		status {
+			messages
 		}
 	}
 

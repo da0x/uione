@@ -11,7 +11,9 @@ import type { ReactElement, ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { partsOf } from "./keys.js";
 import { ShownPath, fill, useConfirmContext, useFill, usePageTitle, useSignIn, useSite } from "./app.js";
-import { hintOf, rememberGiven, setPicked as pickRow, useInGroup, useInOptions, useLastGiven, useOverRun, useStyled, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
+import { hintOf, rememberGiven, setPicked as pickRow, useInGroup, useInOptions, useLastGiven, useOverRun, usePicturesHanded, useStyled, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
+import { useSaying } from "./said.js";
+import { pictureSize } from "./vectors.js";
 import type { BoardCard, CanvasRegion, ChartProps, FieldProps, Filtered, Hue, LandingFeature, LandingProps, LinkProps, PipelineRow, TrackStep } from "./contract.js";
 import { readValue, scaleTop, seriesOf, toneOfState, valueAt, type ChartUnit } from "./series.js";
 import { calendarGo, calendarOf, dateOf, dayOf, movedTo } from "./calendar.js";
@@ -2742,6 +2744,8 @@ export function Cards({
   hideEmpty = false,
   picture,
   fit = false,
+  paste,
+  name,
 }: {
   view: ViewState;
   list: string;
@@ -2758,6 +2762,10 @@ export function Cards({
   hideEmpty?: boolean; // not there at all while it has no cards, or can't be read, like a project's private boards
   picture?: string; // a file each row holds, shown on top of its card
   fit?: boolean; // all of it fitted in, or filling its place
+  // Pictures dropped, pasted or chosen, each a record made by this command, given what's
+  // given besides, each of its parts, like picture and picture_width, in the field named.
+  paste?: { command: string; fields: Record<string, string>; given?: Record<string, unknown> };
+  name?: string; // what the screen's paste and add pictures buttons name them by
 }) {
   const ui = useUI();
   const links = useLinks();
@@ -2766,6 +2774,7 @@ export function Cards({
   const counted = tally ? rowsOf(tally.view.data?.[tally.list]) : [];
   const rows = rowsOf(view.data?.[list]);
   const addresses = useAddresses(rows, picture);
+  const taking = useTakingPictures(paste, name);
   // Hidden when empty is hidden until there's something to show, not drawn while it loads.
   if (hideEmpty && (view.status !== "live" || rows.length === 0)) return null;
   const sum = (card: Row) => {
@@ -2787,7 +2796,7 @@ export function Cards({
     }
     return [...groups.values()].sort((a, b) => a.order - b.order).map(({ label: name, count, state }) => ({ label: name, count, state }));
   };
-  return (
+  const shown = (
     <ui.Cards
       status={view.status}
       cards={rows.map((row) => {
@@ -2809,6 +2818,73 @@ export function Cards({
         };
       })}
     />
+  );
+  return taking ? taking(shown, rows.length === 0) : shown;
+}
+
+// Pictures dropped, pasted or chosen on cards, each a record made by their command, given
+// what the address names, its file in the picture, and its own size, its file's name,
+// bytes and date where the cards keep them; all one step to undo. The same as the
+// desktop's. What it gives is the cards wrapped in what takes them, a drop target even
+// while there are none.
+function useTakingPictures(paste: { command: string; fields: Record<string, string>; given?: Record<string, unknown> } | undefined, name: string | undefined) {
+  const ui = useUI();
+  const files = useFiles();
+  const runner = useRunner();
+  const { say } = useSaying();
+  const [dropping, setDropping] = useState(false);
+  const add = async (given: File[]) => {
+    if (!paste || !files || !paste.fields["picture"]) return;
+    let first = true;
+    for (const file of given) {
+      const size = await pictureSize(file);
+      if (!size) {
+        say({ text: `${file.name} isn't a picture this can read.`, problem: true });
+        continue;
+      }
+      const made: CommandInput = { ...(paste.given ?? {}) };
+      const keep = (part: string, held: unknown) => {
+        const field = paste.fields[part];
+        if (field) made[field] = held;
+      };
+      keep("picture", await files.upload(file, () => {}));
+      keep("picture_width", size.w);
+      keep("picture_height", size.h);
+      const called = file.name.replace(/\.[^.]+$/, "");
+      keep("name", !called || called === "image" || called === "Pasted" ? "Pasted image" : called);
+      keep("picture_bytes", file.size);
+      keep("picture_date", new Date(Math.floor(file.lastModified / 1000) * 1000).toISOString().replace(".000Z", "Z"));
+      if (!first) made["one:history"] = "joined";
+      first = false;
+      await runner.run(paste.command, made);
+    }
+  };
+  usePicturesHanded(paste ? name : undefined, add);
+  if (!paste) return undefined;
+  return (shown: ReactNode, empty: boolean) => (
+    <div
+      className="one-cards-taking"
+      style={{ minHeight: empty ? 160 : undefined, outline: dropping ? "3px solid var(--color-accent, #2457d6)" : "none", outlineOffset: 4 }}
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes("Files")) return;
+        e.preventDefault();
+        setDropping(true);
+      }}
+      onDragLeave={() => setDropping(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDropping(false);
+        const pictures = [...e.dataTransfer.files].filter((f) => f.type.startsWith("image/"));
+        if (pictures.length === 0) {
+          if (e.dataTransfer.getData("text/uri-list")) say({ text: "That picture is on the web. Save it first, then drop it here." });
+          return;
+        }
+        void add(pictures);
+      }}
+    >
+      {shown}
+      {empty && <ui.Text>Nothing here yet. Drop pictures here to add them.</ui.Text>}
+    </div>
   );
 }
 
