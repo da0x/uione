@@ -24,10 +24,25 @@ function Launcher({ features }: { features: LandingFeature[] }) {
           <h3 className="m-0 text-[1.1rem] font-semibold text-ink" style={heading}>
             {f.title}
           </h3>
-          <div className="max-w-[16rem] text-sm leading-6 text-muted empty:hidden">{f.text}</div>
+          <Words text={f.text} className="max-w-[16rem] text-sm leading-6 text-muted" />
         </li>
       ))}
     </ul>
+  );
+}
+
+// Words given as several texts, each its own paragraph.
+function Words({ text, className = "" }: { text?: ReactNode; className?: string }) {
+  const paragraphs = (Array.isArray(text) ? text : [text]).filter((words) => words !== undefined && words !== null);
+  if (paragraphs.length === 0) return null;
+  return (
+    <div className={`flex flex-col gap-4 ${className}`}>
+      {paragraphs.map((words, at) => (
+        <p key={at} className="m-0">
+          {words}
+        </p>
+      ))}
+    </div>
   );
 }
 
@@ -52,7 +67,7 @@ function Part({ id, overline, title, text, children }: { id?: string; overline?:
             {title}
           </h2>
         )}
-        <div className="max-w-md leading-7 text-muted empty:hidden">{text}</div>
+        <Words text={text} className="max-w-md leading-7 text-muted" />
       </div>
       <div className="lg:col-span-8">{children}</div>
     </section>
@@ -73,7 +88,7 @@ function Entries({ entries }: { entries: { title: string; overline?: ReactNode; 
             </h3>
           </div>
           <div className="col-start-2 flex flex-col gap-4 pt-2 leading-7 text-muted sm:col-start-3 sm:pt-1">
-            <div className="max-w-prose empty:hidden">{e.text}</div>
+            <Words text={e.text} className="max-w-prose" />
             {e.features && e.features.length > 0 && (
               <ul className="m-0 flex list-none flex-col gap-2 p-0">
                 {e.features.map((f, held) => (
