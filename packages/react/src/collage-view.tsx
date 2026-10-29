@@ -1522,7 +1522,7 @@ export function Collage({
       const r = canvas.getBoundingClientRect();
       const lines = e.deltaMode === 1 ? 16 : 1;
       let dx = e.deltaX * lines, dy = e.deltaY * lines;
-      if (e.ctrlKey) w.view = zoomed(w.view, { x: 0, y: 0, w: r.width, h: r.height }, W, H, w.margin, Math.exp(-dy * 0.01), { x: e.clientX - r.left, y: e.clientY - r.top });
+      if (e.ctrlKey) w.view = zoomed(w.view, { x: 0, y: 0, w: r.width, h: r.height }, W, H, w.margin, Math.exp(-dy * 0.002), { x: e.clientX - r.left, y: e.clientY - r.top });
       else {
         if (e.shiftKey) [dx, dy] = [dy, dx];
         w.view = { ...w.view, panX: w.view.panX - dx, panY: w.view.panY - dy };

@@ -390,6 +390,11 @@ export const buttonIcons: Record<string, ReactNode> = {
       <path d="M11.5 7A4.5 4.5 0 1 1 2.5 7 4.5 4.5 0 1 1 11.5 7zM10.2 10.2l3.8 3.8M5 7h4M7 5v4" />
     </svg>
   ),
+  zoom_fit: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M11.5 7A4.5 4.5 0 1 1 2.5 7 4.5 4.5 0 1 1 11.5 7zM10.2 10.2l3.8 3.8M5 5.5h4v3H5z" />
+    </svg>
+  ),
   zoom_out: (
     <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M11.5 7A4.5 4.5 0 1 1 2.5 7 4.5 4.5 0 1 1 11.5 7zM10.2 10.2l3.8 3.8M5 7h4" />
