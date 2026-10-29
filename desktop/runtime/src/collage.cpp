@@ -1713,7 +1713,15 @@ namespace one::desktop::runtime {
 			float wide = 0, high = 0;
 			double scale = 1;
 			std::optional<desktop::point> held;  // where a drag is, while one is
+			// A swipe across it at fit: where it began, and how far across it's gone,
+			// which it's drawn moved by.
+			std::optional<desktop::point> swiping;
+			float swiped = 0;
 		};
+
+		// Whether a swipe across goes far enough to step: an eighth of the picture's
+		// place, or 60 pixels on a narrow one.
+		bool far_enough(const looked_at& l, float dx) { return std::abs(dx) >= std::max(60.f, l.area.width / 8); }
 
 		// Where it's drawn: fitted, then as many times larger as it's zoomed, its point in
 		// the middle, but never past its edges once it's larger than the screen.
@@ -1723,7 +1731,7 @@ namespace one::desktop::runtime {
 			float s = std::min(a.width / l.wide, a.height / l.high) * l.times;
 			float w = l.wide * s, h = l.high * s;
 			float x = a.x + a.width / 2 - l.x * w, y = a.y + a.height / 2 - l.y * h;
-			x = w <= a.width ? a.x + (a.width - w) / 2 : std::clamp(x, a.x + a.width - w, a.x);
+			x = w <= a.width ? a.x + (a.width - w) / 2 + l.swiped : std::clamp(x, a.x + a.width - w, a.x);
 			y = h <= a.height ? a.y + (a.height - h) / 2 : std::clamp(y, a.y + a.height - h, a.y);
 			return {x, y, w, h};
 		}
@@ -1790,6 +1798,12 @@ namespace one::desktop::runtime {
 		}
 		desktop::picture shown = shown_now(p, kept, 0);
 		bool shows_pointer = awake();
+		// To the record after, swiped to the left, as a photo app does, or the one before;
+		// where the screen's steps say, as they're built.
+		auto step = [&p](float dx) {
+			auto to = *p.kept<std::shared_ptr<std::string>>(dx < 0 ? "step next" : "step previous", std::make_shared<std::string>()).peek();
+			if (!to.empty()) p.open_instead(to);
+		};
 		return desktop::drawing(
 		           [shown, l](desktop::canvas& c, desktop::rect area) {
 			           // On black, as a photo is looked at, whatever the theme.
@@ -1813,20 +1827,35 @@ namespace one::desktop::runtime {
 				                }
 				                return true;
 			                }
-			                if (l->times <= 1.0001f) return false;
+			                // At fit, a drag across is a swipe, as a finger's is; larger, it moves it about.
+			                if (l->times <= 1.0001f) {
+				                l->swiping = at, l->swiped = 0;
+				                return true;
+			                }
 			                l->held = at;
 			                return true;
 		                },
 		            .on_drag =
 		                [l](desktop::point at) {
+			                if (l->swiping) {
+				                l->swiped = at.x - l->swiping->x;
+				                desktop::runtime::redraw();
+				                return;
+			                }
 			                if (!l->held) return;
 			                moved(*l, l->held->x - at.x, l->held->y - at.y);
 			                l->held = at;
 			                desktop::runtime::redraw();
 		                },
 		            .on_release =
-		                [l](desktop::point) {
+		                [l, step](desktop::point at) {
 			                l->held.reset();
+			                if (!l->swiping) return;
+			                float dx = at.x - l->swiping->x;
+			                l->swiping.reset();
+			                l->swiped = 0;
+			                // Too short, it goes back to its place.
+			                if (far_enough(*l, dx)) step(dx);
 		                },
 		            // With Ctrl, the wheel zooms about the pointer, as a collage's does; without,
 		            // it moves about a picture larger than fits, as a touchpad's two fingers do.
@@ -1844,6 +1873,14 @@ namespace one::desktop::runtime {
 		            .on_pinch =
 		                [l](desktop::point at, float by) {
 			                zoomed(*l, by, at);
+			                return true;
+		                },
+		            // Three fingers across a touchpad, the same as a swipe, at fit.
+		            .on_swipe =
+		                [l, step](desktop::point, float dx, float, bool ended) {
+			                if (l->times > 1.0001f) return false;
+			                l->swiped = ended ? 0 : dx;
+			                if (ended && far_enough(*l, dx)) step(dx);
 			                return true;
 		                },
 		            .cursor =

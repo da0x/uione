@@ -311,6 +311,18 @@ namespace one::desktop {
 		}
 	}
 
+	void deliver_swipe(window::state& w, one::desktop::point at, float dx, float dy, bool ended) {
+		bring_up_to_date(w);
+		in_window context(w);
+		if (!w.root) return;
+		for (element* e = w.root->hit(at); e; e = e->parent) {
+			if (e->swipe(at, dx, dy, ended)) {
+				w.redraw();
+				return;
+			}
+		}
+	}
+
 	one::desktop::cursor cursor_at(window::state& w, one::desktop::point at) {
 		if (!w.root) return cursor::normal;
 		for (element* e = w.root->hit(at); e; e = e->parent) {

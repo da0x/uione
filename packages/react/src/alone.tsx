@@ -118,6 +118,27 @@ export function stepped() {
   if (!awakeBefore) rest();
 }
 
+// The screen's steps to the record before and after, for a swipe to take: each step
+// says where it goes while it's shown.
+const steps = new Map<boolean, () => void>();
+export function useSwipeStep(next: boolean, go: (() => void) | undefined) {
+  const latest = useRef(go);
+  latest.current = go;
+  useEffect(() => {
+    const step = () => latest.current?.();
+    steps.set(next, step);
+    return () => {
+      if (steps.get(next) === step) steps.delete(next);
+    };
+  }, [next]);
+}
+
+// How far a swipe goes before it steps: an eighth of the picture's width, or 60 pixels
+// on a narrow one.
+export function swipeSteps(dx: number, width: number): boolean {
+  return Math.abs(dx) >= Math.max(60, width / 8);
+}
+
 export function useAwake(): boolean {
   return useSyncExternalStore(
     (changed) => {
@@ -150,13 +171,21 @@ export function useAwakeOn(on: boolean): boolean {
 // =, - or 0, by the wheel with Ctrl or a touchpad's pinch, which a browser hands over
 // as one, about the pointer, and by the screen's zoom buttons, asked by `zoom`; to 100%
 // and back by a double click; dragged, or scrolled, to move about it once it's larger
-// than fits. The picture's turned as its camera says, as the browser does.
+// than fits; pinched with two fingers. At fit, a swipe across steps to the record after,
+// to the left, or before, to the right, as a photo app's does: the picture follows the
+// finger, and goes back to its place when the swipe is too short. The picture's turned as
+// its camera says, as the browser does.
 export function PictureAlone({ source, zoom }: { source?: string; zoom: string }) {
   const box = useRef<HTMLDivElement>(null);
   const [look, setLook] = useState<Looked>(fitted);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [own, setOwn] = useState({ wide: 0, high: 0 });
   const [held, setHeld] = useState<{ x: number; y: number } | undefined>();
+  // A swipe at fit: where it began, and how far across it's gone.
+  const [swipe, setSwipe] = useState<{ from: number; by: number } | undefined>();
+  // The fingers down, by pointer, for a pinch of two.
+  const fingers = useRef(new Map<number, { x: number; y: number }>());
+  const apart = useRef(0);
   const awake = useAwake();
   const seen: Seen = { ...size, ...own };
   const ratio = typeof window === "undefined" ? 1 : window.devicePixelRatio || 1;
@@ -209,6 +238,7 @@ export function PictureAlone({ source, zoom }: { source?: string; zoom: string }
     return () => el.removeEventListener("wheel", wheeled);
   }, []);
   const r = drawnAt(look, seen);
+  if (swipe && look.times <= 1.0001) r.x += swipe.by;
   const larger = look.times > 1.0001;
   const pointedAt = (e: { clientX: number; clientY: number }) => {
     const at = box.current?.getBoundingClientRect();
@@ -229,18 +259,54 @@ export function PictureAlone({ source, zoom }: { source?: string; zoom: string }
         });
       }}
       onPointerDown={(e) => {
-        if (!larger || e.button > 0) return;
+        if (e.button > 0) return;
         e.currentTarget.setPointerCapture?.(e.pointerId);
-        setHeld(pointedAt(e));
+        fingers.current.set(e.pointerId, pointedAt(e));
+        // A second finger pinches, instead of moving or swiping.
+        if (fingers.current.size === 2) {
+          const [a, b] = [...fingers.current.values()] as [{ x: number; y: number }, { x: number; y: number }];
+          apart.current = Math.hypot(a.x - b.x, a.y - b.y);
+          setHeld(undefined);
+          setSwipe(undefined);
+          return;
+        }
+        if (fingers.current.size > 2) return;
+        if (larger) setHeld(pointedAt(e));
+        else setSwipe({ from: e.clientX, by: 0 });
       }}
       onPointerMove={(e) => {
-        if (!held) return;
+        if (!fingers.current.has(e.pointerId)) return;
         const at = pointedAt(e);
+        fingers.current.set(e.pointerId, at);
+        if (fingers.current.size === 2) {
+          const [a, b] = [...fingers.current.values()] as [{ x: number; y: number }, { x: number; y: number }];
+          const now = Math.hypot(a.x - b.x, a.y - b.y);
+          if (apart.current > 0 && now > 0) {
+            const by = now / apart.current;
+            change((l, s, ratio) => zoomed(l, by, { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, s, ratio));
+          }
+          apart.current = now;
+          return;
+        }
+        if (swipe) {
+          setSwipe({ from: swipe.from, by: e.clientX - swipe.from });
+          return;
+        }
+        if (!held) return;
         change((l, s) => moved(l, held.x - at.x, held.y - at.y, s));
         setHeld(at);
       }}
-      onPointerUp={() => setHeld(undefined)}
-      onPointerCancel={() => setHeld(undefined)}
+      onPointerUp={(e) => {
+        fingers.current.delete(e.pointerId);
+        if (swipe && fingers.current.size === 0 && swipeSteps(e.clientX - swipe.from, now.current.seen.w)) steps.get(e.clientX < swipe.from)?.();
+        setSwipe(undefined);
+        setHeld(undefined);
+      }}
+      onPointerCancel={(e) => {
+        fingers.current.delete(e.pointerId);
+        setSwipe(undefined);
+        setHeld(undefined);
+      }}
     >
       {source && (
         <img

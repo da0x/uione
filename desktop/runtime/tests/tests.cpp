@@ -3580,6 +3580,72 @@ TEST("on a picture alone, left and right step through the list whatever has the 
 	std::filesystem::remove_all(folder);
 }
 
+TEST("a picture alone steps by a swipe across it at fit, a finger's, a drag's or three fingers' on a touchpad, following it, and not for one too short, nor while it's zoomed") {
+	auto folder = banded_picture(std::filesystem::temp_directory_path() / "uione-alone-swiped");
+	struct kept_there : memory_source {
+		std::filesystem::path in;
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return in / kept; }
+	} data;
+	data.in = folder;
+	auto s = archive_of(5, data, {.view = {}, .list = "posters", .columns = {{"title", "Title"}}, .link = "/posters/:poster"});
+	s.screens.back().build = [](page& p) {
+		auto archive = p.view("studio::archive");
+		return items(workspace(p, region{"toolbar", along(step(p, {.view = archive, .list = "posters", .route = "/posters/:poster"}, "Previous", "previous", {"left"}),
+		                                                  step(p, {.view = archive, .list = "posters", .route = "/posters/:poster", .next = true}, "Next", "next", {"right"}))},
+		                          region{"main", items(picture_alone(p, "files/banded.png", "/posters/:poster collage"))}));
+	};
+	navigator nav(s, data);
+	nav.open("/posters");
+	nav.open("/posters/p2");
+	kept_window window(nav);
+	window.update();
+	rest();
+	window.update();
+	auto left_edge = [&] {
+		auto shown = looked(window.w);
+		for (int x = 0; x < 900; ++x) {
+			if (shown.at(x, 300) != black) return x;
+		}
+		return -1;
+	};
+	CHECK(left_edge() == 0);
+	// Too short: it follows the finger, then goes back.
+	one::desktop::deliver_press(window.w, {500, 300}, 1);
+	one::desktop::deliver_pointer(window.w, {470, 300});
+	CHECK(left_edge() == 0);  // its left edge is under the window's, moved left
+	CHECK(looked(window.w).at(875, 300) == black);
+	one::desktop::deliver_release(window.w, {470, 300});
+	window.update();
+	CHECK(nav.current().address() == "/posters/p2");
+	CHECK(left_edge() == 0);
+	CHECK(looked(window.w).at(875, 300) != black);
+	// To the left, far enough: the next.
+	one::desktop::deliver_press(window.w, {600, 300}, 1);
+	one::desktop::deliver_pointer(window.w, {400, 300});
+	one::desktop::deliver_release(window.w, {400, 300});
+	window.update();
+	CHECK(nav.current().address() == "/posters/p3");
+	// Three fingers to the right: the one before, but not when they're called off.
+	one::desktop::deliver_swipe(window.w, {450, 300}, 150, 0, false);
+	one::desktop::deliver_swipe(window.w, {450, 300}, 0, 0, true);
+	window.update();
+	CHECK(nav.current().address() == "/posters/p3");
+	one::desktop::deliver_swipe(window.w, {450, 300}, 150, 0, false);
+	CHECK(left_edge() == 150);
+	one::desktop::deliver_swipe(window.w, {450, 300}, 200, 0, true);
+	window.update();
+	CHECK(nav.current().address() == "/posters/p2");
+	// Zoomed, a drag moves it about instead.
+	(void)looked(window.w);
+	one::desktop::deliver_pinch(window.w, {450, 300}, 2.f);
+	one::desktop::deliver_press(window.w, {600, 300}, 1);
+	one::desktop::deliver_pointer(window.w, {300, 300});
+	one::desktop::deliver_release(window.w, {300, 300});
+	window.update();
+	CHECK(nav.current().address() == "/posters/p2");
+	std::filesystem::remove_all(folder);
+}
+
 TEST("a picture alone is zoomed by Ctrl and its keys, its zoom buttons and a pinch, to 100% and back by a double click, and dragged about once it's larger, and stepping fits the next") {
 	auto folder = banded_picture(std::filesystem::temp_directory_path() / "uione-alone-zoomed");
 	struct kept_there : memory_source {
@@ -3603,11 +3669,12 @@ TEST("a picture alone is zoomed by Ctrl and its keys, its zoom buttons and a pin
 	window.update();
 	const one::desktop::key_event larger{.symbol = '=', .text = "=", .control = true}, smaller{.symbol = '-', .text = "-", .control = true},
 	    fitted{.symbol = '0', .text = "0", .control = true};
-	// Fitted, a drag doesn't take it: there's nowhere to move it to.
+	// Fitted, a drag down doesn't move it: there's nowhere to move it to.
 	CHECK(looked(window.w).at(450, 40) == black);
 	one::desktop::deliver_press(window.w, {450, 300}, 1);
-	CHECK(window.w.dragging == nullptr);
-	one::desktop::deliver_release(window.w, {450, 300});
+	one::desktop::deliver_pointer(window.w, {450, 500});
+	CHECK(looked(window.w).at(450, 40) == black);
+	one::desktop::deliver_release(window.w, {450, 500});
 	// Larger by a quarter about its middle: 1125 × 625, past the window's top and foot.
 	CHECK(key(nav, larger));
 	CHECK(looked(window.w).at(450, 40) == green);

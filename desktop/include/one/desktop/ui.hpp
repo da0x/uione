@@ -117,6 +117,10 @@ namespace one::desktop {
 		// Two fingers pinched on a touchpad over it, apart or together: how many times
 		// larger what's under them would be since it was last told.
 		virtual bool pinch(point, float) { return false; }
+		// Swiped across it, by three fingers on a touchpad: how far across and down since
+		// the swipe began, and, once the fingers are lifted, ended, with nothing moved
+		// when it was called off.
+		virtual bool swipe(point, float, float, bool) { return false; }
 		virtual element* hit(point at);
 		virtual bool focusable() const { return false; }
 		// Whether a press gives it the keyboard; a toolbar's button acts on what's being
@@ -321,6 +325,8 @@ namespace one::desktop {
 		std::function<bool(point at, float dx, float dy)> on_wheel = {};
 		// Pinched on a touchpad, by how many times larger: whether it took it.
 		std::function<bool(point at, float by)> on_pinch = {};
+		// Swiped across by three fingers on a touchpad, as element::swipe says.
+		std::function<bool(point at, float dx, float dy, bool ended)> on_swipe = {};
 		std::function<one::desktop::cursor(point at)> cursor = {};
 	};
 	// Painted by the app itself into all the space it's given, as a drawing app's

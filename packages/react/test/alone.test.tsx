@@ -42,6 +42,9 @@ describe("a picture alone on its screen", () => {
       return (
         <Layout name="workspace" alone>
           <Region name="toolbar">
+            <StepLink view={archive} list="clippings" to="/clippings/:clipping" icon="previous" keys={["left"]}>
+              Previous
+            </StepLink>
             <StepLink view={archive} list="clippings" to="/clippings/:clipping" next icon="next" keys={["right"]}>
               Next
             </StepLink>
@@ -63,7 +66,16 @@ describe("a picture alone on its screen", () => {
 
   // Where it's laid out, which jsdom doesn't do: 900 × 600, and the picture 1800 × 1000.
   beforeEach(() => {
-    if (!globalThis.PointerEvent) globalThis.PointerEvent = class extends MouseEvent {} as unknown as typeof PointerEvent;
+    // jsdom has no pointer events: a mouse's, with which pointer it is, for two fingers.
+    if (!globalThis.PointerEvent) {
+      globalThis.PointerEvent = class extends MouseEvent {
+        pointerId: number;
+        constructor(type: string, init?: PointerEventInit) {
+          super(type, init);
+          this.pointerId = init?.pointerId ?? 0;
+        }
+      } as unknown as typeof PointerEvent;
+    }
     Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => 900 });
     Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => 600 });
     Object.defineProperty(HTMLImageElement.prototype, "naturalWidth", { configurable: true, get: () => 1800 });
@@ -120,6 +132,44 @@ describe("a picture alone on its screen", () => {
     next.focus();
     fireEvent.keyDown(next, { key: "ArrowRight" });
     await waitFor(() => expect(drawn.container.querySelector(".one-picture-alone img")?.getAttribute("src")).toContain("c2"));
+  });
+
+  it("steps by a swipe across it at fit, the picture following the finger, and not for one too short, nor while it's zoomed; two fingers pinch it", async () => {
+    const drawn = renderAlone("/clippings/c1");
+    const picture = await shown(drawn);
+    const place = () => drawn.container.querySelector<HTMLElement>(".one-picture-alone")!;
+    await waitFor(() => expect(picture.style.width).toBe("900px"));
+    // Too short: it follows, then goes back.
+    fireEvent.pointerDown(place(), { button: 0, clientX: 500, clientY: 300, pointerId: 1 });
+    fireEvent.pointerMove(place(), { clientX: 470, clientY: 300, pointerId: 1 });
+    expect(picture.style.left).toBe("-30px");
+    fireEvent.pointerUp(place(), { clientX: 470, clientY: 300, pointerId: 1 });
+    expect(picture.style.left).toBe("0px");
+    expect(picture.getAttribute("src")).toContain("c1");
+    // To the left, far enough: the next one.
+    fireEvent.pointerDown(place(), { button: 0, clientX: 600, clientY: 300, pointerId: 2 });
+    fireEvent.pointerMove(place(), { clientX: 400, clientY: 300, pointerId: 2 });
+    fireEvent.pointerUp(place(), { clientX: 400, clientY: 300, pointerId: 2 });
+    await waitFor(() => expect(drawn.container.querySelector(".one-picture-alone img")?.getAttribute("src")).toContain("c2"));
+    // To the right: the one before.
+    fireEvent.pointerDown(place(), { button: 0, clientX: 300, clientY: 300, pointerId: 3 });
+    fireEvent.pointerMove(place(), { clientX: 500, clientY: 300, pointerId: 3 });
+    fireEvent.pointerUp(place(), { clientX: 500, clientY: 300, pointerId: 3 });
+    await waitFor(() => expect(drawn.container.querySelector(".one-picture-alone img")?.getAttribute("src")).toContain("c1"));
+    const now = drawn.container.querySelector<HTMLImageElement>(".one-picture-alone img")!;
+    fireEvent.load(now);
+    await waitFor(() => expect(now.style.width).toBe("900px"));
+    // Two fingers apart twice as far: twice as large, and then a drag moves it, not steps.
+    fireEvent.pointerDown(place(), { button: 0, clientX: 350, clientY: 300, pointerId: 4 });
+    fireEvent.pointerDown(place(), { button: 0, clientX: 550, clientY: 300, pointerId: 5 });
+    fireEvent.pointerMove(place(), { clientX: 750, clientY: 300, pointerId: 5 });
+    fireEvent.pointerUp(place(), { clientX: 750, clientY: 300, pointerId: 5 });
+    fireEvent.pointerUp(place(), { clientX: 350, clientY: 300, pointerId: 4 });
+    await waitFor(() => expect(now.style.width).toBe("1800px"));
+    fireEvent.pointerDown(place(), { button: 0, clientX: 600, clientY: 300, pointerId: 6 });
+    fireEvent.pointerMove(place(), { clientX: 300, clientY: 300, pointerId: 6 });
+    fireEvent.pointerUp(place(), { clientX: 300, clientY: 300, pointerId: 6 });
+    expect(drawn.container.querySelector(".one-picture-alone img")?.getAttribute("src")).toContain("c1");
   });
 
   it("is zoomed by Ctrl and its keys, its zoom buttons and the wheel with Ctrl, to 100% and back by a double click, and dragged about once it's larger", async () => {

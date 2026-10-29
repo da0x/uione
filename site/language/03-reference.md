@@ -2119,9 +2119,14 @@ form step::update "Save" {
   out` and `zoom to fit` buttons, and the wheel with Ctrl or a touchpad's pinch
   zoom it, from fitted to eight times its own size; a double click goes to 100%, a
   pixel of it a pixel of the screen, about where it's clicked, and back. Larger than
-  fits, it's dragged, or the wheel moves it, as far as its edges. Each picture
-  stepped to is fitted again. A terminal draws no pictures, so its screen is its
-  bars.
+  fits, it's dragged, or the wheel moves it, as far as its edges; two fingers on a
+  touchscreen pinch it. At fit, a swipe across it steps, as a photo app's does: to the
+  left for the screen's `link next`, to the right for its `link previous`, by a finger,
+  a drag, or three fingers on a touchpad. The picture follows it, and goes back to its
+  place when it's too short, under an eighth of the screen. Each picture stepped to is
+  fitted again. A key a screen's line names, like `key left`, is that line's whatever
+  button has the keyboard; only a field being typed in keeps its own. A terminal draws
+  no pictures, so its screen is its bars.
 - `chart agent_page.stats.cpu "CPU" percent` draws a run of numbers over time, newest
   at the right, as btop draws one: a line over a soft fill in the accent, its title,
   its latest value, and the top of its scale. Its numbers are a field of the view, or

@@ -9,6 +9,7 @@
 #include <array>
 #include <cmath>
 #include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -57,6 +58,8 @@ namespace one::desktop {
 		inline void wp_cursor_shape_device_v1_destroy(wp_cursor_shape_device_v1* held) { ::wp_cursor_shape_device_v1_destroy(held); }
 		inline void zwp_pointer_gestures_v1_destroy(zwp_pointer_gestures_v1* held) { ::zwp_pointer_gestures_v1_destroy(held); }
 		inline void zwp_pointer_gesture_pinch_v1_destroy(zwp_pointer_gesture_pinch_v1* held) { ::zwp_pointer_gesture_pinch_v1_destroy(held); }
+		inline void zwp_pointer_gesture_swipe_v1_destroy(zwp_pointer_gesture_swipe_v1* held) { ::zwp_pointer_gesture_swipe_v1_destroy(held); }
+		inline void wl_touch_release(wl_touch* held) { ::wl_touch_release(held); }
 		inline void wl_data_device_manager_destroy(wl_data_device_manager* held) { ::wl_data_device_manager_destroy(held); }
 		inline void wl_data_device_release(wl_data_device* held) { ::wl_data_device_release(held); }
 		inline void wl_data_offer_destroy(wl_data_offer* held) { ::wl_data_offer_destroy(held); }
@@ -139,6 +142,8 @@ namespace one::desktop {
 		owned<wl_pointer, released::wl_pointer_release> pointer;
 		owned<wp_cursor_shape_device_v1, released::wp_cursor_shape_device_v1_destroy> cursor;
 		owned<zwp_pointer_gesture_pinch_v1, released::zwp_pointer_gesture_pinch_v1_destroy> pinch;
+		owned<zwp_pointer_gesture_swipe_v1, released::zwp_pointer_gesture_swipe_v1_destroy> swipe;
+		owned<wl_touch, released::wl_touch_release> touch;
 		one::desktop::clipboard clipboard;
 		one::desktop::typing typing;
 		std::uint32_t input_serial = 0;  // the last key's or button's, which the clipboard is set with
@@ -151,6 +156,13 @@ namespace one::desktop {
 		point pointer_at;
 		float wheel_x = 0, wheel_y = 0;  // since the last frame of pointer events
 		double pinched = 1;              // how far a pinch had gone when it was last told
+		point swiped;                    // how far a touchpad's swipe has gone, and with
+		int swiping = 0;                 // how many fingers, or 0 while there's none
+		// Fingers on a touchscreen, by their id, where each is: one presses, drags and
+		// lets go as the pointer's button does; two pinch, how far apart they were last.
+		std::map<std::int32_t, point> fingers;
+		window::state* touched = nullptr;
+		float fingers_apart = 0;
 		int shape = -1;                  // the cursor shape last set
 		int repeat_rate = 25, repeat_delay = 600;  // per second, and milliseconds before
 		std::uint32_t repeating = 0;               // the key held, or 0
@@ -236,6 +248,7 @@ namespace one::desktop {
 	void deliver_wheel(window::state& w, point at, float dx, float dy);
 	void deliver_leave(window::state& w);
 	void deliver_pinch(window::state& w, point at, float by);
+	void deliver_swipe(window::state& w, point at, float dx, float dy, bool ended);
 	one::desktop::cursor cursor_at(window::state& w, point at);
 
 	// The seat's part of the app, in seat.cpp.

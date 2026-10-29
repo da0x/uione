@@ -13,7 +13,7 @@ import { partsOf } from "./keys.js";
 import { ShownPath, fill, useConfirmContext, useFill, usePageTitle, useSignIn, useSite } from "./app.js";
 import { hintOf, rememberGiven, setPicked as pickRow, useInGroup, useInOptions, useLastGiven, useOverRun, usePicturesHanded, useStyled, takeInTurn, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
 import { useSaying } from "./said.js";
-import { PictureAlone, stepped, useAwakeOn } from "./alone.js";
+import { PictureAlone, stepped, useAwakeOn, useSwipeStep } from "./alone.js";
 import { pictureSize } from "./vectors.js";
 import { cameraOf, factsOf, takenAt } from "./exif.js";
 import type { BoardCard, CanvasRegion, ChartProps, FieldProps, Filtered, Hue, LandingFeature, LandingProps, LinkProps, PipelineRow, TrackStep } from "./contract.js";
@@ -97,6 +97,8 @@ export function StepLink({
   const go = () => {
     if (target) void navigate(target, { replace: true });
   };
+  // A swipe across a picture alone steps too, while it can.
+  useSwipeStep(next, !off && target !== undefined ? go : undefined);
   // By its key, it leaves a picture's bars hidden, as they were.
   useKeys(
     keys,

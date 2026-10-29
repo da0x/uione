@@ -1011,6 +1011,7 @@ namespace one::desktop {
 			}
 			bool wheel(point at, float dx, float dy) override { return pointer_.on_wheel ? pointer_.on_wheel(at, dx, dy) : element::wheel(at, dx, dy); }
 			bool pinch(point at, float by) override { return pointer_.on_pinch && pointer_.on_pinch(at, by); }
+			bool swipe(point at, float dx, float dy, bool ended) override { return pointer_.on_swipe && pointer_.on_swipe(at, dx, dy, ended); }
 			// Where the pointer is, as it's found over this, for the cursor it shows there.
 			element* hit(point at) override {
 				element* found = element::hit(at);

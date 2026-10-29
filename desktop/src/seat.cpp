@@ -69,6 +69,92 @@ namespace one::desktop {
 		    .end = [](void*, zwp_pointer_gesture_pinch_v1*, std::uint32_t, std::uint32_t, std::int32_t) { owning->input->pinched = 1; },
 		};
 
+		// Three fingers or more swiped across a touchpad, as the compositor tells it when
+		// it doesn't take them itself: how far they've gone since they began, over what the
+		// pointer's over, and when they're lifted.
+		const zwp_pointer_gesture_swipe_v1_listener swipe_listener{
+		    .begin =
+		        [](void*, zwp_pointer_gesture_swipe_v1*, std::uint32_t, std::uint32_t, wl_surface*, std::uint32_t fingers) {
+			        auto& s = *owning->input;
+			        s.swiped = {};
+			        s.swiping = static_cast<int>(fingers);
+		        },
+		    .update =
+		        [](void*, zwp_pointer_gesture_swipe_v1*, std::uint32_t, wl_fixed_t dx, wl_fixed_t dy) {
+			        auto& s = *owning->input;
+			        if (s.swiping < 3) return;
+			        s.swiped.x += static_cast<float>(wl_fixed_to_double(dx));
+			        s.swiped.y += static_cast<float>(wl_fixed_to_double(dy));
+			        if (s.pointer_over) deliver_swipe(*s.pointer_over, s.pointer_at, s.swiped.x, s.swiped.y, false);
+		        },
+		    .end =
+		        [](void*, zwp_pointer_gesture_swipe_v1*, std::uint32_t, std::uint32_t, std::int32_t cancelled) {
+			        auto& s = *owning->input;
+			        if (s.swiping >= 3 && s.pointer_over) deliver_swipe(*s.pointer_over, s.pointer_at, cancelled ? 0 : s.swiped.x, cancelled ? 0 : s.swiped.y, true);
+			        s.swiping = 0;
+		        },
+		};
+
+		// Fingers on a touchscreen: the first presses where it's put down, drags as it
+		// moves and lets go where it's lifted, as the pointer's button does; a second
+		// pinches, by how much further apart they are each time they move.
+		const wl_touch_listener touch_listener{
+		    .down =
+		        [](void*, wl_touch*, std::uint32_t serial, std::uint32_t, wl_surface* surface, std::int32_t id, wl_fixed_t x, wl_fixed_t y) {
+			        auto& s = *owning->input;
+			        point at{static_cast<float>(wl_fixed_to_double(x)), static_cast<float>(wl_fixed_to_double(y))};
+			        s.input_serial = serial;
+			        if (s.fingers.empty()) s.touched = window_of(surface);
+			        s.fingers[id] = at;
+			        if (!s.touched) return;
+			        if (s.fingers.size() == 1) {
+				        deliver_pointer(*s.touched, at);
+				        deliver_press(*s.touched, at, 1);
+			        } else if (s.fingers.size() == 2) {
+				        // The first finger's press is let go where it began, so it neither drags on nor clicks.
+				        deliver_leave(*s.touched);
+				        auto first = s.fingers.begin()->second, second = std::next(s.fingers.begin())->second;
+				        s.fingers_apart = std::hypot(first.x - second.x, first.y - second.y);
+			        }
+		        },
+		    .up =
+		        [](void*, wl_touch*, std::uint32_t, std::uint32_t, std::int32_t id) {
+			        auto& s = *owning->input;
+			        auto found = s.fingers.find(id);
+			        if (found == s.fingers.end()) return;
+			        point at = found->second;
+			        bool alone = s.fingers.size() == 1;
+			        s.fingers.erase(found);
+			        if (alone && s.touched) deliver_release(*s.touched, at);
+			        if (s.fingers.empty()) s.touched = nullptr;
+		        },
+		    .motion =
+		        [](void*, wl_touch*, std::uint32_t, std::int32_t id, wl_fixed_t x, wl_fixed_t y) {
+			        auto& s = *owning->input;
+			        auto found = s.fingers.find(id);
+			        if (found == s.fingers.end() || !s.touched) return;
+			        found->second = {static_cast<float>(wl_fixed_to_double(x)), static_cast<float>(wl_fixed_to_double(y))};
+			        if (s.fingers.size() == 1) {
+				        deliver_pointer(*s.touched, found->second);
+			        } else if (s.fingers.size() == 2) {
+				        auto first = s.fingers.begin()->second, second = std::next(s.fingers.begin())->second;
+				        float apart = std::hypot(first.x - second.x, first.y - second.y);
+				        if (s.fingers_apart > 0 && apart > 0) deliver_pinch(*s.touched, {(first.x + second.x) / 2, (first.y + second.y) / 2}, apart / s.fingers_apart);
+				        s.fingers_apart = apart;
+			        }
+		        },
+		    .frame = [](void*, wl_touch*) {},
+		    .cancel =
+		        [](void*, wl_touch*) {
+			        auto& s = *owning->input;
+			        if (s.touched) deliver_leave(*s.touched);
+			        s.fingers.clear();
+			        s.touched = nullptr;
+		        },
+		    .shape = [](void*, wl_touch*, std::int32_t, wl_fixed_t, wl_fixed_t) {},
+		    .orientation = [](void*, wl_touch*, std::int32_t, wl_fixed_t) {},
+		};
+
 		key_event event_for(seat& s, std::uint32_t code) {
 			key_event e;
 			e.symbol = xkb_state_key_get_one_sym(s.key_state, code);
@@ -226,7 +312,13 @@ namespace one::desktop {
 				        if (owning->gestures) {
 					        s.pinch = zwp_pointer_gestures_v1_get_pinch_gesture(owning->gestures, s.pointer);
 					        zwp_pointer_gesture_pinch_v1_add_listener(s.pinch, &pinch_listener, nullptr);
+					        s.swipe = zwp_pointer_gestures_v1_get_swipe_gesture(owning->gestures, s.pointer);
+					        zwp_pointer_gesture_swipe_v1_add_listener(s.swipe, &swipe_listener, nullptr);
 				        }
+			        }
+			        if ((capabilities & WL_SEAT_CAPABILITY_TOUCH) && !s.touch) {
+				        s.touch = wl_seat_get_touch(handle);
+				        wl_touch_add_listener(s.touch, &touch_listener, nullptr);
 			        }
 			        if (typing && !s.keyboard) {
 				        s.keyboard = wl_seat_get_keyboard(handle);

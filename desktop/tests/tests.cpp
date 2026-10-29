@@ -662,6 +662,28 @@ TEST("the chosen row and the scroll stay where they were when the view is built 
 	CHECK(opened == "issue-9");  // gone, so the nearest that's left
 }
 
+TEST("three fingers swiped across a touchpad are told to what's under the pointer, how far they've gone, and when they're lifted") {
+	one::desktop::detail::theme_in_use() = &tested_theme();
+	one::desktop::app::state app;
+	one::desktop::window::state w;
+	w.owner = &app;
+	w.size = {400, 200};
+	std::vector<std::tuple<float, float, bool>> told;
+	w.build = [&] {
+		return one::desktop::drawing([](one::desktop::canvas&, one::desktop::rect) {}, {.on_swipe = [&](one::desktop::point, float dx, float dy, bool ended) {
+			told.emplace_back(dx, dy, ended);
+			return true;
+		}}).grow();
+	};
+	w.needs_building = true;
+	one::desktop::bring_up_to_date(w);
+	one::desktop::deliver_swipe(w, {200, 100}, -40, 2, false);
+	one::desktop::deliver_swipe(w, {200, 100}, -120, 3, true);
+	CHECK(told.size() == 2);
+	CHECK((told[0] == std::tuple{-40.f, 2.f, false}));
+	CHECK((told[1] == std::tuple{-120.f, 3.f, true}));
+}
+
 TEST("a key the window's lines take is theirs before it moves the keyboard to what's beside, and one they don't take still moves it") {
 	one::desktop::detail::theme_in_use() = &tested_theme();
 	one::desktop::app::state app;

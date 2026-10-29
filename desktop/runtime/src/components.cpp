@@ -342,6 +342,8 @@ namespace one::desktop::runtime {
 		auto go = [&p, to] {
 			if (!to.empty()) p.open_instead(to);
 		};
+		// Where it goes, for a swipe across a picture alone to step there too.
+		*p.kept<std::shared_ptr<std::string>>(spec.next ? "step next" : "step previous", std::make_shared<std::string>()).peek() = off ? "" : to;
 		// By its key, it leaves a picture's bars hidden, as they were.
 		if (!off) {
 			for (const auto& k : keys) p.on_key(k, [go] {
