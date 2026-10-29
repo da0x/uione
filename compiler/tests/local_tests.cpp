@@ -139,7 +139,9 @@ TEST_CASE("a local project is served from a Firebase project only as its web app
 
 TEST_CASE("one build serves a local project's web app from Hosting, with nothing else") {
     language::diagnostics out;
-    auto files = parsed(with(board, "\ttarget   desktop\n", "\ttarget   web\n\tfirebase \"pinned-1\"\n\tregion   \"us-east4\"\n\tdomain   \"pinned.example.com\"\n"), out);
+    auto files = parsed(with(with(board, "\ttarget   desktop\n", "\ttarget   web\n\tfirebase \"pinned-1\"\n\tregion   \"us-east4\"\n\tdomain   \"pinned.example.com\"\n"),
+                             "\t\tw      number  = 400\n", "\t\tw      number  = 400\n\t\tshot   file\n"),
+                        out);
     REQUIRE(out.empty());
     auto dir = std::filesystem::temp_directory_path() / "one-local-hosted";
     auto whole = generators::generate_project(files, dir.string(), (dir / "build").string(), {"web"});
@@ -147,6 +149,7 @@ TEST_CASE("one build serves a local project's web app from Hosting, with nothing
     auto found = std::ranges::find_if(whole.files, [](const auto& f) { return f.path == "infrastructure/main.go"; });
     REQUIRE(found != whole.files.end());
     CHECK(found->content.find("Static:   true") != std::string::npos);
+    CHECK(found->content.find("Files:") == std::string::npos);  // kept in the browser
     CHECK(std::ranges::none_of(whole.files, [](const auto& f) { return f.path.starts_with("api/") || f.path.ends_with(".rules"); }));
 }
 

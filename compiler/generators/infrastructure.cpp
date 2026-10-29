@@ -91,15 +91,20 @@ namespace one::generators {
                 }
                 if (s.domain.empty() || s.firebase.empty() || s.region.empty()) return std::nullopt;
                 if (!p->environment.empty()) s.stack = s.firebase;
+                // A project kept on its machine has no backend wherever it's served: its
+                // web app keeps its data, files too, in the browser, so it's only the app
+                // on Hosting.
+                if (language::stores_locally(files)) {
+                    s.backend = false;
+                    return s;
+                }
                 for (const auto& other : files) {
                     if (s.github.empty()) s.github = hook_route(other.declarations, "github");
                     if (s.stripe.empty()) s.stripe = hook_route(other.declarations, "stripe");
                     s.services = s.services || has_services(other.declarations);
                     s.files = s.files || has_files(other.declarations);
                 }
-                // A project kept on its machine has no backend wherever it's served: its
-                // web app keeps its data in the browser, so it's only the app on Hosting.
-                s.backend = !language::stores_locally(files) && needs_backend(files);
+                s.backend = needs_backend(files);
                 return s;
             }
         }
