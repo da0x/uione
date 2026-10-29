@@ -1570,7 +1570,7 @@ namespace one::generators {
         // A paste or add pictures button that goes into the screen's paper or cards.
         bool into_paper(const language::collage_button& b) const {
             using kind = language::collage_button::kind;
-            return pictures_key_ && (b.does == kind::paste || b.does == kind::add_pictures);
+            return pictures_key_ && (b.does == kind::paste || b.does == kind::add_pictures || b.does == kind::add_folder);
         }
 
         stream pages_file(const page_set& pages) const {
@@ -1909,9 +1909,10 @@ namespace one::generators {
                            (insert->sizes ? ", .sizes = " + std::to_string(insert->sizes) : "") + "})";
                 } else if (auto* does = std::get_if<language::collage_button>(&item.node); does && into_paper(*does)) {
                     // Paste into the screen's paper or cards, or pictures chosen from files.
-                    bool chooses = does->does == language::collage_button::kind::add_pictures;
+                    bool folder = does->does == language::collage_button::kind::add_folder;
+                    bool chooses = does->does == language::collage_button::kind::add_pictures || folder;
                     code = "paper_button(p, {.key = " + str(*pictures_key_) + ", .label = " + str(language::label_of(*does)) + ", .icon = " + str(does->icon.value_or("")) +
-                           (does->keys.empty() ? "" : ", .keys = " + keys_of(does->keys)) + (chooses ? ", .chooses = true})" : ", .pastes = true})");
+                           (does->keys.empty() ? "" : ", .keys = " + keys_of(does->keys)) + (folder ? ", .chooses = true, .folder = true})" : chooses ? ", .chooses = true})" : ", .pastes = true})");
                 } else if (auto* does = std::get_if<language::collage_button>(&item.node)) {
                     std::string what = language::asked_of(*does, collage_over_), label = language::label_of(*does);
                     code = "collage_button(p, {.key = " + str(collage_key_) + ", .does = " + str(what) + ", .label = " + str(label) + ", .icon = " + str(does->icon.value_or("")) +

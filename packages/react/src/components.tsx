@@ -11,7 +11,7 @@ import type { ReactElement, ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { partsOf } from "./keys.js";
 import { ShownPath, fill, useConfirmContext, useFill, usePageTitle, useSignIn, useSite } from "./app.js";
-import { hintOf, rememberGiven, setPicked as pickRow, useInGroup, useInOptions, useLastGiven, useOverRun, usePicturesHanded, useStyled, takeInTurn, alreadyIn, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
+import { hintOf, rememberGiven, setPicked as pickRow, useInGroup, useInOptions, useLastGiven, useOverRun, usePicturesHanded, useStyled, takeInTurn, alreadyIn, notAPicture, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
 import { useSaying } from "./said.js";
 import { PictureAlone, stepped, useAwakeOn, useSwipeStep } from "./alone.js";
 import { pictureSize } from "./vectors.js";
@@ -3015,7 +3015,7 @@ function useTakingPictures(paste: { command: string; fields: Record<string, stri
     const kept = new Set(latest.current().map((path) => path.slice(path.lastIndexOf("/") + 1)).filter((hash) => /^[0-9a-f]{64}$/.test(hash)));
     await takeInTurn(given, say, async (file) => {
       const size = await pictureSize(file);
-      if (!size) return `${file.name} isn't a picture this can read.`;
+      if (!size) return notAPicture(file);
       const hash = await sha256(file);
       if (kept.has(hash)) return alreadyIn;
       kept.add(hash);

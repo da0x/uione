@@ -2043,7 +2043,7 @@ form step::update "Save" {
   `building`, `chart`, `cloud`, `code`, `connect`, `database`, `globe`, `layers`,
   `lock`, `people`, `shield` and `spark`; and for a drawing app's toolbar, `undo`,
   `redo`, `save`, `paste`, `copy`, `crop`, `text`, `screenshot`, `picture`,
-  `gallery`, `fullscreen`, `sun`, `moon`, `check`, `close`, `raise`, `lower`,
+  `folder`, `gallery`, `fullscreen`, `sun`, `moon`, `check`, `close`, `raise`, `lower`,
   `rotate_left`, `rotate_right`, `flip_horizontal`, `flip_vertical`, `bold`,
   `smaller`, `larger`, `fill`, `fit`, `stretch`, `center`, `color` and `edges`. A
   name close to one of them is told which it was likely meant to be.
@@ -2104,8 +2104,19 @@ form step::update "Save" {
   before it in the same batch, isn't made a record again, whatever its file is
   called. Once they're in, the workspace says so: "Added 31 pictures, 9 were
   already in." It's known by the file's SHA-256, which is what a store that keeps
-  files here names it by; a store that names files otherwise takes every one. A terminal can't be dropped
-  on, so it doesn't take them.
+  files here names it by; a store that names files otherwise takes every one. A
+  terminal can't be dropped on, so it doesn't take them.
+
+  `add folder "Folder" icon folder` beside `add pictures` goes to the
+  same place, a collage, a paper or cards, and asks for a folder instead, in the
+  desktop's own chooser or the browser's. Every picture in it, and in the folders in
+  it, comes in, known as a picture by what's in it, not what it's called. Hidden
+  folders and files are passed over, and so is anything that isn't a picture, without
+  saying so. The desktop goes through the folder as the pictures are kept, never
+  listing it whole first, and follows no link out of it, so a folder of ten thousand
+  photos neither stops the window nor fills memory. While it goes, the workspace says
+  "Adding pictures from Summer, 120 so far…", and then "Added 214 pictures." A
+  terminal can't choose a folder, so it has no such button.
 
   Pictures coming in, here or in a collage or paper, are read and kept one at a
   time away from the app's drawing, so the window keeps answering however many

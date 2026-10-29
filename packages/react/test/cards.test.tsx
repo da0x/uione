@@ -130,6 +130,65 @@ describe("cards that keep each picture once", () => {
   });
 });
 
+describe("a folder of pictures", () => {
+  let before: typeof createImageBitmap;
+  afterEach(() => {
+    globalThis.createImageBitmap = before;
+  });
+  beforeEach(() => {
+    before = globalThis.createImageBitmap;
+    // A picture is one whose bytes say so; the rest aren't.
+    globalThis.createImageBitmap = (async (file: Blob) => {
+      const said = await new Promise<string>((done) => {
+        const reader = new FileReader();
+        reader.onload = () => done(String(reader.result));
+        reader.readAsText(file);
+      });
+      if (!said.startsWith("picture")) throw new Error("not a picture");
+      return { width: 640, height: 480, close() {} };
+    }) as unknown as typeof createImageBitmap;
+  });
+
+  it("is chosen in the browser's own chooser, and every picture in it comes in, past hidden folders and what isn't a picture, saying how many", async () => {
+    const source = memorySource({ files: true, commands: { "studio::piece::create": () => ({ id: "n1" }) } });
+    source.set("studio::room_page", { pieces: [] }, "r1");
+    function Pieces() {
+      const page = useView("studio::room_page", "r1");
+      return (
+        <>
+          <PaperButton paper="/ cards pieces" label="Folder" chooses folder />
+          <Cards view={page} list="pieces" columns={{ name: "Name" }} picture="image" paste={paste} name="/ cards pieces" />
+          <Messages />
+        </>
+      );
+    }
+    const only = defineScreen({ title: "Pieces", route: "/" }, () => <Pieces />);
+    const drawn = render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
+    await waitFor(() => expect(drawn.getByRole("button", { name: "Folder" })).toBeTruthy());
+    let opened: HTMLInputElement | undefined;
+    const click = HTMLInputElement.prototype.click;
+    HTMLInputElement.prototype.click = function (this: HTMLInputElement) {
+      opened = this;
+    };
+    try {
+      fireEvent.click(drawn.getByRole("button", { name: "Folder" }));
+    } finally {
+      HTMLInputElement.prototype.click = click;
+    }
+    expect(opened?.hasAttribute("webkitdirectory")).toBe(true);
+    const at = (path: string, words: string) => {
+      const file = new File([words], path.split("/").pop()!, { type: "" });
+      Object.defineProperty(file, "webkitRelativePath", { value: path });
+      return file;
+    };
+    const files = [at("Summer/harbor.jpg", "picture harbor"), at("Summer/beach/dusk", "picture dusk"), at("Summer/.thumbnails/harbor.jpg", "picture small"), at("Summer/notes.txt", "notes"), at("Summer/.hidden.jpg", "picture hidden")];
+    Object.defineProperty(opened!, "files", { value: files });
+    fireEvent.change(opened!);
+    await waitFor(() => expect(drawn.getByText("Added 2 pictures.")).toBeTruthy());
+    expect(source.runs.filter((r) => r.command === "studio::piece::create").map((r) => (r.input as Record<string, unknown>).name)).toEqual(["harbor", "dusk"]);
+  });
+});
+
 describe("pictures taken in turn", () => {
   afterEach(() => {
     vi.restoreAllMocks();

@@ -36,6 +36,7 @@ terminal collage.save
 terminal collage.screenshot
 terminal collage.svg
 terminal pictures.choose
+terminal pictures.folder
 terminal calendar.move
 terminal notify.buttons
 terminal table.picture

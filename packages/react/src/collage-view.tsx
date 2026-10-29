@@ -24,7 +24,7 @@ import type { ViewState } from "./data.js";
 import { useUI } from "./ui.js";
 import { useSaying } from "./said.js";
 import { useSite } from "./app.js";
-import { OverKind, OverLayer, OverRun, choosePictures, lastGiven, styleThese, hintOf, setChosen, setPicked, takeInTurn, typing, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
+import { OverKind, OverLayer, OverRun, chooseFolder, choosePictures, lastGiven, styleThese, hintOf, notAPicture, setChosen, setPicked, takeInTurn, typing, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
 
 type Row = Record<string, unknown>;
 
@@ -676,15 +676,15 @@ const pastes = new Map<string, { files: File[]; words: string }>();
 let copiedLayers: { svg: string; rows: Row[] } = { svg: "", rows: [] };
 
 // crop "Crop", edit words "Edit", add words "Text": what's asked of the screen's collage.
-export function CollageButton({ collage, does, label, icon, keys }: { collage: string; does: "crop" | "edit" | "ungroup" | "group picked" | "raise" | "lower" | "zoom in" | "zoom out" | "zoom to fit" | "add" | "add pictures" | "paste" | "screenshot" | "copy" | "copy picked" | "save" | "save picked" | "copy svg" | "copy svg picked" | "cut svg picked" | "save svg" | "save svg picked"; label: string; icon?: string; keys?: string[] }) {
+export function CollageButton({ collage, does, label, icon, keys }: { collage: string; does: "crop" | "edit" | "ungroup" | "group picked" | "raise" | "lower" | "zoom in" | "zoom out" | "zoom to fit" | "add" | "add pictures" | "add folder" | "paste" | "screenshot" | "copy" | "copy picked" | "save" | "save picked" | "copy svg" | "copy svg picked" | "cut svg picked" | "save svg" | "save svg picked"; label: string; icon?: string; keys?: string[] }) {
   const ui = useUI();
   const tool = useTool() ?? "small";
   const off = useOff();
   // Pasting with ctrl+v takes what's pasted; its other keys, and a press, read the clipboard.
   const byPaste = does === "paste" && (keys ?? []).includes("ctrl+v") && !off;
   const press = () =>
-    does === "add pictures"
-      ? choosePictures((files) => {
+    does === "add pictures" || does === "add folder"
+      ? (does === "add folder" ? chooseFolder : choosePictures)((files) => {
           pastes.set(collage, { files, words: "" });
           ask(collage, "pasted");
         })
@@ -961,7 +961,7 @@ export function Collage({
         return;
       }
       const size = await pictureSize(file);
-      if (!size) return `${file.name} isn't a picture this can read.`;
+      if (!size) return notAPicture(file);
       if (!asked) (inLayer = await layerFor()), (asked = true);
       let b: Box;
       // An SVG is drawing, not a photograph: it comes in at its own size, fitted, never

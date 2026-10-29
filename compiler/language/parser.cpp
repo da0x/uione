@@ -1765,11 +1765,12 @@ namespace one::language {
             bool groups = at_word("group") && peek(1).kind == token_kind::identifier && peek(1).text == "picked";
             bool collage_does = ((at_word("crop") || at_word("paste") || at_word("screenshot") || at_word("ungroup") || at_word("raise") || at_word("lower")) && alone) || as_picture || zooms || groups ||
                                 ((at_word("edit") || at_word("add")) && peek(1).kind == token_kind::identifier && peek(1).text == "words") ||
-                                (at_word("add") && peek(1).kind == token_kind::identifier && peek(1).text == "pictures");
+                                (at_word("add") && peek(1).kind == token_kind::identifier && (peek(1).text == "pictures" || peek(1).text == "folder"));
             if (collage_does) {
                 collage_button button;
                 std::string first = advance().text;
                 bool pictures = first == "add" && peek().text == "pictures";
+                bool folder = first == "add" && peek().text == "folder";
                 if (first == "edit" || first == "add") advance();
                 std::string zoom = first == "zoom" ? advance().text : "";
                 if (first == "group") advance();
@@ -1795,6 +1796,7 @@ namespace one::language {
                               : zoom == "to"          ? collage_button::kind::zoom_fit
                               : first == "edit"       ? collage_button::kind::edit_words
                               : pictures              ? collage_button::kind::add_pictures
+                              : folder                ? collage_button::kind::add_folder
                                                       : collage_button::kind::add_words;
                 if (at(token_kind::string)) button.label = advance().text;
                 parse_icon(button.icon, button.icon_where);

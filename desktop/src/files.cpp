@@ -11,10 +11,11 @@ namespace one::desktop {
 		auto said = portal::ask(
 		    "org.freedesktop.portal.FileChooser", "OpenFile", {what.title},
 		    [&](DBusMessageIter& options) {
-			    dbus_bool_t several = what.several, modal = true;
+			    dbus_bool_t several = what.several, modal = true, folder = what.folder;
 			    portal::option(options, "multiple", DBUS_TYPE_BOOLEAN, &several);
 			    portal::option(options, "modal", DBUS_TYPE_BOOLEAN, &modal);
-			    if (!what.pictures) return;
+			    if (folder) portal::option(options, "directory", DBUS_TYPE_BOOLEAN, &folder);
+			    if (!what.pictures || folder) return;
 			    // filters, a(sa(us)): one named Pictures, of every image type, kind 1.
 			    DBusMessageIter entry, variant, filters, filter, rules, rule;
 			    const char* name = "filters";

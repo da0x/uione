@@ -1052,21 +1052,75 @@ namespace one::desktop::runtime {
 			std::size_t added = 0, already = 0;
 			bool any = false;
 			std::string wrong = {};  // why the last that couldn't be taken wasn't, said once they're all in
+			// A folder handed, gone through a picture at a time as they're kept, never listed
+			// whole: where it is, and how far through it, its own folders in turn.
+			std::optional<std::filesystem::path> walked = {};
+			std::filesystem::recursive_directory_iterator walking = {};
+			std::string folder_name = {};
 		};
 
+		// The next file to take: one handed, or the next in a folder being gone through,
+		// past hidden folders and files and what links out of it, and none once all are.
+		std::optional<std::filesystem::path> next_file(coming_batch& b) {
+			std::error_code failed;
+			while (true) {
+				if (b.walked) {
+					auto& at = b.walking;
+					if (at == std::filesystem::recursive_directory_iterator()) {
+						b.walked.reset();
+						continue;
+					}
+					std::filesystem::directory_entry entry = *at;
+					bool hidden = entry.path().filename().string().starts_with(".");
+					if (hidden && entry.is_directory(failed) && !entry.is_symlink(failed)) at.disable_recursion_pending();
+					at.increment(failed);
+					if (failed) {
+						b.walked.reset();
+						continue;
+					}
+					if (hidden || !entry.is_regular_file(failed)) continue;
+					if (entry.is_symlink(failed)) {
+						auto to = std::filesystem::canonical(entry.path(), failed);
+						auto [end, inside] = std::ranges::mismatch(*b.walked, to);
+						if (failed || end != b.walked->end()) continue;
+					}
+					return entry.path();
+				}
+				if (b.next == b.files.size()) return std::nullopt;
+				const auto& file = b.files[b.next++];
+				if (!std::filesystem::is_directory(file, failed)) return file;
+				auto root = std::filesystem::canonical(file, failed);
+				if (failed) continue;
+				b.walking = std::filesystem::recursive_directory_iterator(root, std::filesystem::directory_options::skip_permission_denied, failed);
+				if (failed) continue;
+				b.walked = root;
+				b.folder_name = root.filename().string();
+			}
+		}
+
 		void come_in(std::shared_ptr<coming_batch> b) {
-			std::size_t i = b->next++, n = b->files.size();
-			if (i == n) {
-				std::string said = b->already == 0 ? "" : pictures_already_said(b->added, b->already);
+			auto next = next_file(*b);
+			bool in_folder = b->walked.has_value();
+			// In a folder, how many there are isn't known until it's gone through, so each is
+			// placed after the last as if there were many.
+			std::size_t i = in_folder ? b->added + b->already : b->next - 1, n = in_folder ? std::size_t{1'000'000} : b->files.size();
+			if (!next) {
+				std::string said = b->already > 0       ? pictures_already_said(b->added, b->already)
+				                   : b->folder_name.empty() ? ""
+				                   : b->added == 0         ? "There are no pictures in " + b->folder_name + "."
+				                                           : std::format("Added {} picture{}.", b->added, b->added == 1 ? "" : "s");
 				return handed_back([told = b->told, wrong = b->wrong, said] {
 					if (!said.empty() || !wrong.empty()) told.set(said.empty() ? wrong : wrong.empty() ? said : said + " " + wrong);
 					else if (told.peek().starts_with("Adding ")) told.set("");
 				});
 			}
-			const auto& file = b->files[i];
-			if (n > 1) handed_back([told = b->told, i, n] { told.set(std::format("Adding {} of {} pictures…", i + 1, n)); });
+			const auto& file = *next;
+			if (in_folder) handed_back([told = b->told, i, name = b->folder_name] { told.set(std::format("Adding pictures from {}, {} so far…", name, i + 1)); });
+			else if (n > 1) handed_back([told = b->told, i, n] { told.set(std::format("Adding {} of {} pictures…", i + 1, n)); });
 			coming_picture c{.file = file, .index = i, .count = n};
 			auto size = desktop::picture::size_of(file);
+			// What isn't a picture, by what's in it, is passed over in a folder.
+			if (!size && in_folder) return in_background([b] { come_in(b); });
 			std::optional<std::expected<std::string, std::string>> kept;
 			if (size) kept = b->from->keep(file);
 			if (!size || (kept && !*kept)) {
@@ -1140,11 +1194,12 @@ namespace one::desktop::runtime {
 		std::function<void()> press = [asked, given = ask.fields] { asked.set(given); };
 		if (ask.pastes) press = [pasting] { pasting.set(true); };
 		// Pictures chosen in the desktop's own file chooser, which waits on the person,
-		// away from the window's thread, and handed back to what the button names.
+		// away from the window's thread, and handed back to what the button names; or a
+		// folder of them, gone through as they're kept.
 		if (ask.chooses) {
-			press = [told = p.told(), chosen = p.kept<std::vector<std::string>>("pictures chosen " + ask.key), title = ask.label] {
-				std::thread([told, chosen, title] {
-					auto files = desktop::chosen_files({.title = title, .pictures = true, .several = true});
+			press = [told = p.told(), chosen = p.kept<std::vector<std::string>>("pictures chosen " + ask.key), title = ask.label, folder = ask.folder] {
+				std::thread([told, chosen, title, folder] {
+					auto files = desktop::chosen_files({.title = title, .pictures = true, .several = !folder, .folder = folder});
 					post([told, chosen, files] {
 						if (!files) return told.set(files.error());
 						chosen.set(std::vector<std::string>(files->begin(), files->end()));

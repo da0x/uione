@@ -177,7 +177,7 @@ namespace one::generators {
         // A paste or add pictures button that goes into the screen's paper or cards.
         bool into_paper(const language::collage_button& b) const {
             using kind = language::collage_button::kind;
-            return pictures_key_ && (b.does == kind::paste || b.does == kind::add_pictures);
+            return pictures_key_ && (b.does == kind::paste || b.does == kind::add_pictures || b.does == kind::add_folder);
         }
         std::optional<std::string> edit_view(const std::string& ns, const language::entity_declaration& entity, const language::form_item& form) const {
             return model_.edit_view(ns, entity, form);
@@ -1645,10 +1645,11 @@ namespace one::generators {
                 } else if (auto* does = std::get_if<language::collage_button>(&item.node); does && into_paper(*does)) {
                     // Paste into the screen's paper or cards, or pictures chosen from files.
                     parts.components.insert("PaperButton");
-                    bool chooses = does->does == language::collage_button::kind::add_pictures;
+                    bool folder = does->does == language::collage_button::kind::add_folder;
+                    bool chooses = does->does == language::collage_button::kind::add_pictures || folder;
                     shown_while(out, parts, ns, item, [&] {
                         out.line("<PaperButton paper=" + web_detail::js_string(*pictures_key_) + " label=" + web_detail::js_string(language::label_of(*does)) +
-                                 (does->icon ? " icon=" + web_detail::js_string(*does->icon) : "") + keys_of(does->keys) + (chooses ? " chooses />" : " pastes />"));
+                                 (does->icon ? " icon=" + web_detail::js_string(*does->icon) : "") + keys_of(does->keys) + (folder ? " chooses folder />" : chooses ? " chooses />" : " pastes />"));
                     });
                 } else if (auto* does = std::get_if<language::collage_button>(&item.node)) {
                     // What it asks of the screen's collage, by what names it.

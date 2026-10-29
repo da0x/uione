@@ -439,6 +439,34 @@ export function choosePictures(chosen: (files: File[]) => void): void {
   input.click();
 }
 
+// add folder "Add folder": a folder chosen in the device's own chooser, and every picture
+// in it and in the folders in it, but hidden ones, which the browser lists whole as
+// handles, read one at a time as they're taken. What isn't a picture, by what's in it, is
+// passed over, not said to be wrong. The same as the desktop's.
+const folderOf = new WeakMap<object, string>();
+export function chooseFolder(chosen: (files: File[]) => void): void {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.setAttribute("webkitdirectory", "");
+  input.hidden = true;
+  input.addEventListener("change", () => {
+    const files = [...(input.files ?? [])].filter((file) => !(file.webkitRelativePath || file.name).split("/").some((part) => part.startsWith(".")));
+    input.remove();
+    const name = (input.files?.[0]?.webkitRelativePath ?? "").split("/")[0] ?? "";
+    for (const file of files) folderOf.set(file, name);
+    chosen(files);
+  });
+  input.addEventListener("cancel", () => input.remove());
+  document.body.appendChild(input);
+  input.click();
+}
+// What a taker says of a file that isn't a picture: passed over, when it's from a folder,
+// or why it couldn't be taken.
+export const passedOver = Symbol("passed over");
+export function notAPicture(file: File): string | typeof passedOver {
+  return folderOf.has(file) ? passedOver : `${file.name} isn't a picture this can read.`;
+}
+
 // What a screen's paste and add pictures buttons hand what they go into, a paper or
 // cards, by what names it: the pictures chosen, or a paste, which reads the clipboard
 // as the browser lets it be read.
@@ -455,18 +483,25 @@ export function handPictures(name: string, files: File[] | "paste"): void {
 // `take` says why, and how many were already in, when `take` says one was. The same
 // as the desktop's.
 export const alreadyIn = Symbol("already in");
-export async function takeInTurn<T>(given: T[], say: (said: Said | undefined) => void, take: (item: T, index: number) => Promise<string | typeof alreadyIn | void>): Promise<void> {
+export async function takeInTurn<T>(given: T[], say: (said: Said | undefined) => void, take: (item: T, index: number) => Promise<string | typeof alreadyIn | typeof passedOver | void>): Promise<void> {
   let wrong: string | undefined;
   let already = 0;
   let failed = 0;
+  let over = 0;
+  // A folder's, said by its name.
+  const folder = given.length > 0 && typeof given[0] === "object" && given[0] !== null ? folderOf.get(given[0]) : undefined;
   for (const [i, item] of given.entries()) {
     await givenBack();
-    if (given.length > 1) say({ text: `Adding ${i + 1} of ${given.length} pictures…` });
+    if (folder !== undefined) say({ text: `Adding pictures from ${folder}, ${i + 1 - over} so far…` });
+    else if (given.length > 1) say({ text: `Adding ${i + 1} of ${given.length} pictures…` });
     const taken = await take(item, i);
     if (taken === alreadyIn) already += 1;
+    else if (taken === passedOver) over += 1;
     else if (taken) (wrong = taken), (failed += 1);
   }
-  const said = already > 0 ? alreadySaid(given.length - already - failed, already) : "";
+  const added = given.length - already - failed - over;
+  const said =
+    already > 0 ? alreadySaid(added, already) : folder === undefined ? "" : added === 0 ? `There are no pictures in ${folder}.` : `Added ${added} picture${added === 1 ? "" : "s"}.`;
   if (wrong) say({ text: said ? `${said} ${wrong}` : wrong, problem: true });
   else if (said) say({ text: said });
   else if (given.length > 1) say(undefined);

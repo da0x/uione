@@ -564,6 +564,11 @@ export const buttonIcons: Record<string, ReactNode> = {
       <path d="M2.5 12l3.5-3.5 2.5 2.5 2-2 3 3" />
     </svg>
   ),
+  folder: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2 4.5a1 1 0 0 1 1-1h3.2l1.5 1.8H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z" />
+    </svg>
+  ),
   gallery: (
     <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <rect x="2" y="2" width="5" height="5" rx="1" />

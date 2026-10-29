@@ -103,6 +103,7 @@ namespace one::language {
         drawn_by{"collage.paste", "pasting and dropping pictures on a collage", everywhere},
         drawn_by{"collage.screenshot", "a screenshot added to a collage", "web desktop"},
         drawn_by{"pictures.choose", "pictures chosen from the device's files, onto a collage, a paper or cards", "web desktop"},
+        drawn_by{"pictures.folder", "a folder of pictures chosen, onto a collage, a paper or cards", "web desktop"},
         drawn_by{"calendar", "a list's rows on the days a date of theirs says, a week side by side", "web desktop terminal"},
         drawn_by{"notify", "a row whose time has come said by the system, whatever screen is open", "web desktop terminal"},
         drawn_by{"notify.buttons", "buttons on what the system says, acting on its row", "web desktop"},
@@ -437,6 +438,7 @@ namespace one::language {
                             : n.does == kind::paste      ? "collage.paste"
                             : n.does == kind::screenshot ? "collage.screenshot"
                             : n.does == kind::add_pictures ? "pictures.choose"
+                            : n.does == kind::add_folder ? "pictures.folder"
                             : n.does == kind::copy || n.does == kind::cut ? "collage.copy"
                             : n.does == kind::save       ? "collage.save"
                             : n.does == kind::ungroup || n.does == kind::group_picked ? "collage.group"

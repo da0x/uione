@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <format>
+#include <set>
 #include <fstream>
 #include <thread>
 
@@ -1075,6 +1076,35 @@ TEST("cards take pictures chosen or dropped, each a record made by their add, it
 	std::filesystem::remove_all(folder);
 }
 
+namespace {
+
+	// Cards that take pictures, kept as a folder keeps them, by what's in them.
+	struct kept_by_content : memory_source {
+		std::optional<std::expected<std::string, std::string>> keep(const std::filesystem::path& file) override {
+			std::ifstream in(file, std::ios::binary);
+			std::string bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+			return "files/" + std::to_string(std::hash<std::string>{}(bytes));
+		}
+	};
+	site taking_cards() {
+		site s{.name = "studio", .id = "org.uione.runtime-tests"};
+		s.look = tested_theme();
+		s.screens.push_back({"Pieces", "/:room", "", [](page& p) {
+			                     return items(cards(p, {.view = p.view("studio::room_page", p.param("room")),
+			                                            .list = "pieces",
+			                                            .columns = {{"name", "Name"}},
+			                                            .picture = "image",
+			                                            .add = "studio::piece::create",
+			                                            .fields = {{"picture", "image"}, {"name", "name"}},
+			                                            .given = {{"room", p.param("room")}},
+			                                            .key = "/:room cards pieces",
+			                                            .paste = true}));
+		                     }});
+		return s;
+	}
+
+}  // namespace
+
 TEST("cards keep each picture once: one whose file is a card's already, or one before it in the same batch, isn't made again, and they say how many were") {
 	auto folder = std::filesystem::temp_directory_path() / "uione-cards-once";
 	std::filesystem::remove_all(folder);
@@ -1083,14 +1113,7 @@ TEST("cards keep each picture once: one whose file is a card's already, or one b
 		one::desktop::offscreen::write_png(folder / name, {6, 4, std::vector<std::uint8_t>(6 * 4 * 4, shade)});
 		return (folder / name).string();
 	};
-	// Kept as its content names it, as a folder keeps files by their hash.
-	struct kept_by_content : memory_source {
-		std::optional<std::expected<std::string, std::string>> keep(const std::filesystem::path& file) override {
-			std::ifstream in(file, std::ios::binary);
-			std::string bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-			return "files/" + std::to_string(std::hash<std::string>{}(bytes));
-		}
-	} data;
+	kept_by_content data;
 	auto harbor = picture("harbor.png", 200), dusk = picture("dusk.png", 90), pier = picture("pier.png", 30);
 	std::filesystem::copy_file(dusk, folder / "dusk copy.png");
 	data.set("studio::room_page", "r1", value(fields{{"pieces", list{value(fields{{"id", "n0"}, {"name", "harbor"}, {"image", **data.keep(harbor)}})}}}));
@@ -1124,6 +1147,89 @@ TEST("cards keep each picture once: one whose file is a card's already, or one b
 	CHECK(nav.current().told().peek() == "That picture was already in.");
 	CHECK(pictures_already_said(0, 9) == "All 9 pictures were already in.");
 	CHECK(pictures_already_said(1, 1) == "Added 1 picture, 1 was already in.");
+	std::filesystem::remove_all(folder);
+}
+
+TEST("a folder handed to cards brings in every picture in it and in its folders, by what's in it, past hidden ones, what isn't a picture, and links out of it") {
+	auto folder = std::filesystem::temp_directory_path() / "uione-cards-folder";
+	std::filesystem::remove_all(folder);
+	auto summer = folder / "Summer";
+	std::filesystem::create_directories(summer / "beach" / "evening");
+	std::filesystem::create_directories(summer / ".thumbnails");
+	std::filesystem::create_directories(folder / "elsewhere");
+	std::uint8_t shade = 10;
+	auto picture = [&](const std::filesystem::path& at) { one::desktop::offscreen::write_png(at, {6, 4, std::vector<std::uint8_t>(6 * 4 * 4, shade += 20)}); };
+	picture(summer / "harbor.png");
+	picture(summer / "beach" / "dunes.png");
+	picture(summer / "beach" / "evening" / "dusk");  // a picture, whatever it's called
+	picture(summer / ".thumbnails" / "harbor.png");
+	picture(summer / ".hidden.png");
+	picture(folder / "elsewhere" / "far.png");
+	std::ofstream(summer / "notes.png") << "not a picture";
+	std::ofstream(summer / "list.txt") << "harbor, dunes";
+	std::filesystem::create_symlink(folder / "elsewhere" / "far.png", summer / "far.png");
+	std::filesystem::create_directory_symlink(folder / "elsewhere", summer / "elsewhere");
+	std::filesystem::create_symlink(summer / "harbor.png", summer / "beach" / "harbor again.png");
+	kept_by_content data;
+	data.set("studio::room_page", "r1", value(fields{{"pieces", list{}}}));
+	auto s = taking_cards();
+	navigator nav(s, data);
+	nav.open("/r1");
+	built(nav);
+	nav.current().kept<std::vector<std::string>>("pictures chosen /:room cards pieces").set({summer.string()});
+	built(nav);
+	std::multiset<std::string> made;
+	for (const auto& run : data.runs()) made.insert(run.fields["name"].as_string());
+	// The link to harbor inside it is harbor again, so it's in once.
+	CHECK((made == std::multiset<std::string>{"harbor", "dunes", "dusk"}));
+	CHECK(nav.current().told().peek() == "Added 3 pictures, 1 was already in.");
+	// None at all.
+	std::filesystem::create_directories(folder / "Empty");
+	std::ofstream(folder / "Empty" / "list.txt") << "nothing";
+	nav.current().kept<std::vector<std::string>>("pictures chosen /:room cards pieces").set({(folder / "Empty").string()});
+	built(nav);
+	CHECK(nav.current().told().peek() == "There are no pictures in Empty.");
+	std::filesystem::remove_all(folder);
+}
+
+TEST("a folder of thousands of pictures is gone through away from the window, which keeps being built, a picture at a time, saying how far it's got") {
+	auto folder = std::filesystem::temp_directory_path() / "uione-cards-many";
+	std::filesystem::remove_all(folder);
+	constexpr int count = 3000;
+	for (int i = 0; i < count; ++i) {
+		auto at = folder / std::format("roll-{}", i / 500);
+		if (i % 500 == 0) std::filesystem::create_directories(at);
+		std::vector<std::uint8_t> pixels(4 * 4 * 4, 0);
+		pixels[0] = static_cast<std::uint8_t>(i), pixels[1] = static_cast<std::uint8_t>(i >> 8);
+		one::desktop::offscreen::write_png(at / std::format("p{}.png", i), {4, 4, std::move(pixels)});
+	}
+	kept_by_content data;
+	data.set("studio::room_page", "r1", value(fields{{"pieces", list{}}}));
+	auto s = taking_cards();
+	navigator nav(s, data);
+	nav.open("/r1");
+	built(nav);
+	one::desktop::runtime::hold_posted(true);
+	nav.current().kept<std::vector<std::string>>("pictures chosen /:room cards pieces").set({folder.string()});
+	built(nav);
+	int frames = 0;
+	std::size_t most_waiting = 0;
+	std::string said_while;
+	for (; data.runs().size() < count && frames < 200000; ++frames) {
+		if (one::desktop::runtime::run_posted(1) == 0) std::this_thread::sleep_for(std::chrono::microseconds(200));
+		if (std::string now = nav.current().told().peek(); now.starts_with("Adding")) said_while = now;
+		most_waiting = std::max(most_waiting, nav.current().kept<std::vector<coming_picture>>("pictures come /:room cards pieces").peek().size());
+		built(nav);
+	}
+	for (int i = 0; i < 2000 && one::desktop::runtime::run_posted() == 0; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	built(nav);
+	one::desktop::runtime::hold_posted(false);
+	CHECK(data.runs().size() == count);
+	CHECK(frames > count);
+	// What's waiting for the window is a picture or two, never the folder.
+	CHECK_SAYING(most_waiting < 50, std::to_string(most_waiting));
+	CHECK(said_while.starts_with("Adding pictures from uione-cards-many, "));
+	CHECK(nav.current().told().peek() == std::format("Added {} pictures.", count));
 	std::filesystem::remove_all(folder);
 }
 

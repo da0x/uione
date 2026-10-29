@@ -3392,7 +3392,7 @@ namespace one::language {
                 "edit",   "add",    "follow", "following", "settings", "workflow", "delete", "archive", "robot",   "building", "database",   "code",
                 "connect", "shield", "cloud", "chart",     "spark",    "people",   "lock",   "globe",   "layers",  "crop",     "copy",       "raise",
                 "lower",  "rotate_left", "rotate_right", "flip_horizontal", "flip_vertical", "check", "close", "paste", "save", "undo", "redo",
-                "text",   "screenshot", "picture", "gallery", "fullscreen", "sun", "moon", "bold", "smaller", "larger", "fill", "fit", "stretch",
+                "text",   "screenshot", "picture", "folder", "gallery", "fullscreen", "sun", "moon", "bold", "smaller", "larger", "fill", "fit", "stretch",
                 "center", "color", "edges", "blend", "harmonize", "clear", "square", "rounded", "pointer", "rectangle", "ellipse", "line", "italic", "magic", "align_left", "align_center", "align_right",
                 "title", "heading", "quote", "equation", "book", "letters", "quill", "typewriter", "coffee", "eye", "eye_off", "opacity", "spectrum", "zoom_in", "zoom_out", "zoom_fit", "star", "polygon", "cut", "group", "ungroup", "chevron_right", "chevron_down", "spread", "contents", "calendar", "bell", "inbox", "previous", "next"};
             if (name && !known.contains(*name)) error(where, "there's no icon " + *name + nearest(*name, {known.begin(), known.end()}));
@@ -3725,7 +3725,7 @@ namespace one::language {
                     icon(does->icon, does->icon_where);
                     keys(does->keys);
                     using kind = collage_button::kind;
-                    bool takes_pictures = does->does == kind::paste || does->does == kind::screenshot || does->does == kind::add_pictures;
+                    bool takes_pictures = does->does == kind::paste || does->does == kind::screenshot || does->does == kind::add_pictures || does->does == kind::add_folder;
                     if (does->does == kind::cut) {
                         // Cut: copied, then deleted, so it's the pick, and the collage deletes.
                         bool picks = does->of && std::ranges::any_of(collages_, [&](const collage_item* c) { return c->over && *c->over == *does->of && c->remove; });
@@ -3741,7 +3741,7 @@ namespace one::language {
                         }
                     }
                     // A picture pasted or chosen can go into the screen's paper or cards too, when they say paste.
-                    bool into_paper = (does->does == kind::paste || does->does == kind::add_pictures) &&
+                    bool into_paper = (does->does == kind::paste || does->does == kind::add_pictures || does->does == kind::add_folder) &&
                                       (std::ranges::any_of(papers_, [](const paper_item* p) { return p->paste; }) || std::ranges::any_of(cards_, [](const cards_item* c) { return c->paste; }));
                     bool zooms = does->does == kind::zoom_in || does->does == kind::zoom_out || does->does == kind::zoom_fit;
                     bool can = does->of.has_value() || into_paper || (zooms && alone_) || std::ranges::any_of(collages_, [&](const collage_item* c) {
@@ -3749,7 +3749,7 @@ namespace one::language {
                     });
                     if (!can) {
                         std::string needs = does->does == kind::crop ? "crop layer::crop" : does->does == kind::edit_words ? "write layer::write" : does->does == kind::ungroup ? "group layer::group" : does->does == kind::group_picked ? "group layer::group and add layer::create" : does->does == kind::raise || does->does == kind::lower ? "order layer::update" : takes_pictures ? "paste" : "add layer::create";
-                        bool pictures = does->does == kind::paste || does->does == kind::add_pictures;
+                        bool pictures = does->does == kind::paste || does->does == kind::add_pictures || does->does == kind::add_folder;
                         error(item.where, pictures ? "this screen has no collage, paper or cards that say paste for this button to use"
                                           : zooms  ? "this screen has no collage, nor a picture alone, for this button to zoom"
                                                    : "this screen has no collage that says " + needs + " for this button to use");

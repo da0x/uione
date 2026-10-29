@@ -482,6 +482,7 @@ namespace one::screens {
 		int sizes = 0;  // or, larger or smaller, the reader's page made a step larger, 1, or smaller, -1
 		bool pastes = false;  // or what's on the clipboard pasted into the paper
 		bool chooses = false;  // or pictures chosen from the device's files
+		bool folder = false;   // a folder of them, chosen, every picture in it and the folders in it
 	};
 
 	struct paper_spec {

@@ -312,6 +312,7 @@ namespace studio at / {
 		toolbar {
 			group "Add" {
 				add pictures "Pictures" icon picture
+				add folder "Folder" icon folder
 				paste "Paste" icon paste key ctrl+v
 			}
 		}

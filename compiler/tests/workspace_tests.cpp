@@ -765,6 +765,7 @@ TEST_CASE("pictures dropped, pasted or taken from the screen are made by a colla
 			group "Insert" {
 				paste "Paste" icon paste key ctrl+shift+v
 				screenshot "Screenshot" icon screenshot
+				add folder
 			}
 		}
 		main {
@@ -803,8 +804,14 @@ TEST_CASE("pictures dropped, pasted or taken from the screen are made by a colla
     CHECK(native.find(R"(.paste = true, .update = "studio::layer::update"})") != std::string::npos);
     std::string unsized = collage_screen("\t\tlayout workspace\n" + fine);
     unsized.erase(unsized.find("\tcommand layer::update\n"), std::string("\tcommand layer::update\n").size());
-    CHECK(messages(unsized) == std::vector<std::string>{"51: a picture's own size, when it isn't kept yet, is filled in by layer::update, which isn't declared in namespace studio"});
+    CHECK(messages(unsized) == std::vector<std::string>{"52: a picture's own size, when it isn't kept yet, is filled in by layer::update, which isn't declared in namespace studio"});
     CHECK(native.find(R"(collage_button(p, {.key = "/posters/:poster collage", .does = "screenshot", .label = "Screenshot", .icon = "screenshot"}))") != std::string::npos);
+    CHECK(native.find(R"(collage_button(p, {.key = "/posters/:poster collage", .does = "add folder", .label = "Folder", .icon = ""}))") != std::string::npos);
+    CHECK(web.find(R"(<CollageButton collage="/posters/:poster collage" does="add folder" label="Folder" />)") != std::string::npos);
+    // Only where pictures go.
+    std::string nowhere = collage_screen("\t\tlayout workspace\n" + fine);
+    nowhere.replace(nowhere.find("\t\t\t\tpaste\n\t\t\t}"), std::string("\t\t\t\tpaste\n").size(), "");
+    CHECK(std::ranges::count(messages(nowhere), std::string("49: this screen has no collage, paper or cards that say paste for this button to use")) == 1);
 }
 
 TEST_CASE("cards take pictures dropped, pasted or chosen, each a record made by their add, its file in their picture and its other parts in the fields named like them") {
@@ -840,6 +847,7 @@ TEST_CASE("cards take pictures dropped, pasted or chosen, each a record made by 
 			group "Insert" {
 				paste "Paste" icon paste key ctrl+shift+v
 				add pictures "Pictures" icon picture
+				add folder "Folder" icon folder key ctrl+shift+o
 			}
 		}
 		main {
@@ -864,22 +872,26 @@ TEST_CASE("cards take pictures dropped, pasted or chosen, each a record made by 
     CHECK(web.find(R"(<PaperButton paper="/posters/:poster cards clippings" label="Pictures" icon="picture" chooses />)") != std::string::npos);
     CHECK(web.find(R"(paste={{ command: "studio::clipping::create", fields: { name: "name", picture: "image", picture_bytes: "picture_bytes", picture_camera: "picture_camera", picture_date: "picture_date", picture_height: "picture_height", picture_width: "picture_width" }, given: { poster: posterId } }} name="/posters/:poster cards clippings" />)") != std::string::npos);
     CHECK(native.find(R"(paper_button(p, {.key = "/posters/:poster cards clippings", .label = "Pictures", .icon = "picture", .chooses = true}))") != std::string::npos);
+    // And a folder of them.
+    CHECK(web.find(R"(<PaperButton paper="/posters/:poster cards clippings" label="Folder" icon="folder" keys={["ctrl+shift+o"]} chooses folder />)") != std::string::npos);
+    CHECK(native.find(R"(paper_button(p, {.key = "/posters/:poster cards clippings", .label = "Folder", .icon = "folder", .keys = std::vector<std::string>{"ctrl+shift+o"}, .chooses = true, .folder = true}))") != std::string::npos);
     CHECK(native.find(R"(.add = "studio::clipping::create", .fields = {{"name", "name"}, {"picture", "image"}, {"picture_bytes", "picture_bytes"}, {"picture_camera", "picture_camera"}, {"picture_date", "picture_date"}, {"picture_height", "picture_height"}, {"picture_width", "picture_width"}}, .given = {{"poster", poster_id}}, .key = "/posters/:poster cards clippings", .paste = true})") != std::string::npos);
     // A part only where the entity keeps it, of the part's type; and add and paste go together, with a picture to keep.
     std::string wrong = project + clippings;
     wrong.replace(wrong.find("picture_bytes   number  = 0"), std::string("picture_bytes   number  = 0").size(), "picture_bytes   text");
     wrong.replace(wrong.find("picture_camera  text"), std::string("picture_camera  text").size(), "picture_camera  number");
     wrong.replace(wrong.find("\t\t\t\tpicture image fit\n"), std::string("\t\t\t\tpicture image fit\n").size(), "");
-    CHECK(messages(wrong) == std::vector<std::string>{"46: a pasted picture is kept in the field the cards' picture line names, like picture image",
-                                                     "46: clipping.picture_bytes keeps how many bytes a pasted picture is, so it's a number",
-                                                     "46: clipping.picture_camera keeps the camera a pasted picture was taken with, so it's text"});
+    CHECK(messages(wrong) == std::vector<std::string>{"47: a pasted picture is kept in the field the cards' picture line names, like picture image",
+                                                     "47: clipping.picture_bytes keeps how many bytes a pasted picture is, so it's a number",
+                                                     "47: clipping.picture_camera keeps the camera a pasted picture was taken with, so it's text"});
     std::string alone = project + clippings;
     alone.replace(alone.find("\t\t\t\tpaste\n\t\t\t}"), std::string("\t\t\t\tpaste\n").size(), "");
     alone.replace(alone.find("add clipping::create"), std::string("add clipping::create").size(), "add poster::create");
     CHECK(messages(alone) == std::vector<std::string>{"38: this screen has no collage, paper or cards that say paste for this button to use",
                                                      "39: this screen has no collage, paper or cards that say paste for this button to use",
-                                                     "46: these cards are clippings, so add names clipping::create",
-                                                     "46: cards make records of pictures dropped or pasted on them, so add goes with paste"});
+                                                     "40: this screen has no collage, paper or cards that say paste for this button to use",
+                                                     "47: these cards are clippings, so add names clipping::create",
+                                                     "47: cards make records of pictures dropped or pasted on them, so add goes with paste"});
 }
 
 TEST_CASE("cards set as a mosaic of their pictures say so to both runtimes, and say which picture each fills its tile with") {

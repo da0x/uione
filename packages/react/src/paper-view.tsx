@@ -15,7 +15,7 @@ import { useFiles, useRunner } from "./data.js";
 import type { ViewState } from "./data.js";
 import { useSaying } from "./said.js";
 import { pictureSize } from "./vectors.js";
-import { choosePictures, handPictures, hintOf, setPicked, takeInTurn, useKeys, useOff, usePicturesHanded, useTool } from "./workspace.js";
+import { chooseFolder, choosePictures, handPictures, hintOf, notAPicture, setPicked, takeInTurn, useKeys, useOff, usePicturesHanded, useTool } from "./workspace.js";
 import { useUI } from "./ui.js";
 import { kindOf } from "./paper/index.js";
 import type { Parts } from "./paper/index.js";
@@ -127,7 +127,8 @@ function askInsert(name: string, given: Row) {
 // insert "Equation" icon equation { kind = kind::math }: a block made after the caret's.
 // larger "Larger" and smaller "Smaller": the reader's page a step larger or smaller.
 // paste "Paste": what's on the clipboard, after the caret, or into the screen's cards.
-// add pictures "Photo": pictures chosen from the device's files, the same.
+// add pictures "Photo": pictures chosen from the device's files, the same; add folder,
+// a folder of them.
 export function PaperButton({
   paper,
   label,
@@ -137,6 +138,7 @@ export function PaperButton({
   sizes: by = 0,
   pastes: pasting = false,
   chooses = false,
+  folder = false,
 }: {
   paper: string;
   label: string;
@@ -146,12 +148,13 @@ export function PaperButton({
   sizes?: number;
   pastes?: boolean;
   chooses?: boolean;
+  folder?: boolean; // a folder of them chosen, every picture in it
 }) {
   const ui = useUI();
   const tool = useTool() ?? "small";
   const step = useSizeStep();
   const off = useOff() || (by > 0 && step >= sizes.length - 1) || (by < 0 && step <= 0);
-  const press = () => (chooses ? choosePictures((files) => handPictures(paper, files)) : pasting ? handPictures(paper, "paste") : by ? resize(by) : askInsert(paper, given));
+  const press = () => (chooses ? (folder ? chooseFolder : choosePictures)((files) => handPictures(paper, files)) : pasting ? handPictures(paper, "paste") : by ? resize(by) : askInsert(paper, given));
   useKeys(keys, press, !off);
   return (
     <ui.Button kind="secondary" icon={icon} tool={tool} disabled={off} hint={hintOf(label, keys)} onClick={press}>
@@ -566,7 +569,7 @@ export function Paper({
     let n = 0;
     await takeInTurn(given, say, async (file) => {
       const size = await pictureSize(file);
-      if (!size) return `${file.name} isn't a picture this can read.`;
+      if (!size) return notAPicture(file);
       const position = to !== undefined ? from + ((to - from) * (n + 1)) / (given.length + 1) : from + n + 1;
       const path = await files.upload(file, () => {});
       const made: Row = { picture: path, picture_width: size.w, picture_height: size.h, position, words: "", kind: "picture", align: "center" };

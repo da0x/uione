@@ -2115,11 +2115,12 @@ namespace one::desktop::runtime {
 						shot.set(taken->string());
 					});
 				}).detach();
-			} else if (does == "add pictures" && spec.paste) {
+			} else if ((does == "add pictures" || does == "add folder") && spec.paste) {
 				// The desktop's own file chooser, which waits on the person, away from the
-				// window's thread, handed back as the screenshot is.
-				std::thread([told = p.told(), chosen = p.kept<std::vector<std::string>>("collage chosen " + spec.key)] {
-					auto files = desktop::chosen_files({.title = "Add pictures", .pictures = true, .several = true});
+				// window's thread, handed back as the screenshot is; or a folder, gone
+				// through as its pictures are kept.
+				std::thread([told = p.told(), chosen = p.kept<std::vector<std::string>>("collage chosen " + spec.key), folder = does == "add folder"] {
+					auto files = desktop::chosen_files({.title = folder ? "Add folder" : "Add pictures", .pictures = true, .several = !folder, .folder = folder});
 					post([told, chosen, files] {
 						if (!files) return told.set(files.error());
 						chosen.set(std::vector<std::string>(files->begin(), files->end()));
