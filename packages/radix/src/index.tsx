@@ -2345,13 +2345,15 @@ export const radix: ComponentSet = {
         {regions.bar && (
           // The app's name in the middle, in the theme's heading font, as a window's
           // title is; the bar's lines at the start and light and dark at the end, each
-          // side as wide as the other so the name stays centered.
-          <div className="grid h-11 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 border-b border-line bg-surface px-3">
-            <div className="flex min-w-0 items-center gap-2">{regions.bar}</div>
-            <span className="text-lg leading-none font-semibold" style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}>
+          // side as wide as the other so the name stays centered. On a phone there's
+          // no room for all three across, so the name is centered on a row of its own
+          // above the rest.
+          <div className="grid shrink-0 grid-cols-[1fr_auto] items-center gap-x-2 gap-y-1 border-b border-line bg-surface px-3 pt-2.5 pb-1 sm:h-11 sm:grid-cols-[1fr_auto_1fr] sm:py-0">
+            <span className="col-span-2 justify-self-center text-lg leading-none font-semibold sm:col-span-1 sm:col-start-2 sm:row-start-1" style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}>
               {site}
             </span>
-            <span className="flex justify-end">
+            <div className="flex min-w-0 items-center gap-2 sm:col-start-1 sm:row-start-1">{regions.bar}</div>
+            <span className="flex justify-end sm:col-start-3 sm:row-start-1">
               <ThemeToggle />
             </span>
           </div>
