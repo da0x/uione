@@ -244,6 +244,27 @@ TEST("a drawing hears a press it takes, the moves while it's held, and the relea
 	CHECK(!one::desktop::drawing([](one::desktop::canvas&, one::desktop::rect) {}).take()->focusable());
 }
 
+TEST("a color picker tells the color chosen as it's let go, from its shades and its hues") {
+	one::screens::state<std::string> held("#ff0000");
+	std::vector<std::string> settled;
+	auto root = one::desktop::column(one::desktop::color_picker(held, [&](const std::string& hex) { settled.push_back(hex); })).take();
+	root->place({0, 0, 240, 220});
+	// Past the square's bottom left is black, whatever the hue.
+	one::desktop::element* found = root->hit({6, 142});
+	CHECK(found != nullptr);
+	if (!found) return;
+	CHECK(found->press({2, 148}, 1));
+	CHECK(settled.empty());
+	found->release({2, 148}, found);
+	CHECK((settled == std::vector<std::string>{"#000000"}));
+	// Its top right, along the hues a third of the way: green.
+	CHECK(found->press({4 + 232.f / 3, 4 + 140 + 10 + 6}, 1));
+	found->release({0, 0}, found);
+	CHECK(found->press({241, 0}, 1));
+	found->release({241, 0}, found);
+	CHECK(settled.back() == "#00ff00");
+}
+
 TEST("a slider tells what it settled on as it's let go, not while it's held") {
 	one::screens::state<std::string> held("0.5");
 	std::vector<std::string> settled;

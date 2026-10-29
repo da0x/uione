@@ -786,6 +786,16 @@ namespace one::generators {
             // would set is already so.
             std::string given, same, slide;
             for (const auto& v : button.given) {
+                if (v.any_color) {
+                    // Any color, from what it is now, as a slider is.
+                    std::string now = "value()";
+                    if (!on_pick.empty()) now = "field_of(" + on_pick + ", " + str(v.name) + ")";
+                    else if (named) {
+                        if (auto holding = model_.view_holding(ns, entity->name, v.name)) now = "at(" + view_variable(parts, *holding) + ", " + str(v.name) + ")";
+                    }
+                    slide = ", .color = command_color{.field = " + str(v.name) + ", .now = " + now + "}";
+                    continue;
+                }
                 if (v.range) {
                     // Along a slider from what it is now: on the picked row, or the entity
                     // the address names, as a view per it holds it.

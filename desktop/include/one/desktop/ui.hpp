@@ -387,6 +387,9 @@ namespace one::desktop {
 	};
 	// A number slid along; `settled` told it each time it's let go, or changed by a key.
 	view slider(state<std::string> value, number_range range, std::function<void(const std::string&)> settled = {});
+	// A color chosen from a square of its shades and a bar of its hues, written #rrggbb;
+	// `settled` told it as each press is let go.
+	view color_picker(state<std::string> hex, std::function<void(const std::string&)> settled = {});
 	view edge(color c, float width = 3);      // a bar down a row's side, like how urgent it is
 	view icon(std::string name, color tint, float size = 16);  // one of the icons, alone, like database
 	view avatar(const std::string& name, float size = 24);  // a person's first letter in a color of theirs

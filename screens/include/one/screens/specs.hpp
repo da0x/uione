@@ -65,6 +65,13 @@ namespace one::screens {
 		value now = {};
 	};
 
+	// fill any color: a button's value any color, from what it is now, its command run
+	// with each one chosen, written #rrggbb.
+	struct command_color {
+		std::string field;
+		value now = {};
+	};
+
 	struct command_button {
 		std::string command;
 		std::string label;
@@ -80,6 +87,7 @@ namespace one::screens {
 		std::string then_open = "";          // a route like /:poster, opened with what it made
 		std::string about = "";              // among options, what it's for, said beside it
 		std::optional<command_slide> slide = std::nullopt;  // drawn as a slider, run as it's let go
+		std::optional<command_color> color = std::nullopt;  // or as a color picker, run as one's chosen
 	};
 
 	// Links down the side to a part's pages, like a project's settings, beside what

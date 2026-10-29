@@ -3077,9 +3077,17 @@ namespace one::language {
                     error(v.where, command->name.text() + " has no field or input " + v.name + " to be given");
                 }
                 if (v.value) verify_condition(ns, *v.value, route);
+                if (v.any_color) {
+                    // fill any color: text, written #rrggbb, one chosen a button.
+                    if (++slid == 2) error(v.where, "a button is one slider or color picker, so only one of its values is chosen");
+                    const field* f = entity ? find_field(*entity, v.name) : nullptr;
+                    if (f && (!f->type || f->type->text() != "text")) error(v.where, v.name + " isn't text, so it can't hold a color written #rrggbb");
+                    if (button.then_open) error(v.where, "a color picker runs its command each time one's chosen, so it opens nothing after");
+                    continue;
+                }
                 if (!v.range) continue;
                 // opacity from 0 to 1: a number, the least first, and one slider a button.
-                if (++slid == 2) error(v.where, "a button is one slider, so only one of its values goes from one number to another");
+                if (++slid == 2) error(v.where, "a button is one slider or color picker, so only one of its values is chosen");
                 if (std::stod(v.range->from) >= std::stod(v.range->to)) error(v.range->where, "a slider goes from the least to the most, like from 0 to 1");
                 if (!v.range->by.empty() && std::stod(v.range->by) <= 0) error(v.range->where, "a slider's step is more than nothing, like by 0.05");
                 const field* f = entity ? find_field(*entity, v.name) : nullptr;

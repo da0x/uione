@@ -1336,6 +1336,16 @@ namespace one::generators {
                     // address names, as a view per it holds it.
                     std::string given, same, slide;
                     for (const auto& v : button->given) {
+                        if (v.any_color) {
+                            // Any color, from what it is now, as a slider is.
+                            std::string now = "null";
+                            if (!on_pick.empty()) now = "(" + on_pick + "?.[" + web_detail::js_string(v.name) + "] ?? null)";
+                            else if (entity && !id.empty()) {
+                                if (auto holding = model_.view_holding(ns, entity->name, v.name)) now = "(" + view_variable(parts, *holding) + ".data?.[" + web_detail::js_string(v.name) + "] ?? null)";
+                            }
+                            slide = " color={{ field: " + web_detail::js_string(v.name) + ", now: " + now + " }}";
+                            continue;
+                        }
                         if (v.range) {
                             // Along a slider from what it is now, as pressed is worked out.
                             std::string now = "null";

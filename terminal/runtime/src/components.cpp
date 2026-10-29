@@ -200,6 +200,8 @@ namespace one::terminal::runtime {
 			});
 		};
 		for (const auto& k : b.keys) p.on_key(k, run);
+		// Any color isn't picked here yet: its words and the color it is.
+		if (b.color) return terminal::text(shown->label + " " + b.color->now.as_string(), terminal::dim());
 		// Along a slider: its words, then the slider from what it is now, the command run
 		// with each change.
 		if (b.slide) {

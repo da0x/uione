@@ -5,6 +5,7 @@
 // opens under it, one of a few with round buttons, and a number along a slider.
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdlib>
 #include <format>
@@ -283,6 +284,139 @@ namespace one::desktop {
 			float widest_ = 0;
 		};
 
+		// A color's hue, from 0 to 360, and how much of it and how bright, each 0 to 1, as
+		// red, green and blue from 0 to 255; and back.
+		std::array<int, 3> rgb_of(double h, double s, double v) {
+			double c = v * s, x = c * (1 - std::abs(std::fmod(h / 60, 2) - 1)), m = v - c;
+			double r = 0, g = 0, b = 0;
+			if (h < 60) r = c, g = x;
+			else if (h < 120) r = x, g = c;
+			else if (h < 180) g = c, b = x;
+			else if (h < 240) g = x, b = c;
+			else if (h < 300) r = x, b = c;
+			else r = c, b = x;
+			return {static_cast<int>(std::lround((r + m) * 255)), static_cast<int>(std::lround((g + m) * 255)), static_cast<int>(std::lround((b + m) * 255))};
+		}
+		std::array<double, 3> hsv_of(int red, int green, int blue) {
+			double r = red / 255.0, g = green / 255.0, b = blue / 255.0;
+			double most = std::max({r, g, b}), least = std::min({r, g, b}), d = most - least, h = 0;
+			if (d > 0) {
+				if (most == r) h = 60 * std::fmod((g - b) / d + 6, 6);
+				else if (most == g) h = 60 * ((b - r) / d + 2);
+				else h = 60 * ((r - g) / d + 4);
+			}
+			return {h, most > 0 ? d / most : 0, most};
+		}
+
+		class color_picker_element : public element {
+		public:
+			color_picker_element(state<std::string> hex, std::function<void(const std::string&)> settled) : hex_(std::move(hex)), settled_(std::move(settled)) {
+				padding = edges(4);
+				const std::string& now = hex_.peek();
+				if (now.size() == 7 && now[0] == '#') {
+					auto n = std::strtoul(now.c_str() + 1, nullptr, 16);
+					auto [h, s, v] = hsv_of(static_cast<int>(n >> 16 & 0xff), static_cast<int>(n >> 8 & 0xff), static_cast<int>(n & 0xff));
+					h_ = h, s_ = s, v_ = v;
+				}
+			}
+			one::desktop::cursor cursor() const override { return cursor::crosshair; }
+			extent measure_content(float width) override { return {std::max(200.f, std::min(width, 240.f)), square + gap + bar + gap + row}; }
+			void paint_content(canvas& c) override {
+				const theme& t = current_theme();
+				rect a = inner();
+				rect sq = square_of(a), hues = bar_of(a);
+				c.picture(shades(), sq, {0, 0, 1, 1}, 1, 6);
+				c.box(sq, {.border = t.line, .border_width = 1, .radius = 6});
+				float mx = sq.x + static_cast<float>(s_) * sq.width, my = sq.y + static_cast<float>(1 - v_) * sq.height;
+				c.box({mx - 7, my - 7, 14, 14}, {.border = color::hex(0x000000), .border_width = 1, .radius = 7});
+				c.box({mx - 6, my - 6, 12, 12}, {.border = color::hex(0xffffff), .border_width = 2, .radius = 6});
+				c.picture(rainbow(), hues, {0, 0, 1, 1}, 1, bar / 2);
+				float hx = hues.x + static_cast<float>(h_ / 360) * hues.width;
+				c.box({hx - 7, hues.y - 1, 14, bar + 2}, {.fill = hue_color(), .border = color::hex(0xffffff), .border_width = 2, .radius = (bar + 2) / 2});
+				// What it is now: a swatch of it, and how it's written.
+				rect swatch{a.x, hues.bottom() + gap, row, row};
+				c.box(swatch, {.fill = now(), .border = t.line, .border_width = 1, .radius = 4});
+				auto laid = lay_out({hex_.peek(), t.body()}, 0, detail::layout_scale());
+				c.text(laid, {swatch.right() + 10, swatch.y + (row - laid.height()) / 2});
+			}
+			bool press(point at, int) override {
+				rect a = inner();
+				pressed_ = hex_.peek();
+				dragging_ = square_of(a).inset(-6).contains(at) ? 1 : bar_of(a).inset(-6).contains(at) ? 2 : 0;
+				drag(at);
+				return dragging_ != 0;
+			}
+			void drag(point at) override {
+				rect a = inner();
+				if (dragging_ == 1) {
+					rect sq = square_of(a);
+					s_ = std::clamp((at.x - sq.x) / sq.width, 0.f, 1.f);
+					v_ = 1 - std::clamp((at.y - sq.y) / sq.height, 0.f, 1.f);
+				} else if (dragging_ == 2) {
+					rect hues = bar_of(a);
+					h_ = std::clamp((at.x - hues.x) / hues.width, 0.f, 0.999f) * 360;
+				} else {
+					return;
+				}
+				auto [r, g, b] = rgb_of(h_, s_, v_);
+				hex_.set(std::format("#{:02x}{:02x}{:02x}", r, g, b));
+			}
+			void release(point, element*) override {
+				dragging_ = 0;
+				if (settled_ && hex_.peek() != pressed_) settled_(hex_.peek());
+			}
+
+		private:
+			static constexpr float square = 140, bar = 12, gap = 10, row = 22;
+			rect square_of(const rect& a) const { return {a.x, a.y, a.width, square}; }
+			rect bar_of(const rect& a) const { return {a.x, a.y + square + gap, a.width, bar}; }
+			color now() const {
+				const std::string& hex = hex_.peek();
+				return hex.size() == 7 ? color::hex(static_cast<std::uint32_t>(std::strtoul(hex.c_str() + 1, nullptr, 16))) : color::hex(0x000000);
+			}
+			color hue_color() const {
+				auto [r, g, b] = rgb_of(h_, 1, 1);
+				return color::hex(static_cast<std::uint32_t>(r << 16 | g << 8 | b));
+			}
+			// Its hue's shades, whiter across and darker down, made once a hue.
+			picture shades() {
+				int hue = static_cast<int>(h_);
+				if (shades_ && shades_hue_ == hue) return *shades_;
+				constexpr int side = 64;
+				std::vector<std::uint8_t> rgba(side * side * 4, 255);
+				for (int y = 0; y < side; ++y) {
+					for (int x = 0; x < side; ++x) {
+						auto [r, g, b] = rgb_of(hue, x / (side - 1.0), 1 - y / (side - 1.0));
+						std::size_t at = (static_cast<std::size_t>(y) * side + x) * 4;
+						rgba[at] = static_cast<std::uint8_t>(r), rgba[at + 1] = static_cast<std::uint8_t>(g), rgba[at + 2] = static_cast<std::uint8_t>(b);
+					}
+				}
+				shades_ = picture::of(side, side, std::move(rgba));
+				shades_hue_ = hue;
+				return *shades_;
+			}
+			// Every hue, along.
+			static const picture& rainbow() {
+				static const picture made = [] {
+					constexpr int wide = 180;
+					std::vector<std::uint8_t> rgba(wide * 4, 255);
+					for (int x = 0; x < wide; ++x) {
+						auto [r, g, b] = rgb_of(x * 360.0 / wide, 1, 1);
+						rgba[x * 4] = static_cast<std::uint8_t>(r), rgba[x * 4 + 1] = static_cast<std::uint8_t>(g), rgba[x * 4 + 2] = static_cast<std::uint8_t>(b);
+					}
+					return picture::of(wide, 1, std::move(rgba));
+				}();
+				return made;
+			}
+			state<std::string> hex_;
+			std::function<void(const std::string&)> settled_;
+			double h_ = 0, s_ = 0, v_ = 0;
+			int dragging_ = 0;  // the square, 1, or the bar of hues, 2
+			std::string pressed_;
+			std::optional<picture> shades_;
+			int shades_hue_ = -1;
+		};
+
 		// What a picker shows while it's closed: the choice, in a box like a field's.
 		class chosen_element : public element {
 		public:
@@ -439,6 +573,10 @@ namespace one::desktop {
 
 	view radio_buttons(state<std::string> chosen, std::vector<option> options, std::function<void(const std::string&)> on_pick) {
 		return view(std::make_unique<radio_element>(std::move(chosen), std::move(options), std::move(on_pick)));
+	}
+
+	view color_picker(state<std::string> hex, std::function<void(const std::string&)> settled) {
+		return view(std::make_unique<color_picker_element>(std::move(hex), std::move(settled)));
 	}
 
 	view slider(state<std::string> value, number_range range, std::function<void(const std::string&)> settled) {

@@ -173,6 +173,13 @@ export const plain: ComponentSet = {
     );
   },
 
+  ColorPicker: ({ label, value, disabled, onSettle }) => (
+    <label>
+      {label}
+      <input type="color" defaultValue={value} disabled={disabled} onChange={(event) => event.target.value !== value && onSettle(event.target.value)} />
+    </label>
+  ),
+
   Messages: ({ text, problem }) => (
     <span role="status" data-problem={problem ? "" : undefined}>
       {text}

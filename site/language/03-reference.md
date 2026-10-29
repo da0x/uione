@@ -2468,6 +2468,11 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   `by 0.05`, and from 0 to 1 it says where it is as a percent. Only a screen's buttons
   slide, one value each, and only a number. Inside `options`, it's a button that opens
   the slider.
+- `item::paint "Fill" { fill any color }` is its words over a color picker from the
+  color the value is now: a square of the hue's shades, whiter across and darker down,
+  a bar of every hue under it, and the color written `#rrggbb`, which can be typed.
+  Its command runs with each color chosen, as a press is let go. Only text holds one,
+  and a button is one slider or one color picker. A terminal shows the color it is.
 - `group "Rotate" { ... }` in a toolbar is a named part of it, its name under its
   buttons and a line after it. Its buttons and links are tools: an icon over its words, or,
   in a `small` group, `group "Rotate" small { ... }`, an icon alone, in two rows

@@ -164,6 +164,16 @@ describe("a workspace", () => {
     expect(source.runs[0]).toMatchObject({ command: "studio::layer::paint", input: { id: "l1", opacity: 0.75 } });
   });
 
+  it("picks any color for a button's value, running its command with the one chosen", async () => {
+    const source = memorySource({ commands: { "studio::layer::paint": () => ({ id: "l1" }) } });
+    renderScreen(source, () => <Command name="studio::layer::paint" id="l1" label="Fill" color={{ field: "fill", now: "#2e86de" }} />);
+    const picker = screen.getByLabelText("Fill") as HTMLInputElement;
+    expect(picker.value).toBe("#2e86de");
+    fireEvent.change(picker, { target: { value: "#ff0000" } });
+    await waitFor(() => expect(source.runs.length).toBe(1));
+    expect(source.runs[0]).toMatchObject({ command: "studio::layer::paint", input: { id: "l1", fill: "#ff0000" } });
+  });
+
   it("says what an undo took back, and why a command was turned down", async () => {
     const source = memorySource({
       commands: {

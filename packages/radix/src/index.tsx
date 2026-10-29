@@ -21,7 +21,7 @@ import "@fontsource-variable/fraunces/wght-italic.css";
 import { Children, Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CSSProperties, ReactNode } from "react";
-import type { ButtonProps, ChoiceProps, ComponentSet, OptionsProps, SliderProps } from "@uione/react";
+import type { ButtonProps, ChoiceProps, ColorPickerProps, ComponentSet, OptionsProps, SliderProps } from "@uione/react";
 import { Surface } from "@uione/react";
 import { highlight, highlightCodeBlocks } from "./highlight.js";
 import { MarkdownField, MarkdownText } from "./markdown.js";
@@ -439,6 +439,89 @@ function Slider({ label, value, from, to, by, percent, disabled, onSettle }: Sli
       />
       <output className="min-w-[4ch] text-right tabular-nums text-ink">{said}</output>
     </label>
+  );
+}
+
+// A color's hue, from 0 to 360, and how much of it and how bright, each 0 to 1, written
+// #rrggbb; and back. The same as the desktop's.
+function hexOf(h: number, s: number, v: number): string {
+  const c = v * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = v - c;
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return "#" + [r, g, b].map((n) => Math.round((n + m) * 255).toString(16).padStart(2, "0")).join("");
+}
+function hsvOf(hex: string): [number, number, number] {
+  const n = parseInt(hex.slice(1), 16), r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+  const most = Math.max(r, g, b), d = most - Math.min(r, g, b);
+  const h = d === 0 ? 0 : most === r ? 60 * (((g - b) / d + 6) % 6) : most === g ? 60 * ((b - r) / d + 2) : 60 * ((r - g) / d + 4);
+  return [h, most > 0 ? d / most : 0, most];
+}
+
+// Any color: a square of the hue's shades, whiter across and darker down, a bar of every
+// hue under it, then a swatch of what it is and how it's written, which can be typed.
+// Each press let go, or a color typed, is chosen.
+function ColorPicker({ label, value, disabled, onSettle }: ColorPickerProps) {
+  const [hsv, setHsv] = useState(() => hsvOf(value));
+  const [typed, setTyped] = useState(value);
+  useEffect(() => {
+    setHsv(hsvOf(value));
+    setTyped(value);
+  }, [value]);
+  const [h, s, v] = hsv;
+  const now = hexOf(h, s, v);
+  const drag = (part: "square" | "hues") => (e: React.PointerEvent<HTMLDivElement>) => {
+    if (disabled) return;
+    const area = e.currentTarget.getBoundingClientRect();
+    const across = Math.min(1, Math.max(0, (e.clientX - area.left) / area.width)), down = Math.min(1, Math.max(0, (e.clientY - area.top) / area.height));
+    if (e.type === "pointerdown") e.currentTarget.setPointerCapture(e.pointerId);
+    else if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+    const next: [number, number, number] = part === "square" ? [h, across, 1 - down] : [Math.min(across, 0.999) * 360, s, v];
+    setHsv(next);
+    setTyped(hexOf(...next));
+  };
+  const settle = () => now !== value && onSettle(now);
+  return (
+    <div className="flex w-60 flex-col gap-2 px-2 py-1.5 text-xs text-muted">
+      <span>{label}</span>
+      <div
+        role="slider"
+        aria-label={`${label}: shade`}
+        aria-valuenow={Math.round(s * 100)}
+        onPointerDown={drag("square")}
+        onPointerMove={drag("square")}
+        onPointerUp={settle}
+        className="relative h-36 cursor-crosshair touch-none rounded-md border border-line"
+        style={{ background: `linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, ${hexOf(h, 1, 1)})` }}
+      >
+        <span className="pointer-events-none absolute size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)]" style={{ left: `${s * 100}%`, top: `${(1 - v) * 100}%` }} />
+      </div>
+      <div
+        role="slider"
+        aria-label={`${label}: hue`}
+        aria-valuenow={Math.round(h)}
+        onPointerDown={drag("hues")}
+        onPointerMove={drag("hues")}
+        onPointerUp={settle}
+        className="relative h-3 cursor-crosshair touch-none rounded-full"
+        style={{ background: "linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)" }}
+      >
+        <span className="pointer-events-none absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.4)]" style={{ left: `${(h / 360) * 100}%`, backgroundColor: hexOf(h, 1, 1) }} />
+      </div>
+      <div className="flex items-center gap-2">
+        <span aria-hidden="true" className="size-6 rounded-sm border border-line" style={{ backgroundColor: now }} />
+        <input
+          aria-label={label}
+          value={typed}
+          disabled={disabled}
+          spellCheck={false}
+          onChange={(event) => {
+            setTyped(event.target.value);
+            if (/^#[0-9a-fA-F]{6}$/.test(event.target.value)) setHsv(hsvOf(event.target.value));
+          }}
+          onKeyDown={(event) => event.key === "Enter" && /^#[0-9a-fA-F]{6}$/.test(typed) && typed.toLowerCase() !== value.toLowerCase() && onSettle(typed.toLowerCase())}
+          className="h-7 w-24 rounded-control border border-line bg-surface px-2 font-mono text-xs text-ink focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent"
+        />
+      </div>
+    </div>
   );
 }
 
@@ -2312,6 +2395,7 @@ export const radix: ComponentSet = {
   Options,
   Choice,
   Slider,
+  ColorPicker,
 
   Group: ({ name, small, across, atEnd, children }) => (
     <div role="group" aria-label={name} data-at-end={atEnd ? "" : undefined} className="flex flex-col items-center justify-between gap-0.5 border-r border-line px-2 last:border-r-0 [&:has(>div:empty)]:hidden">

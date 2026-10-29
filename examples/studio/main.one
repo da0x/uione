@@ -134,6 +134,10 @@ namespace studio at / {
 	command layer::reshape {
 		changes points x y w h
 	}
+	// A shape's colors.
+	command layer::paint {
+		changes fill stroke
+	}
 	// Put in a group, another layer, or taken out of it.
 	command layer::group {
 		changes group
@@ -305,6 +309,12 @@ namespace studio at / {
 				layer::arrange "Rounded" icon rounded { corners = 0.06 }
 				options "Roundness" icon rounded {
 					layer::arrange "Roundness" { corners from 0 to 0.5 }
+				}
+			}
+			// Any color for a shape, from a color picker.
+			group "Color" small when layer.picture == none {
+				options "Fill" icon color {
+					layer::paint "Fill" { fill any color }
 				}
 			}
 			group "Look" small {

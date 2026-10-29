@@ -103,7 +103,7 @@ namespace one::generators::screens {
     // collage's color, is drawn clear: "none", or "line none" for a stroke.
     inline std::string swatch_of(const language::button_item& button, const collage_colors& colors = {}) {
         if (button.icon || button.given.empty()) return "";
-        if (std::ranges::any_of(button.given, [](const auto& v) { return v.range.has_value(); })) return "";
+        if (std::ranges::any_of(button.given, [](const auto& v) { return v.range.has_value() || v.any_color; })) return "";
         // A page, "page 1920 1080", drawn as one of that shape: one giving the collage's
         // width and height, each a number.
         if (button.given.size() == 2 && !colors.width.empty()) {

@@ -648,7 +648,35 @@ TEST_CASE("a button's value along a slider, from what it is on the picked row, i
     std::string wrong = body;
     wrong.replace(wrong.find("{ x from 0 to 1 }"), std::string("{ x from 0 to 1 }").size(), "{ x from 1 to 0  y from 0 to 1 }");
     CHECK(messages(collage_screen(wrong)) == std::vector<std::string>{"48: a slider goes from the least to the most, like from 0 to 1",
-                                                                        "48: a button is one slider, so only one of its values goes from one number to another"});
+                                                                        "48: a button is one slider or color picker, so only one of its values is chosen"});
+}
+
+TEST_CASE("a button's value any color, from a color picker, from what it is on the picked row") {
+    std::string body = R"(		layout workspace
+		toolbar {
+			group "Color" {
+				options "Fill" icon color {
+					layer::place "Fill" { around any color }
+				}
+			}
+		}
+		main {
+			pick layer from poster_page.layers
+			collage poster_page.layers size width height {
+			}
+		}
+)";
+    // Only text holds a color.
+    CHECK(messages(collage_screen(body)) == std::vector<std::string>{"48: around isn't text, so it can't hold a color written #rrggbb"});
+    std::string source = collage_screen(body);
+    source.replace(source.find("{ around any color }"), std::string("{ around any color }").size(), "{ name any color }");
+    source.replace(source.find("\t\tx        number"), 0, "\t\tname     text\n");
+    source.replace(source.find("around  x  y  w  h"), 0, "name  ");
+    CHECK(messages(source).empty());
+    auto files = built(source);
+    CAPTURE(files["web/src/screens/main.tsx"]);
+    CHECK(files["web/src/screens/main.tsx"].find(R"(color={{ field: "name", now: ()") != std::string::npos);
+    CHECK(files["desktop/src/screens/main.cpp"].find(R"(.color = command_color{.field = "name", .now = field_of()") != std::string::npos);
 }
 
 TEST_CASE("a collage is a view's list as layers, as big as two of its values, placed by a command, with buttons over the picked layer") {

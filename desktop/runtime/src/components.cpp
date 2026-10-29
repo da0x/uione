@@ -227,6 +227,19 @@ namespace one::desktop::runtime {
 			auto words = current_theme().quiet();
 			return desktop::row(desktop::text(label_now, words), std::move(slid).grow()).spacing(10).align(align::center).padding(edges(6, 8)).width(260);
 		}
+		// Any color: its words over a color picker, from what it is now, the command run
+		// with each one chosen.
+		if (b.color) {
+			std::string now = b.color->now.as_string();
+			state<std::string> held(now.size() == 7 && now[0] == '#' ? now : std::string("#000000"));
+			auto settled = [&p, name = b.command, fields = shown->fields, field = b.color->field, off](const std::string& hex) {
+				if (off) return;
+				value sent = fields.is_null() ? value::map() : fields;
+				sent.fields[field] = value(hex);
+				p.run(name, sent);
+			};
+			return desktop::column(desktop::text(label_now, current_theme().quiet()), desktop::color_picker(held, std::move(settled))).spacing(6).padding(edges(6, 8)).width(240);
+		}
 		// Among a tool's options, a choice: what it gives drawn small, a page of its shape
 		// or its icon, then its words and what it's for under them; tinted while it's what
 		// holds now, and closing the options once it's chosen.

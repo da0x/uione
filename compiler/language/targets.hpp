@@ -112,6 +112,7 @@ namespace one::language {
         drawn_by{"collage.match_colors", "matching a collage's colors", "web desktop"},
         drawn_by{"button.given", "a button's given values", everywhere},
         drawn_by{"button.slide", "a button's value along a slider", everywhere},
+        drawn_by{"button.color", "a button's value any color, from a color picker", "web desktop"},
         drawn_by{"button.on", "a button's on when", everywhere},
         drawn_by{"button.then", "a button's then open", everywhere},
         drawn_by{"table.empty", "a table's empty", everywhere},
@@ -339,6 +340,7 @@ namespace one::language {
                         if (!n.keys.empty()) use("key");
                         if (!n.given.empty()) use("button.given");
                         if (std::ranges::any_of(n.given, [](const auto& v) { return v.range.has_value(); })) use("button.slide");
+                        if (std::ranges::any_of(n.given, [](const auto& v) { return v.any_color; })) use("button.color");
                         if (n.pressed_when) use("button.on");
                         if (n.then_open) use("button.then");
                     } else if constexpr (std::is_same_v<T, component_item>) {

@@ -1055,6 +1055,7 @@ export function Command({
   swatch,
   about,
   slide,
+  color,
 }: {
   name: string;
   id?: string;
@@ -1069,6 +1070,7 @@ export function Command({
   swatch?: string; // in a toolbar, drawn as a circle of this color, like #ffffff
   about?: string; // among a tool's options, what it's for, said beside it
   slide?: { field: string; from: number; to: number; by: number; now: unknown }; // drawn as a slider from what it is now, run as it's let go
+  color?: { field: string; now: unknown }; // or as a color picker, run with each one chosen
 }) {
   const ui = useUI();
   const runner = useConfirmedRunner();
@@ -1095,6 +1097,11 @@ export function Command({
   useKeys(keys, run, shown && !off && !runner.busy(name));
   if (!shown) return null;
   const words = says ?? label(action(name));
+  // Any color, from a color picker, run with each one chosen.
+  if (color) {
+    const now = typeof color.now === "string" && /^#[0-9a-fA-F]{6}$/.test(color.now) ? color.now : "#000000";
+    return <ui.ColorPicker label={words} value={now} disabled={off || runner.busy(name)} onSettle={(hex) => void runner.run(name, { ...sent, [color.field]: hex })} />;
+  }
   // Along a slider, from what it is now, run with where it's let go.
   if (slide) {
     const now = typeof slide.now === "number" ? Math.min(slide.to, Math.max(slide.from, slide.now)) : slide.to;

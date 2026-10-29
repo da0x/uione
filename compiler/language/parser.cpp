@@ -771,6 +771,15 @@ namespace one::language {
                     const std::size_t first = pos_;
                     value.where = peek().where;
                     value.name = expect(token_kind::identifier, "a field it's sent, like by").text;
+                    if (slides && at_word("any") && peek(1).kind == token_kind::identifier && peek(1).text == "color") {
+                        // fill any color: any, chosen with a color picker.
+                        advance();
+                        advance();
+                        value.any_color = true;
+                        cut(value, first);
+                        given.push_back(std::move(value));
+                        continue;
+                    }
                     if (slides && at_word("from")) {
                         // opacity from 0 to 1: any along a slider.
                         number_range range;

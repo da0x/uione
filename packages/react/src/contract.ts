@@ -719,6 +719,15 @@ export interface SliderProps {
   onSettle: (value: number) => void;
 }
 
+// A button's value any color: its words, a color picker from the color it is, written
+// #rrggbb, and `onSettle` told each one chosen, as a press is let go.
+export interface ColorPickerProps {
+  label: string;
+  value: string;
+  disabled?: boolean;
+  onSettle: (hex: string) => void;
+}
+
 // What was just done, like "Undid place", or why a command was turned down, said
 // until the next.
 export interface MessagesProps {
@@ -833,6 +842,7 @@ export interface ComponentSet {
   Options: ComponentType<OptionsProps>;
   Choice: ComponentType<ChoiceProps>;
   Slider: ComponentType<SliderProps>;
+  ColorPicker: ComponentType<ColorPickerProps>;
   Messages: ComponentType<MessagesProps>;
   Layout: ComponentType<LayoutProps>;
   Dialog: ComponentType<DialogProps>;

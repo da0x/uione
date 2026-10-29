@@ -158,6 +158,8 @@ namespace one::language {
         // opacity from 0 to 1: not one value but any along a slider, by a hundredth of
         // the way unless it says its step.
         std::optional<number_range> range;
+        // fill any color: any color, chosen with a color picker, written #rrggbb.
+        bool any_color = false;
         // What taking it out cuts: it and the space after it, or before it when it's
         // last on its line, or its whole line when it's alone on it.
         location cut_where;
