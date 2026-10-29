@@ -621,6 +621,9 @@ export interface LandingProps {
   steps: { title: string; id?: string; overline?: ReactNode; text: ReactNode; steps: { title: string; text: ReactNode }[] }[];
   asks: { title: string; id?: string; overline?: ReactNode; children: ReactNode }[];
   before?: ReactNode; // what the screen has that isn't any of these, like a table: first, or where the design puts it
+  // Each part in the order the screen writes it, for a design that keeps it: a
+  // feature, a step or an ask is the next of its list.
+  order?: ("hero" | "feature" | "statement" | "steps" | "ask")[];
 }
 
 // Files, each a link that opens it, and a picture of it when it's an image.

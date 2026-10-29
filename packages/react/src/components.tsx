@@ -130,8 +130,10 @@ export function Landing({ design, children }: { design: string; children?: React
   const steps: LandingProps["steps"] = [];
   const asks: LandingProps["asks"] = [];
   const before: ReactNode[] = [];
+  const order: LandingProps["order"] = [];
   for (const child of elementsOf(children)) {
     if (child.type === Hero) {
+      order.push("hero");
       title = child.props.title ?? "";
       for (const part of elementsOf(child.props.children)) {
         if (part.type === Overline) overline = part.props.children;
@@ -144,6 +146,7 @@ export function Landing({ design, children }: { design: string; children?: React
       continue;
     }
     if (child.type === Statement) {
+      order.push("statement");
       statement = child.props.children;
       continue;
     }
@@ -153,6 +156,7 @@ export function Landing({ design, children }: { design: string; children?: React
       const marked = over !== undefined ? { overline: over } : {};
       const id = child.props.id !== undefined ? { id: child.props.id } : {};
       if (child.props.steps) {
+        order.push("steps");
         steps.push({
           title: child.props.title ?? "",
           ...id,
@@ -164,9 +168,11 @@ export function Landing({ design, children }: { design: string; children?: React
       }
       const feature = offered(child);
       if (feature) {
+        order.push("feature");
         features.push(feature);
         continue;
       }
+      order.push("ask");
       asks.push({ title: child.props.title ?? "", ...id, ...marked, children: parts.filter((part) => part.type !== Overline) });
       continue;
     }
@@ -186,6 +192,7 @@ export function Landing({ design, children }: { design: string; children?: React
       steps={steps}
       asks={asks}
       before={before}
+      order={order}
     />
   );
 }
