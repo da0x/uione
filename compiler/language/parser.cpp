@@ -1763,7 +1763,7 @@ namespace one::language {
             bool zooms = at_word("zoom") && peek(1).kind == token_kind::identifier && (peek(1).text == "in" || peek(1).text == "out" || (peek(1).text == "to" && peek(2).text == "fit"));
             // group picked: what's picked, several at once, made one group.
             bool groups = at_word("group") && peek(1).kind == token_kind::identifier && peek(1).text == "picked";
-            bool collage_does = ((at_word("crop") || at_word("paste") || at_word("screenshot") || at_word("ungroup")) && alone) || as_picture || zooms || groups ||
+            bool collage_does = ((at_word("crop") || at_word("paste") || at_word("screenshot") || at_word("ungroup") || at_word("raise") || at_word("lower")) && alone) || as_picture || zooms || groups ||
                                 ((at_word("edit") || at_word("add")) && peek(1).kind == token_kind::identifier && peek(1).text == "words") ||
                                 (at_word("add") && peek(1).kind == token_kind::identifier && peek(1).text == "pictures");
             if (collage_does) {
@@ -1787,6 +1787,8 @@ namespace one::language {
                               : first == "save"       ? collage_button::kind::save
                               : first == "ungroup"    ? collage_button::kind::ungroup
                               : first == "group"      ? collage_button::kind::group_picked
+                              : first == "raise"      ? collage_button::kind::raise
+                              : first == "lower"      ? collage_button::kind::lower
                               : zoom == "in"          ? collage_button::kind::zoom_in
                               : zoom == "out"         ? collage_button::kind::zoom_out
                               : zoom == "to"          ? collage_button::kind::zoom_fit
@@ -2438,6 +2440,9 @@ namespace one::language {
                     if (at_word("place") && peek(1).kind == token_kind::identifier) {
                         advance();
                         collage.place = parse_qualified_name("the command a layer moved or resized is sent to, like layer::place");
+                    } else if (at_word("order") && peek(1).kind == token_kind::identifier) {
+                        advance();
+                        collage.order = parse_qualified_name("the command a layer's depth is sent to, raised or lowered, like layer::update");
                     } else if (at_word("group") && peek(1).kind == token_kind::identifier) {
                         advance();
                         collage.group = parse_qualified_name("the command that puts a layer in a group or takes it out, like layer::group");

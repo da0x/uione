@@ -319,6 +319,8 @@ namespace studio at / {
 			}
 			group "Look" small {
 				group picked "Group" icon group key ctrl+g
+				raise "Raise" icon raise key ctrl+page_up
+				lower "Lower" icon lower key ctrl+page_down
 				poster::update "Match colors" icon magic { matched = 0 } on when poster_page.matched == 1 when poster_page.matched == 1
 				poster::update "Match colors" icon magic { matched = 1 } when poster_page.matched != 1
 			}
@@ -352,6 +354,7 @@ namespace studio at / {
 				place layer::place
 				reshape layer::reshape
 				group layer::group
+				order layer::update
 				crop layer::crop
 				write layer::write
 				delete layer::delete

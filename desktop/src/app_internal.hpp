@@ -149,6 +149,7 @@ namespace one::desktop {
 		int shape = -1;                  // the cursor shape last set
 		int repeat_rate = 25, repeat_delay = 600;  // per second, and milliseconds before
 		std::uint32_t repeating = 0;               // the key held, or 0
+		bool space_held = false;                   // Space, down now
 	};
 
 	// The app's globals, freed after every window and the seat, the display last.

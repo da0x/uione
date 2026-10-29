@@ -285,6 +285,7 @@ namespace one::generators {
             if (c.place) out += ", .place = " + str(screens::full_command(ns, *c.place));
             if (c.reshape) out += ", .reshape = " + str(screens::full_command(ns, *c.reshape));
             if (c.group) out += ", .group = " + str(screens::full_command(ns, *c.group));
+            if (c.order) out += ", .order = " + str(screens::full_command(ns, *c.order));
             if (c.snap) out += ", .snap = true";
             if (c.clear) out += ", .clear = true";
             if (c.match_colors) out += ", .match_colors = " + condition(parts, ns, *c.match_colors);

@@ -238,7 +238,7 @@ given          ::= "{" NEWLINE? ((NAME "=" expression)+ END)* "}"
 /* opacity from 0 to 1: on a screen's button, any value along a slider, its command run as it's let go;
    fill any color: any color, chosen with a color picker */
 button_given   ::= "{" NEWLINE? ((NAME ("=" expression | "from" "-"? NUMBER "to" "-"? NUMBER ("by" NUMBER)? | "any" "color"))+ END)* "}"
-collage_line   ::= ("place" qualified | "reshape" qualified | "group" qualified | "add" qualified | "crop" qualified | "write" qualified | "delete" qualified
+collage_line   ::= ("place" qualified | "reshape" qualified | "group" qualified | "order" qualified | "add" qualified | "crop" qualified | "write" qualified | "delete" qualified
                   | "snap" "to" "edges" | "clear" | "match" "colors" "when" expression | "empty" STRING | "over" NAME screen_block
                   /* its objects held in layers, another list of its view, each naming its own by a field */
                   | "in" qualified "." NAME "by" NAME
@@ -294,7 +294,7 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? ("icon" NAME)? ("color" N
                  /* what the screen's collage does: crops its picked picture, writes its picked words, adds words,
                     pastes what's on the clipboard, adds a screenshot or pictures chosen from the device's files, or copies
                     or saves it, or its picked layer, as a picture; paste and add pictures go into a paper that says paste */
-                 | ("crop" | "edit" "words" | "add" "words" | "add" "pictures" | "paste" | "screenshot" | "ungroup" | "group" "picked" | "zoom" ("in" | "out" | "to" "fit") | ("copy" | "save") NAME "as" ("picture" | "svg")) STRING? ("icon" NAME)? key* ("when" expression)? END
+                 | ("crop" | "edit" "words" | "add" "words" | "add" "pictures" | "paste" | "screenshot" | "ungroup" | "group" "picked" | "raise" | "lower" | "zoom" ("in" | "out" | "to" "fit") | ("copy" | "save") NAME "as" ("picture" | "svg")) STRING? ("icon" NAME)? key* ("when" expression)? END
                  /* what the screen does as it's opened, the first of its lines that applies: the first row of a
                     view's list the condition holds for opened, the row named by what it's of; or a command run */
                  | "on" "open" ("open" ROUTE "for" qualified ("." NAME)? ("where" expression)? ("when" expression)? END | screen_item)

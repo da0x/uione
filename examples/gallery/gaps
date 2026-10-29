@@ -11,7 +11,7 @@
 # choose from files, a calendar's rows are moved by its commands, not dragged, and what's
 # said as a row's time comes is the bell and its words, without buttons. A paper is
 # written on in place, which a terminal doesn't do yet, and a collage's layer is drawn
-# or reshaped by a pointer's drag, or picked as a group, or zoomed, which a terminal has none of; nor does it pick colors yet.
+# or reshaped by a pointer's drag, or picked as a group, raised, lowered or zoomed, which a terminal has none of; nor does it pick colors yet.
 terminal cards.picture
 terminal picture
 terminal collage.copy
@@ -23,6 +23,7 @@ terminal collage.draw_points
 terminal collage.reshape
 terminal collage.group
 terminal collage.zoom
+terminal collage.order
 terminal button.color
 terminal collage.match_colors
 terminal collage.preview

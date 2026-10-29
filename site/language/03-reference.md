@@ -2263,6 +2263,15 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     moved as one by a drag on any of them, deleted by Delete, and let go by Esc. A
     `group picked "Group" icon group key ctrl+g` button makes them one new group, by
     the collage's `add`, named Group, and puts each in it.
+  - `order layer::update`: what a layer's `depth` is sent to as it's raised or
+    lowered. A `raise "Raise" icon raise key ctrl+page_up` button takes the picked one,
+    or a group with all it holds, past the one just above it among those beside it, in
+    its layer and its group; `lower` past the one below; its layer renumbered from 0,
+    in one step.
+  - With Space held, a drag moves what's shown, as a drawing program's hand does, and
+    on the web the middle button does too. While something's to be drawn and nothing
+    is picked, Esc sets the choices its `draw`'s when reads back to their first, as a
+    drawing program goes back to its pointer.
   - `group layer::group`: what puts a layer in a group or takes it out, sent its
     `group`. An `ungroup "Ungroup" icon ungroup` button over the picked group sends
     each it holds with no group and deletes the group by the collage's `delete`.

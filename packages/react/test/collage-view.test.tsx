@@ -8,7 +8,7 @@
 
 import { act, fireEvent, render, waitFor, within } from "@testing-library/react";
 import { App, Cards, Collage, CollageButton, Layers, Picture, Table, memorySource, screen as defineScreen, useView } from "../src/index.js";
-import { currentLayer, inLayers } from "../src/collage-view.js";
+import { currentLayer, grouped, inLayers, restacked } from "../src/collage-view.js";
 import type { MemorySource } from "../src/index.js";
 import { setChosen, setPicked, useChosen, usePickedId } from "../src/workspace.js";
 import { plain } from "../src/plain.js";
@@ -598,6 +598,23 @@ describe("a collage's objects held in layers", () => {
     expect(currentLayer(layers, "back")).toBe("back");
     expect(currentLayer(layers, "missing")).toBe("top");
     expect(currentLayer([], "")).toBe("");
+  });
+
+  it("raises a layer past the one above it, a group with all it holds, in its own layer, and lowers one past the one below", () => {
+    // In layer L, lowest first: a, then group g of b and c, then d; e is in another layer.
+    const rows = grouped([
+      { id: "a", layer: "L", depth: 0, group: "" },
+      { id: "g", layer: "L", depth: 9, group: "" },
+      { id: "b", layer: "L", depth: 1, group: "g" },
+      { id: "c", layer: "L", depth: 2, group: "g" },
+      { id: "d", layer: "L", depth: 3, group: "" },
+      { id: "e", layer: "M", depth: 0, group: "" },
+    ]);
+    expect(restacked(rows, "a", true, "layer")).toEqual([["b", 0], ["c", 1], ["a", 2]]);
+    expect(restacked(rows, "g", true, "layer")).toEqual([["d", 1], ["b", 2], ["c", 3]]);
+    expect(restacked(rows, "d", false, "layer")).toEqual([["d", 1], ["b", 2], ["c", 3]]);
+    expect(restacked(rows, "c", false, "layer")).toEqual([["c", 1], ["b", 2]]);
+    expect(restacked(rows, "d", true, "layer")).toEqual([]);
   });
 
   it("lists the layers topmost first, each opening to its objects, a layer deleted taking them with it in one step, and renames one written in place", async () => {

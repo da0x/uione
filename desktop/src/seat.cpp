@@ -165,6 +165,7 @@ namespace one::desktop {
 			        s.input_serial = serial;
 			        if (!s.key_state) return;
 			        std::uint32_t code = key + 8;  // evdev's codes to XKB's
+			        if (key == KEY_SPACE) s.space_held = state != WL_KEYBOARD_KEY_STATE_RELEASED;
 			        if (state == WL_KEYBOARD_KEY_STATE_RELEASED) {
 				        if (s.repeating == code) {
 					        s.repeating = 0;
@@ -233,7 +234,7 @@ namespace one::desktop {
 		if (!owning || !owning->input || !owning->input->key_state) return {};
 		xkb_state* state = owning->input->key_state.get();
 		auto active = [&](const char* name) { return xkb_state_mod_name_is_active(state, name, XKB_STATE_MODS_EFFECTIVE) > 0; };
-		return {.shift = active(XKB_MOD_NAME_SHIFT), .control = active(XKB_MOD_NAME_CTRL), .alt = active(XKB_MOD_NAME_ALT)};
+		return {.shift = active(XKB_MOD_NAME_SHIFT), .control = active(XKB_MOD_NAME_CTRL), .alt = active(XKB_MOD_NAME_ALT), .space = owning->input->space_held};
 	}
 
 }  // namespace one::desktop

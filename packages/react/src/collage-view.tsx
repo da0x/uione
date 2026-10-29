@@ -650,7 +650,7 @@ function ask(name: string, does: string) {
 const pastes = new Map<string, { files: File[]; words: string }>();
 
 // crop "Crop", edit words "Edit", add words "Text": what's asked of the screen's collage.
-export function CollageButton({ collage, does, label, icon, keys }: { collage: string; does: "crop" | "edit" | "ungroup" | "group picked" | "zoom in" | "zoom out" | "zoom to fit" | "add" | "add pictures" | "paste" | "screenshot" | "copy" | "copy picked" | "save" | "save picked" | "copy svg" | "copy svg picked" | "save svg" | "save svg picked"; label: string; icon?: string; keys?: string[] }) {
+export function CollageButton({ collage, does, label, icon, keys }: { collage: string; does: "crop" | "edit" | "ungroup" | "group picked" | "raise" | "lower" | "zoom in" | "zoom out" | "zoom to fit" | "add" | "add pictures" | "paste" | "screenshot" | "copy" | "copy picked" | "save" | "save picked" | "copy svg" | "copy svg picked" | "save svg" | "save svg picked"; label: string; icon?: string; keys?: string[] }) {
   const ui = useUI();
   const tool = useTool() ?? "small";
   const off = useOff();
@@ -693,7 +693,7 @@ export function CollageButton({ collage, does, label, icon, keys }: { collage: s
 
 // What the pointer is doing to a layer, from where it was and where the pointer was.
 interface Gesture {
-  what: "moving" | "resizing" | "cropping" | "shifting" | "drawing" | "reshaping" | "selecting";
+  what: "moving" | "resizing" | "cropping" | "shifting" | "drawing" | "reshaping" | "selecting" | "panning";
   id: string;
   from: Box;
   at: Point;
@@ -771,6 +771,7 @@ export function Collage({
   place,
   reshape,
   group,
+  order,
   snap = false,
   clear = false,
   matchColors = false,
@@ -805,6 +806,7 @@ export function Collage({
   place?: string; // the command a layer moved or resized is sent to, with x y w h
   reshape?: string; // and the one a path's nodes moved are, with its points and x y w h
   group?: string; // and the one that puts a layer in a group, or takes it out, by its group
+  order?: string; // and the one a layer's depth is sent to, raised or lowered
   snap?: boolean;
   clear?: boolean; // nothing behind its layers: shown over a checkerboard, saved clear
   matchColors?: boolean; // its pictures' colors moved toward one another's, so they look like one picture
@@ -1125,6 +1127,12 @@ export function Collage({
     asked.delete(name);
     if (asking === "crop" && chosen && isPicture(chosen) && crop) {
       w.crop = cropBegun(chosen);
+    } else if ((asking === "raise" || asking === "lower") && chosen && order) {
+      // Past the one above it, or below, among those beside it, in one step.
+      const moved = restacked(layers, picked, asking === "raise", layerField ?? "");
+      void (async () => {
+        for (const [i, [id, depth]] of moved.entries()) await send(order, { id, depth, ...(i > 0 ? { "one:history": "joined" } : {}) });
+      })();
     } else if ((asking === "zoom in" || asking === "zoom out") && canvasRef.current) {
       // About the middle of where it's shown.
       const area = { x: 0, y: 0, w: canvasRef.current.clientWidth, h: canvasRef.current.clientHeight };
@@ -1598,6 +1606,28 @@ export function Collage({
     const allIn = (top: string) => layers.filter((l) => !holdsOthers(l) && (str(l["id"]) === top || inGroup(groupOf, str(l["id"]), top))).map((l) => str(l["id"]));
     styleThese(pick, w.chosen.length > 1 ? w.chosen.flatMap(allIn) : chosen && holdsOthers(chosen) ? allIn(picked) : []);
   });
+  // Space held, for a drag to move what's shown, and the hand that says so.
+  const spaceHeld = useRef(false);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const down = (k: KeyboardEvent) => {
+      if (k.key !== " " || typing(k.target) || spaceHeld.current) return;
+      spaceHeld.current = true;
+      if (canvas && !w.now) canvas.style.cursor = "grab";
+      k.preventDefault();
+    };
+    const up = (k: KeyboardEvent) => {
+      if (k.key !== " ") return;
+      spaceHeld.current = false;
+      if (canvas && w.now?.what !== "panning") canvas.style.cursor = "default";
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+    };
+  });
   // Drawn again as light and dark trade places, by the page's switch or the system's,
   // as its colors come from the theme.
   useEffect(() => {
@@ -1800,6 +1830,15 @@ export function Collage({
     }
     if (w.scale <= 0) return;
     const p = at(e);
+    // With Space held, or by the middle button, a drag moves what's shown, as a drawing
+    // program's hand does.
+    if (spaceHeld.current || e.button === 1) {
+      e.preventDefault();
+      w.now = { what: "panning", id: "", from: { x: w.view.panX, y: w.view.panY, w: 0, h: 0 }, at: p, corner: 0, edges: 0 };
+      e.currentTarget.setPointerCapture(e.pointerId);
+      e.currentTarget.style.cursor = "grabbing";
+      return;
+    }
     // Words being written are kept by a press anywhere but on them.
     if (w.editing) {
       const l = layers.find((r) => r["id"] === w.editing!.id);
@@ -1959,6 +1998,11 @@ export function Collage({
     const g = w.now;
     if (!g) return;
     const p = at(e);
+    if (g.what === "panning") {
+      w.view = { ...w.view, panX: g.from.x + (p.x - g.at.x), panY: g.from.y + (p.y - g.at.y) };
+      paint();
+      return;
+    }
     if (g.what === "selecting") {
       const z = onCollage(p);
       w.marquee = { x: Math.min(g.from.x, z.x), y: Math.min(g.from.y, z.y), w: Math.abs(z.x - g.from.x), h: Math.abs(z.y - g.from.y) };
@@ -1993,6 +2037,11 @@ export function Collage({
   const release = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const g = w.now;
     if (!g) return;
+    if (g.what === "panning") {
+      w.now = undefined;
+      e.currentTarget.style.cursor = spaceHeld.current ? "grab" : "default";
+      return;
+    }
     // What the drag went all the way around is chosen, as the groups they're in are, or
     // what's just inside the group gone into.
     if (g.what === "selecting") {
@@ -2089,7 +2138,8 @@ export function Collage({
   const cursorAt = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (w.now) return;
     const p = at(e);
-    let cursor = "default";
+    let cursor = spaceHeld.current ? "grab" : "default";
+    if (spaceHeld.current) return void (e.currentTarget.style.cursor = cursor);
     if (w.crop) {
       const edgesAt = cropEdgesAt(onBoard(w.crop.kept), p, handle);
       cursor =
@@ -2134,6 +2184,13 @@ export function Collage({
   // Several chosen: Esc lets them go, and Delete deletes them, a group with all it
   // holds, in one step.
   const several = w.chosen.length > 1 && !busy;
+  // While something's to be drawn and nothing's picked or under way, Esc sets the
+  // choices its when reads back to their first, as a drawing program goes back to its
+  // pointer.
+  const backToFirst = drawingNow();
+  useKeys(backToFirst && !picked && !w.pen?.length && w.chosen.length < 2 && !busy ? ["escape"] : undefined, () => {
+    for (const [key, first] of backToFirst?.back ?? []) setChosen(key, first);
+  });
   useKeys(several ? ["escape"] : undefined, () => {
     w.chosen = [];
     redraw((n) => n + 1);
@@ -2281,6 +2338,45 @@ export function depthsMoved(layers: Row[], from: number, to: number): [string, n
   const [moving] = order.splice(from, 1);
   order.splice(to, 0, moving!);
   return order.flatMap((l, i) => (l["depth"] === undefined || l["depth"] === null || num(l["depth"]) !== i ? [[str(l["id"]), i] as [string, number]] : []));
+}
+
+// A collage's layer, or a group with all it holds, raised past the one just above it
+// among those beside it, in its layer and its group, or lowered past the one just below,
+// as `layers` are drawn, lowest first, their groups worked out: each that moves, by its
+// id, and its new depth, its layer's renumbered from 0. Nothing at the top or the
+// bottom. The same as the desktop's.
+export function restacked(layers: Row[], id: string, up: boolean, layerField: string): [string, number][] {
+  const row = layers.find((l) => str(l["id"]) === id);
+  if (!row) return [];
+  const inLayer = layerField ? str(row[layerField]) : "", inGroup = str(row["group"]);
+  const groups = groupsOf(layers);
+  // Each of the layer's drawn ones, and which of those beside it it's part of.
+  const order: [string, string][] = [];
+  const beside: string[] = [];
+  for (const l of layers) {
+    if (holdsOthers(l) || (layerField && str(l[layerField]) !== inLayer)) continue;
+    let at = str(l["id"]), part = "";
+    for (let depth = 0; depth < 64; depth++) {
+      const over = groups.get(at) ?? "";
+      if (over === inGroup) {
+        part = at;
+        break;
+      }
+      if (!over) break;
+      at = over;
+    }
+    order.push([str(l["id"]), part]);
+    if (part && !beside.includes(part)) beside.push(part);
+  }
+  const here = beside.indexOf(id);
+  if (here < 0 || (up && here + 1 === beside.length) || (!up && here === 0)) return [];
+  const past = beside[up ? here + 1 : here - 1]!;
+  const moving = order.filter((o) => o[1] === id), rest = order.filter((o) => o[1] !== id);
+  // Just after the last of the one above, or just before the first of the one below.
+  const at = up ? rest.map((o) => o[1]).lastIndexOf(past) + 1 : rest.findIndex((o) => o[1] === past);
+  rest.splice(at, 0, ...moving);
+  const depthOf = new Map(layers.map((l) => [str(l["id"]), num(l["depth"])]));
+  return rest.flatMap(([each], i) => (depthOf.get(each) !== i ? [[each, i] as [string, number]] : []));
 }
 
 // A layer alone, drawn where it is on its collage, in the collage's proportions, over a

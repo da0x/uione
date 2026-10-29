@@ -3661,10 +3661,10 @@ namespace one::language {
                     bool into_paper = (does->does == kind::paste || does->does == kind::add_pictures) && std::ranges::any_of(papers_, [](const paper_item* p) { return p->paste; });
                     bool can = does->of.has_value() || into_paper || std::ranges::any_of(collages_, [&](const collage_item* c) {
                         bool zooms = does->does == kind::zoom_in || does->does == kind::zoom_out || does->does == kind::zoom_fit;
-                        return zooms || (does->does == kind::crop ? c->crop.has_value() : does->does == kind::edit_words ? c->write.has_value() : does->does == kind::ungroup ? c->group.has_value() : does->does == kind::group_picked ? c->group.has_value() && c->add.has_value() : takes_pictures ? c->paste : c->add.has_value());
+                        return zooms || (does->does == kind::crop ? c->crop.has_value() : does->does == kind::edit_words ? c->write.has_value() : does->does == kind::ungroup ? c->group.has_value() : does->does == kind::group_picked ? c->group.has_value() && c->add.has_value() : does->does == kind::raise || does->does == kind::lower ? c->order.has_value() : takes_pictures ? c->paste : c->add.has_value());
                     });
                     if (!can) {
-                        std::string needs = does->does == kind::crop ? "crop layer::crop" : does->does == kind::edit_words ? "write layer::write" : does->does == kind::ungroup ? "group layer::group" : does->does == kind::group_picked ? "group layer::group and add layer::create" : takes_pictures ? "paste" : "add layer::create";
+                        std::string needs = does->does == kind::crop ? "crop layer::crop" : does->does == kind::edit_words ? "write layer::write" : does->does == kind::ungroup ? "group layer::group" : does->does == kind::group_picked ? "group layer::group and add layer::create" : does->does == kind::raise || does->does == kind::lower ? "order layer::update" : takes_pictures ? "paste" : "add layer::create";
                         error(item.where, "this screen has no collage that says " + needs + " for this button to use");
                     }
                 } else if (auto* opening = std::get_if<on_open_item>(&item.node)) {
@@ -4179,8 +4179,9 @@ namespace one::language {
             if (kept.contains("picture_width") != kept.contains("picture_height")) error(collage.list_where, "a picture's own size is its picture_width and picture_height together");
             // Placed, cropped, written and made by commands on what its layers are.
             if (collage.reshape && !kept.contains("points")) error(collage.reshape->where, "a path's nodes are kept in its points, which " + layer->name + " doesn't have; add points text to it, or say its field");
+            if (collage.order && !kept.contains("depth")) error(collage.order->where, "a layer's place in the stack is kept in its depth, which " + layer->name + " doesn't have; add depth number to it, or say its field, like stacked by order");
             if (collage.group && !kept.contains("group")) error(collage.group->where, "the group a layer is in is kept in its group, another " + layer->name + ", which it doesn't have; add group " + layer->name + " to it, or say its field");
-            for (const auto& [command, like] : {std::pair{&collage.place, "place"}, {&collage.reshape, "reshape"}, {&collage.crop, "crop"}, {&collage.write, "write"}, {&collage.add, "create"}, {&collage.remove, "delete"}, {&collage.group, "group"}}) {
+            for (const auto& [command, like] : {std::pair{&collage.place, "place"}, {&collage.reshape, "reshape"}, {&collage.crop, "crop"}, {&collage.write, "write"}, {&collage.add, "create"}, {&collage.remove, "delete"}, {&collage.group, "group"}, {&collage.order, "update"}}) {
                 if (!*command) continue;
                 verify_command_use(ns, **command);
                 const entity_declaration* on = find_command(ns, **command);

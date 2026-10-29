@@ -98,6 +98,7 @@ namespace one::language {
         drawn_by{"collage.reshape", "a collage's paths reshaped by their nodes", "web desktop"},
         drawn_by{"collage.group", "a collage's layers in groups, picked, moved and resized as one", "web desktop"},
         drawn_by{"collage.zoom", "a collage zoomed and moved as it's looked at", "web desktop"},
+        drawn_by{"collage.order", "a collage's layers raised and lowered", "web desktop"},
         drawn_by{"collage.paste", "pasting and dropping pictures on a collage", everywhere},
         drawn_by{"collage.screenshot", "a screenshot added to a collage", "web desktop"},
         drawn_by{"pictures.choose", "pictures chosen from the device's files, onto a collage or a paper", "web desktop"},
@@ -388,6 +389,7 @@ namespace one::language {
                         if (!n.draws.empty()) use("collage.draw");
                         if (n.reshape) use("collage.reshape");
                         if (n.group) use("collage.group");
+                        if (n.order) use("collage.order");
                         if (std::ranges::any_of(n.draws, [](const auto& d) { return d.by == "line"; })) use("collage.draw_line");
                         if (std::ranges::any_of(n.draws, [](const auto& d) { return d.by == "hand"; })) use("collage.draw_hand");
                         if (std::ranges::any_of(n.draws, [](const auto& d) { return d.by == "points"; })) use("collage.draw_points");
@@ -424,6 +426,7 @@ namespace one::language {
                             : n.does == kind::copy       ? "collage.copy"
                             : n.does == kind::save       ? "collage.save"
                             : n.does == kind::ungroup || n.does == kind::group_picked ? "collage.group"
+                            : n.does == kind::raise || n.does == kind::lower ? "collage.order"
                             : n.does == kind::zoom_in || n.does == kind::zoom_out || n.does == kind::zoom_fit ? "collage.zoom"
                                                          : "collage.add");
                         if (n.svg) use("collage.svg");

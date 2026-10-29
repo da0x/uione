@@ -439,7 +439,7 @@ namespace one::desktop::runtime {
 
 		// What the pointer is doing to a layer, from where it was and where the pointer was.
 		struct gesture {
-			enum { none, moving, resizing, cropping, shifting, drawing, reshaping, selecting } what = none;
+			enum { none, moving, resizing, cropping, shifting, drawing, reshaping, selecting, panning } what = none;
 			std::string id;
 			model::box from;
 			desktop::point at;
@@ -1618,6 +1618,14 @@ namespace one::desktop::runtime {
 					}
 					if (!spec.pick.empty()) p.pick(spec.pick, *a);
 				});
+			} else if ((does == "raise" || does == "lower") && chosen && !spec.order.empty()) {
+				// Past the one above it, or below, among those beside it, in one step.
+				bool joined = false;
+				for (const auto& [id, depth] : restacked(layers, picked, does == "raise", spec.layer)) {
+					value sent = collage_fields_of(value(fields{{"id", id}, {"depth", depth}}), spec.fields);
+					if (std::exchange(joined, true)) sent.fields["one:history"] = value("joined");
+					p.run(spec.order, sent);
+				}
 			} else if (does == "zoom in" || does == "zoom out") {
 				// About the middle of where it's shown.
 				desktop::rect a = w->area;
@@ -1757,6 +1765,14 @@ namespace one::desktop::runtime {
 				if (!fits) continue;
 				for (const auto& k : a.keys) p.on_key(k, [asked, does = a.does] { asked.set(does); });
 			}
+		}
+		// While something's to be drawn and nothing's picked or under way, Esc sets the
+		// choices its when reads back to their first, as a drawing program goes back to
+		// its pointer.
+		if (const collage_draw* d = drawing_now(spec); d && picked.empty() && w->pen.empty() && w->chosen.size() < 2 && !w->crop && !w->editing) {
+			p.on_key("escape", [&p, back = d->back] {
+				for (const auto& [key, first] : back) p.choose(key, first);
+			});
 		}
 		// Several chosen: Esc lets them go, and Delete deletes them, a group with all it
 		// holds, in one step.
@@ -2140,6 +2156,11 @@ namespace one::desktop::runtime {
 				        w->now = {.what = gesture::drawing, .id = "points", .from = {}, .at = at, .corner = 0, .edges = 0, .kept_from = {}};
 				        return true;
 			        }
+			        // With Space held, a drag moves what's shown, as a drawing program's hand does.
+			        if (desktop::held().space) {
+				        w->now = {.what = gesture::panning, .id = "", .from = {w->view.pan_x, w->view.pan_y, 0, 0}, .at = at, .corner = 0, .edges = 0, .kept_from = {}};
+				        return true;
+			        }
 			        if (const collage_draw* d = drawing_now(spec); d && w->board.contains(at)) {
 				        // Its id says how it's drawn: a box, or by line.
 				        w->now = {.what = gesture::drawing, .id = d->by, .from = {}, .at = at, .corner = 0, .edges = 0, .kept_from = {}};
@@ -2266,6 +2287,10 @@ namespace one::desktop::runtime {
 		    .on_drag =
 		        [w, width, height, snap = spec.snap](desktop::point at) {
 			        if (w->now.what == gesture::none) return;
+			        if (w->now.what == gesture::panning) {
+				        w->view.pan_x = w->now.from.x + (at.x - w->now.at.x), w->view.pan_y = w->now.from.y + (at.y - w->now.at.y);
+				        return;
+			        }
 			        if (w->now.what == gesture::selecting) {
 				        model::point a{w->now.from.x, w->now.from.y}, z = w->on_collage(at);
 				        w->marquee = model::box{std::min(a.x, z.x), std::min(a.y, z.y), std::abs(z.x - a.x), std::abs(z.y - a.y)};
@@ -2304,6 +2329,7 @@ namespace one::desktop::runtime {
 		    .on_release =
 		        [&p, w, width, height, layers, spec](desktop::point at) {
 			        if (w->now.what == gesture::none) return;
+			        if (w->now.what == gesture::panning) return void(w->now = {});
 			        // What the drag went all the way around is chosen, as the groups they're in
 			        // are, or what's just inside the group gone into.
 			        if (w->now.what == gesture::selecting) {
@@ -2417,6 +2443,7 @@ namespace one::desktop::runtime {
 				        return edges & 5 ? desktop::cursor::resize_across : desktop::cursor::resize_up_down;
 			        }
 			        if (w->editing) return desktop::cursor::text;
+			        if (desktop::held().space || w->now.what == gesture::panning) return w->now.what == gesture::panning ? desktop::cursor::grabbing : desktop::cursor::grab;
 			        // The next segment of a pen's path follows the pointer.
 			        if (!w->pen.empty()) w->hover = w->on_collage(at);
 			        if (drawing_now(spec) && w->board.contains(at)) return desktop::cursor::crosshair;

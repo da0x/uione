@@ -25,6 +25,7 @@ namespace one::desktop {
 	// picture's shape, say. None are held where there's no keyboard, as in tests.
 	struct held_keys {
 		bool shift = false, control = false, alt = false;
+		bool space = false;  // as a drawing program's hand is held to move what's shown
 	};
 	held_keys held();
 

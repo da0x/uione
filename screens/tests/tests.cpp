@@ -764,3 +764,18 @@ int main() {
 	use_time_zone("UTC");
 	return check::run();
 }
+
+TEST("a collage's layer is raised past the one above it, a group with all it holds, in its own layer, and lowered past the one below, as on the web") {
+	using one::screens::value;
+	auto row = [](std::string id, std::string layer, double depth, std::string group) {
+		return value(std::map<std::string, value>{{"id", value(std::move(id))}, {"layer", value(std::move(layer))}, {"depth", value(depth)}, {"group", value(std::move(group))}});
+	};
+	// In layer L, lowest first: a, then group g of b and c, then d; e is in another layer.
+	value rows = one::screens::grouped(value(std::vector<value>{row("a", "L", 0, ""), row("g", "L", 9, ""), row("b", "L", 1, "g"), row("c", "L", 2, "g"), row("d", "L", 3, ""), row("e", "M", 0, "")}));
+	using moved = std::vector<std::pair<std::string, double>>;
+	check::verify(one::screens::restacked(rows, "a", true, "layer") == moved{{"b", 0}, {"c", 1}, {"a", 2}}, "a raised past the group");
+	check::verify(one::screens::restacked(rows, "g", true, "layer") == moved{{"d", 1}, {"b", 2}, {"c", 3}}, "the group raised with all it holds");
+	check::verify(one::screens::restacked(rows, "d", false, "layer") == moved{{"d", 1}, {"b", 2}, {"c", 3}}, "d lowered past the group");
+	check::verify(one::screens::restacked(rows, "c", false, "layer") == moved{{"c", 1}, {"b", 2}}, "inside the group");
+	check::verify(one::screens::restacked(rows, "d", true, "layer").empty(), "nothing above the top");
+}

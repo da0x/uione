@@ -409,6 +409,7 @@ namespace one::screens {
 		std::string place = "";  // the command a layer moved or resized is sent to, with x y w h
 		std::string reshape = "";  // and the one a path's nodes moved are, with its points and x y w h
 		std::string group = "";    // and the one that puts a layer in a group, or takes it out, by its group
+		std::string order = "";    // and the one a layer's depth is sent to, raised or lowered
 		bool snap = false;       // to the collage's edges and middle, and every other layer's
 		bool clear = false;      // nothing behind its layers: shown over a checkerboard, saved clear
 		bool match_colors = false;  // its pictures' colors moved toward one another's, so they look like one picture
@@ -606,6 +607,61 @@ namespace one::screens {
 	}
 	// Whether a layer is a group, holding others.
 	inline bool holds_others(const value& layer) { return layer["holds"].as_double() > 0; }
+
+	// A collage's layer, or a group with all it holds, raised past the one just above it
+	// among those beside it, in its layer and its group, or lowered past the one just
+	// below, as `layers` are drawn, lowest first, their groups worked out: each that
+	// moves, by its id, and its new depth, its layer's renumbered from 0. Nothing at the
+	// top or the bottom.
+	inline std::vector<std::pair<std::string, double>> restacked(const value& layers, const std::string& id, bool up, const std::string& layer_field) {
+		const auto& rows = layers.as_array();
+		auto row = std::ranges::find_if(rows, [&](const value& l) { return l["id"].as_string() == id; });
+		if (row == rows.end()) return {};
+		std::string in_layer = layer_field.empty() ? "" : (*row)[layer_field].as_string(), in_group = (*row)["group"].as_string();
+		std::map<std::string, std::string> group_of;
+		for (const auto& l : rows) {
+			if (!l["group"].as_string().empty()) group_of[l["id"].as_string()] = l["group"].as_string();
+		}
+		// Each of the layer's drawn ones, and which of those beside it it's part of.
+		std::vector<std::pair<std::string, std::string>> order;
+		std::vector<std::string> beside;
+		for (const auto& l : rows) {
+			if (holds_others(l) || (!layer_field.empty() && l[layer_field].as_string() != in_layer)) continue;
+			std::string at = l["id"].as_string(), part;
+			for (int depth = 0; depth < 64; ++depth) {
+				auto up_one = group_of.find(at);
+				std::string over = up_one == group_of.end() ? "" : up_one->second;
+				if (over == in_group) {
+					part = at;
+					break;
+				}
+				if (over.empty()) break;
+				at = over;
+			}
+			order.emplace_back(l["id"].as_string(), part);
+			if (!part.empty() && std::ranges::find(beside, part) == beside.end()) beside.push_back(part);
+		}
+		auto here = std::ranges::find(beside, id);
+		if (here == beside.end() || (up && here + 1 == beside.end()) || (!up && here == beside.begin())) return {};
+		std::string past = up ? *(here + 1) : *(here - 1);
+		std::vector<std::pair<std::string, std::string>> moving, rest;
+		for (const auto& o : order) (o.second == id ? moving : rest).push_back(o);
+		// Just after the last of the one above, or just before the first of the one below.
+		std::size_t at = 0;
+		for (std::size_t i = 0; i < rest.size(); ++i) {
+			if (rest[i].second != past) continue;
+			at = up ? i + 1 : i;
+			if (!up) break;
+		}
+		rest.insert(rest.begin() + static_cast<std::ptrdiff_t>(at), moving.begin(), moving.end());
+		std::map<std::string, double> depth_of;
+		for (const auto& l : rows) depth_of[l["id"].as_string()] = l["depth"].as_double();
+		std::vector<std::pair<std::string, double>> out;
+		for (std::size_t i = 0; i < rest.size(); ++i) {
+			if (depth_of[rest[i].first] != static_cast<double>(i)) out.emplace_back(rest[i].first, static_cast<double>(i));
+		}
+		return out;
+	}
 
 	// The layer new objects go in: the one picked, while it's there, or the topmost.
 	inline std::string current_layer(const value& layers, const std::string& picked) {
