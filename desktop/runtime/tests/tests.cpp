@@ -3667,6 +3667,77 @@ TEST("a side a toggle opens is a drawer over a picture alone, there while it's o
 	std::filesystem::remove_all(folder);
 }
 
+TEST("a step steps by itself every so long while its slideshow's toggle is on, the next picture read ahead, and stops at the end, at a key or a press, and opened afresh") {
+	memory_source data;
+	auto s = archive_of(3, data, {.view = {}, .list = "posters", .columns = {{"title", "Title"}}, .link = "/posters/:poster", .picture = "image"});
+	list posters;
+	for (int i = 0; i < 3; ++i) posters.push_back(value(fields{{"id", std::format("p{}", i)}, {"title", std::format("Poster {}", i)}, {"image", std::format("files/p{}.png", i)}}));
+	data.set("studio::archive", "", value(fields{{"posters", posters}}));
+	s.screens.back().build = [](page& p) {
+		auto archive = p.view("studio::archive");
+		return items(toggle(p, "/posters/:poster show", "Slideshow", "play", std::vector<std::string>{"s"}),
+		             step(p, {.view = archive, .list = "posters", .route = "/posters/:poster", .next = true, .opened = true, .every = 0.02, .while_on = "/posters/:poster show"}, "Next", "next",
+		                  std::vector<std::string>{"right"}));
+	};
+	navigator nav(s, data);
+	one::desktop::runtime::hold_posted(true);
+	auto opened = [&](const std::string& address) {
+		nav.open("/posters");
+		built(nav);
+		nav.open(address);
+		built(nav);
+	};
+	// Run for a while, or until it's at an address.
+	auto waited = [&](const std::string& at, std::chrono::milliseconds most) {
+		for (auto until = std::chrono::steady_clock::now() + most; nav.current().address() != at && std::chrono::steady_clock::now() < until;) {
+			if (one::desktop::runtime::run_posted() == 0) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			built(nav);
+		}
+	};
+	const one::desktop::key_event s_key{.symbol = 's', .text = "s"}, a_key{.symbol = 'a', .text = "a"};
+	auto pressed = [&](const one::desktop::key_event& e) {
+		key_down(e);
+		(void)key(nav, e);
+		built(nav);
+	};
+	auto playing = [&] { return nav.current().toggled("/posters/:poster show"); };
+	opened("/posters/p0");
+	// The picture the cards show for the next one, to read ahead.
+	CHECK(picture_shown_for(nav.current(), "/posters/p1") == "files/p1.png");
+	CHECK(picture_shown_for(nav.current(), "/posters/p9").empty());
+	// On, it steps on by itself to the end of the list, and goes off there.
+	pressed(s_key);
+	CHECK(playing());
+	waited("/posters/p2", std::chrono::seconds(5));
+	CHECK(nav.current().address() == "/posters/p2");
+	waited("", std::chrono::milliseconds(150));
+	CHECK(nav.current().address() == "/posters/p2");
+	CHECK(!playing());
+	// Any key stops it.
+	opened("/posters/p0");
+	pressed(s_key);
+	pressed(a_key);
+	CHECK(!playing());
+	waited("", std::chrono::milliseconds(100));
+	CHECK(nav.current().address() == "/posters/p0");
+	// So does its own toggle's key, which doesn't start it again; and a press.
+	pressed(s_key);
+	CHECK(playing());
+	pressed(s_key);
+	CHECK(!playing());
+	pressed(s_key);
+	input_heard();
+	CHECK(!playing());
+	waited("", std::chrono::milliseconds(100));
+	CHECK(nav.current().address() == "/posters/p0");
+	// Opened afresh, though it was left on, it starts off.
+	nav.current().toggle("/posters/:poster show");
+	CHECK(playing());
+	opened("/posters/p1");
+	CHECK(!playing());
+	one::desktop::runtime::hold_posted(false);
+}
+
 TEST("a picture alone fills its window, edge to edge, fitted on black, wide or tall, at any size and at any scale") {
 	auto folder = std::filesystem::temp_directory_path() / "uione-alone-fills";
 	std::filesystem::remove_all(folder);

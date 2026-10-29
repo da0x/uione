@@ -2012,6 +2012,18 @@ namespace one::language {
                     link.icon = expect(token_kind::identifier, "the icon it's drawn as, like workflow").text;
                 }
                 parse_keys(link.keys);
+                // every 4 seconds while slideshow
+                if (!link.step.empty() && at_word("every")) {
+                    advance();
+                    link.every_where = peek().where;
+                    link.every = std::stod(expect(token_kind::number, "how many seconds apart it steps, like every 4 seconds").text);
+                    const token& unit = expect(token_kind::identifier, "seconds, like every 4 seconds");
+                    if (unit.text != "seconds" && unit.text != "second") fail(unit.where, "it steps every so many seconds, like every 4 seconds, not " + unit.text);
+                    if (!at_word("while")) fail_expecting("while and the toggle it steps while, like every 4 seconds while slideshow");
+                    advance();
+                    link.every_while_where = peek().where;
+                    link.every_while = expect(token_kind::identifier, "the toggle it steps while, like slideshow").text;
+                }
                 end_line();
                 return {where, std::move(link)};
             }
@@ -2566,7 +2578,7 @@ namespace one::language {
             }
             // layers drawing_page.layers { hide layer::show  order layer::update  delete layer::delete }:
             // the screen's collage's layers as a list.
-            if (at_word("layers") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::dot) {
+            if (at_word("layers") && peek(1).kind == token_kind::identifier && (peek(2).kind == token_kind::dot || peek(2).kind == token_kind::scope)) {
                 advance();
                 layers_item layers;
                 layers.view = parse_qualified_name("the view whose list is the collage's layers, like drawing_page");

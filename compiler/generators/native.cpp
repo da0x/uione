@@ -1829,7 +1829,9 @@ namespace one::generators {
                         std::string view = link->step_view ? view_variable(parts, screens::full_view(ns, link->step_view->text())) : fallback ? view_variable(parts, fallback->first) : "{}";
                         std::string list = link->step_view ? link->step_list : fallback ? fallback->second : "";
                         code = "step(p, {.view = " + view + ", .list = " + str(list) + ", .route = " + str(route_) + (link->step == "next" ? ", .next = true" : "") +
-                               (link->step_view ? "" : ", .opened = true") + "}, " + said_of(parts, ns, link->label) + ", " + str(link->icon.value_or("")) +
+                               (link->step_view ? "" : ", .opened = true") +
+                               (link->every_while.empty() ? "" : std::format(", .every = {}, .while_on = ", link->every) + str(route_ + " " + link->every_while)) + "}, " +
+                               said_of(parts, ns, link->label) + ", " + str(link->icon.value_or("")) +
                                (link->keys.empty() ? "" : ", " + keys_of(link->keys)) + ")";
                     } else {
                         std::string target = link->namespace_name ? model_.full_route(link->namespace_name->text(), "/") : link->target.starts_with("/") ? model_.full_route(ns, link->target) : link->target;

@@ -105,6 +105,8 @@ namespace one::desktop {
 		// The pointer moved over the window, whatever it's over, as what hides while
 		// it's still hears.
 		std::function<void()> on_pointer;
+		// A press anywhere in the window, before what's pressed hears it.
+		std::function<void()> on_press;
 
 		// Draws in the window, over its background and any view, each time it's drawn.
 		std::function<void(canvas&)> on_draw;

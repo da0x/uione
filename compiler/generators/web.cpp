@@ -1191,7 +1191,9 @@ namespace one::generators {
                         std::string from = link->step_view ? "view={" + view_variable(parts, full_view(ns, link->step_view->text())) + "} list=" + web_detail::js_string(link->step_list.empty() ? "rows" : link->step_list) + " "
                                            : fallback       ? "view={" + view_variable(parts, fallback->first) + "} list=" + web_detail::js_string(fallback->second.empty() ? "rows" : fallback->second) + " "
                                                             : "";
-                        out.line("<StepLink " + from + "to=" + web_detail::js_string(route_) + (link->step == "next" ? " next" : "") + (link->step_view ? "" : " opened") + icon + keys_of(link->keys) +
+                        // every 4 seconds while slideshow: by itself, while the toggle's on.
+                        std::string every = link->every_while.empty() ? "" : std::format(" every={{{}}} whileOn=", link->every) + web_detail::js_string(route_ + " " + link->every_while);
+                        out.line("<StepLink " + from + "to=" + web_detail::js_string(route_) + (link->step == "next" ? " next" : "") + (link->step_view ? "" : " opened") + every + icon + keys_of(link->keys) +
                                  ">" + live_text(parts, ns, link->label) + "</StepLink>");
                     } else if (!link->built.empty()) {
                         // What the site was built from: its release's notes, or its commit.

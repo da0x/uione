@@ -249,6 +249,7 @@ namespace one::desktop {
 	void deliver_press(window::state& w, one::desktop::point at, int clicks) {
 		bring_up_to_date(w);
 		in_window context(w);
+		if (w.outside && w.outside->on_press) w.outside->on_press();
 		if (!w.root) return;
 		detail::close_popovers_outside(at);
 		element* target = detail::popover_hit(at);

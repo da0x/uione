@@ -778,6 +778,11 @@ namespace one::screens {
 		// Or through the list the record was opened from, whichever it was, when one was;
 		// the view's list only when it wasn't.
 		bool opened = false;
+		// every 4 seconds while slideshow: stepped by itself that often while the toggle
+		// named is on, the picture it goes to read ahead; the toggle goes off at the
+		// list's end, and as a key is pressed or a click made.
+		double every = 0;
+		std::string while_on = "";
 	};
 
 	// A chart's run of numbers: by its field and a name in it, like stats.cpu; its

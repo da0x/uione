@@ -1195,6 +1195,68 @@ TEST_CASE("a side a toggle opens is a drawer over a picture alone, and details s
     CHECK(messages(named) == std::vector<std::string>{"32: name isn't a number, so it isn't said as bytes"});
 }
 
+TEST_CASE("a step steps by itself every so many seconds while a toggle of its screen's is on, as a slideshow does") {
+    const std::string pieces = R"(namespace studio at / {
+	entity piece {
+		name   text
+		image  file
+	}
+
+	view archive {
+		pieces = each piece {
+			order by name
+			name  image
+		}
+	}
+
+	view piece_page per piece {
+		name  image
+	}
+
+	screen "Pieces" /pieces {
+		cards archive.pieces link /pieces/:piece {
+			picture image
+			name
+		}
+	}
+
+	screen "{piece_page.name}" /pieces/:piece {
+		layout workspace
+		toolbar {
+			group "Piece" {
+				link next "Next" icon next key right every 4 seconds while slideshow
+				toggle slideshow "Slideshow" icon play key s
+			}
+		}
+		main {
+			picture piece_page.image fit alone
+		}
+	}
+}
+)";
+    CHECK(messages(project + pieces).empty());
+    auto files = built(project + pieces);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    CHECK(web.find(R"(<StepLink view={archive} list="pieces" to="/pieces/:piece" next opened every={4} whileOn="/pieces/:piece slideshow" icon="next" keys={["right"]}>Next</StepLink>)") != std::string::npos);
+    CHECK(native.find(R"(step(p, {.view = archive, .list = "pieces", .route = "/pieces/:piece", .next = true, .opened = true, .every = 4, .while_on = "/pieces/:piece slideshow"}, "Next", "next", std::vector<std::string>{"right"}))") != std::string::npos);
+    // Its toggle is the screen's own, and it waits some time.
+    std::string missing = project + pieces;
+    missing.replace(missing.find("while slideshow"), std::string("while slideshow").size(), "while playing");
+    missing.replace(missing.find("every 4 seconds"), std::string("every 4 seconds").size(), "every 0 seconds");
+    CHECK(messages(missing) == std::vector<std::string>{"36: a link next steps every so many seconds, more than none, like every 4 seconds",
+                                                        "36: there's no toggle playing on this screen for it to step while; add one, like toggle playing \"Slideshow\" icon play key s"});
+    std::string minutes = project + pieces;
+    minutes.replace(minutes.find("every 4 seconds"), std::string("every 4 seconds").size(), "every 4 minutes");
+    diagnostics said;
+    (void)parse("main.one", minutes, said);
+    REQUIRE(said.size() == 1);
+    CHECK(said.front().where.line == 36);
+    CHECK(said.front().message == "it steps every so many seconds, like every 4 seconds, not minutes");
+}
+
 TEST_CASE("a picture alone is all of a workspace's screen, its bars over it, zoomed by the screen's zoom buttons") {
     const std::string pieces = R"(namespace studio at / {
 	entity clipping {

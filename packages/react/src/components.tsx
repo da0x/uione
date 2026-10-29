@@ -10,8 +10,8 @@ import { createPortal } from "react-dom";
 import type { ReactElement, ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { partsOf } from "./keys.js";
-import { ShownPath, fill, useConfirmContext, useFill, useListOpens, usePageTitle, useSignIn, useSite, useSteppedAmong } from "./app.js";
-import { hintOf, rememberGiven, setPicked as pickRow, useInGroup, useInOptions, useLastGiven, useOverRun, usePicturesHanded, useStyled, takeInTurn, alreadyIn, notAPicture, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
+import { ShownPath, fill, pictureShownFor, useConfirmContext, useFill, useListOpens, usePageTitle, useSignIn, useSite, useSteppedAmong } from "./app.js";
+import { hintOf, rememberGiven, setPicked as pickRow, useInGroup, useInOptions, useLastGiven, useOverRun, usePicturesHanded, useStyled, takeInTurn, alreadyIn, notAPicture, useKeys, useOff, usePickedId, useTool, setToggled, stoppedBy, useToggled } from "./workspace.js";
 import { useSaying } from "./said.js";
 import { PictureAlone, stepped, useAwakeOn, useSwipeStep } from "./alone.js";
 import { pictureSize } from "./vectors.js";
@@ -78,6 +78,8 @@ export function StepLink({
   to,
   next = false,
   opened = false,
+  every,
+  whileOn,
   icon,
   keys,
   children,
@@ -87,6 +89,8 @@ export function StepLink({
   to: string; // the screen's route, its last parameter the record shown, like /things/:thing
   next?: boolean;
   opened?: boolean; // through the list the record was opened from, whichever it was
+  every?: number; // every 4 seconds while slideshow: stepped by itself that often while the toggle's on
+  whileOn?: string;
   icon?: string;
   keys?: string[];
   children: ReactNode;
@@ -94,14 +98,22 @@ export function StepLink({
   const ui = useUI();
   const params = useParams();
   const navigate = useNavigate();
+  const { pathname, search } = useLocation();
+  const here = pathname + search;
   const tool = useTool();
   const off = useOff();
   const among = useSteppedAmong(next);
   const target =
     opened && among !== undefined ? (among ?? undefined) : view?.status === "live" ? steppedTo(rowsOf(view.data?.[list]), to, params, next) : undefined;
   const go = () => {
-    if (target) void navigate(target, { replace: true });
+    if (!target) return;
+    lastStep = { to: target, at: Date.now() };
+    void navigate(target, { replace: true });
   };
+  useSlideshow(whileOn && every ? { toggle: whileOn, every, here, target, off } : undefined, () => {
+    if (target) shownNext = target;
+    go();
+  });
   // A swipe across a picture alone steps too, while it can.
   useSwipeStep(next, !off && target !== undefined ? go : undefined);
   // By its key, it leaves a picture's bars hidden, as they were.
@@ -118,6 +130,57 @@ export function StepLink({
       {children}
     </ui.Button>
   );
+}
+
+// Where a slideshow last stepped, where it carries on; and where any step last went, and
+// when, which a picture alone shows the last picture on until its own is read.
+let shownNext = "";
+let lastStep = { to: "", at: 0 };
+
+// every 4 seconds while slideshow: while its toggle's on, the next step waited for by a
+// timer, the picture it goes to read meanwhile; off at the list's end, and as a key is
+// pressed or a click made. Opened some other way than by its own step, it starts off.
+function useSlideshow(show: { toggle: string; every: number; here: string; target?: string; off: boolean } | undefined, step: () => void): void {
+  const playing = useToggled(show?.toggle ?? "");
+  const on = Boolean(show) && playing;
+  const latest = useRef(step);
+  latest.current = step;
+  useEffect(() => {
+    if (show && playing && shownNext !== show.here) setToggled(show.toggle, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const ahead = on && show?.target ? pictureShownFor(show.here, show.target) : undefined;
+  const addresses = useAddresses(ahead ? [{ id: ahead, path: ahead }] : [], "path");
+  const reading = ahead ? addresses[ahead] : undefined;
+  useEffect(() => {
+    if (!reading || typeof Image === "undefined") return;
+    const picture = new Image();
+    picture.src = reading;
+    void picture.decode?.().catch(() => {});
+  }, [reading]);
+  useEffect(() => {
+    if (!show || !on || show.off) return;
+    const timer = window.setTimeout(() => {
+      if (show.target === undefined) setToggled(show.toggle, false);
+      else latest.current();
+    }, show.every * 1000);
+    return () => window.clearTimeout(timer);
+  }, [show?.toggle, show?.every, show?.target, show?.off, on]);
+  useEffect(() => {
+    if (!show || !on) return;
+    const stop = (e: Event) => {
+      if (e instanceof KeyboardEvent && ["Shift", "Control", "Alt", "Meta"].includes(e.key)) return;
+      shownNext = "";
+      setToggled(show.toggle, false);
+      stoppedBy(show.toggle, e.type === "pointerdown");
+    };
+    window.addEventListener("keydown", stop, true);
+    window.addEventListener("pointerdown", stop, true);
+    return () => {
+      window.removeEventListener("keydown", stop, true);
+      window.removeEventListener("pointerdown", stop, true);
+    };
+  }, [show?.toggle, on]);
 }
 
 // The address of the row before or after the one a route's last parameter names, as
@@ -2801,6 +2864,8 @@ function useAddresses(rows: Row[], field: string | undefined, longest?: number):
   return addresses;
 }
 
+let lastAlone: string | undefined;
+
 // picture poster.preview fit: the file a value holds, as wide as its place and 320
 // tall, all of it fitted in or filling it; alone, all of its screen, zoomed by the
 // screen's zoom buttons, asked by `zoom`.
@@ -2808,7 +2873,15 @@ export function Picture({ source, fit = false, alone = false, zoom = "" }: { sou
   const ui = useUI();
   const path = typeof source === "string" ? source : "";
   const addresses = useAddresses(path ? [{ id: path, path }] : [], "path");
-  if (alone) return <PictureAlone source={addresses[path]} zoom={zoom} />;
+  const { pathname, search } = useLocation();
+  if (alone) {
+    // Stepped to, the last picture shown stays until this one's read, so there's no
+    // black between them, for a moment at most.
+    const own = addresses[path];
+    if (own) lastAlone = own;
+    const stepped = lastStep.to === pathname + search && Date.now() - lastStep.at < 3000;
+    return <PictureAlone source={own ?? (stepped ? lastAlone : undefined)} zoom={zoom} />;
+  }
   return <ui.FilePicture source={addresses[path]} fit={fit} />;
 }
 
@@ -2868,7 +2941,11 @@ export function Cards({
   const addresses = useAddresses(rows, picture, 640);
   const taking = useTakingPictures(paste, name, () => rowsOf(view.data?.[list]).map((row) => String((picture && row[picture]) ?? "")));
   // What its cards open, in order, for a record's screen to step through.
-  useListOpens(`cards ${list} ${link ?? ""}`, link ? rows.map((row) => rowLink(link, row, params, keyed, named)) : undefined);
+  useListOpens(
+    `cards ${list} ${link ?? ""}`,
+    link ? rows.map((row) => rowLink(link, row, params, keyed, named)) : undefined,
+    link && picture ? rows.map((row) => (typeof row[picture] === "string" ? (row[picture] as string) : "")) : undefined,
+  );
   // Its headings, worked out once each time the list changes.
   const groups = useMemo(() => (by ? timeGroups(rowsOf(listed), by.field, by.unit) : undefined), [listed, by?.field, by?.unit]);
   useDatedInView(name ?? "", groups);

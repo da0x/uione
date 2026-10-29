@@ -2904,6 +2904,16 @@ issue::verify "Verify" when {
   no list is an error. A terminal steps through that first list. In a terminal, an arrow goes first
   to what's beside what has the keyboard, as it does everywhere there, and steps
   when there's nothing that way.
+- `link next "Next" icon next key right every 4 seconds while slideshow`, with
+  `toggle slideshow "Slideshow" icon play key s` on the same screen, steps by itself
+  every 4 seconds while the toggle is on, as a slideshow does. The toggle goes off at
+  the end of the list, as any key is pressed or any click made, the toggle's own
+  included, and when the screen is left; opened again, the screen starts with it off.
+  The wait is a timer, so nothing else waits on it. Stepping through the list the
+  record was opened from, the picture its cards show for the next record is read
+  while the wait goes on, and until the next screen's own picture is ready the last
+  one stays, so a picture alone never shows black between them. Its toggle is one of
+  the screen's own, on or off alone, or it's an error.
 - A screen shown again while the app is open, gone back to or opened by a link, is
   as it was left: scrolled where it was, once what it shows reaches that far, with
   what was last opened from it, like a card, or the record stepped to from that,

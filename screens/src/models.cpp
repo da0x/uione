@@ -1869,6 +1869,19 @@ namespace one::screens {
 		return "";
 	}
 
+	std::string picture_shown_for(page_base& p, const std::string& to) {
+		const place* from = p.opened_from();
+		if (!from || to.empty()) return "";
+		for (const auto& [list, addresses] : from->lists) {
+			auto pictures = from->pictures.find(list);
+			if (pictures == from->pictures.end() || std::ranges::find(*addresses, p.address()) == addresses->end()) continue;
+			auto at = std::ranges::find(*addresses, to);
+			if (at == addresses->end() || pictures->second->size() != addresses->size()) continue;
+			return (*pictures->second)[static_cast<std::size_t>(at - addresses->begin())];
+		}
+		return "";
+	}
+
 	std::vector<card_model> cards_of(page_base& p, const cards_spec& spec) {
 		std::vector<card_model> out;
 		std::string title = spec.columns.empty() ? "" : spec.columns.front().field;

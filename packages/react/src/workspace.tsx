@@ -183,6 +183,20 @@ function stored(name: string): boolean {
   return toggled.get(name)!;
 }
 
+// The toggle of a slideshow the key or click being heard stopped, which that same key
+// or click doesn't start again, as it would if it was the toggle's own.
+let stoppedNow = "";
+export function stoppedJustNow(name: string): boolean {
+  return stoppedNow !== "" && stoppedNow === name;
+}
+export function stoppedBy(name: string, click: boolean): void {
+  stoppedNow = name;
+  const over = () => window.setTimeout(() => (stoppedNow = ""), 0);
+  // A press is heard again as its click, once it's let go.
+  if (click) window.addEventListener("click", over, { capture: true, once: true });
+  else over();
+}
+
 export function setToggled(name: string, on: boolean): void {
   toggled.set(name, on);
   try {
@@ -211,7 +225,10 @@ export function Toggle({ name, label, icon, keys }: { name: string; label: strin
   const tool = useTool() ?? "small";
   const on = useToggled(name);
   const off = useOff();
-  const flip = useCallback(() => setToggled(name, !stored(name)), [name]);
+  // A slideshow's toggle pressed while it plays stops it, and stays off.
+  const flip = useCallback(() => {
+    if (!stoppedJustNow(name)) setToggled(name, !stored(name));
+  }, [name]);
   useKeys(keys, flip, !off);
   return (
     <ui.Button kind="secondary" icon={icon} tool={tool} pressed={on && !off} disabled={off} hint={hintOf(label, keys)} onClick={flip}>

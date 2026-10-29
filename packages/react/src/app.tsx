@@ -308,17 +308,38 @@ type Opens = Map<string, string[]>;
 const listsShown = new Map<string, Opens>();
 const openedAmong = new Map<string, Opens | undefined>();
 const amongListening = new Set<() => void>();
-export function useListOpens(key: string, addresses: string[] | undefined): void {
+// And the picture each of those shows, where its cards show one, by the same list.
+const picturesShown = new Map<string, Opens>();
+const picturesAmong = new Map<string, Opens | undefined>();
+export function useListOpens(key: string, addresses: string[] | undefined, pictures?: string[]): void {
   const { pathname, search } = useLocation();
   const here = pathname + search;
   const joined = addresses?.join("\n");
+  const shown = pictures?.join("\n");
   useEffect(() => {
     if (addresses === undefined) return;
     let opens = listsShown.get(here);
     if (!opens) listsShown.set(here, (opens = new Map()));
     opens.set(key, addresses);
+    let held = picturesShown.get(here);
+    if (!held) picturesShown.set(here, (held = new Map()));
+    if (pictures?.length === addresses.length) held.set(key, pictures);
+    else held.delete(key);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [here, key, joined]);
+  }, [here, key, joined, shown]);
+}
+// The picture the list this address was opened from shows for the one a step goes to,
+// for it to be read ahead, or undefined.
+export function pictureShownFor(here: string, to: string): string | undefined {
+  const opens = openedAmong.get(here);
+  const pictures = picturesAmong.get(here);
+  for (const [key, addresses] of opens ?? []) {
+    if (!addresses.includes(here)) continue;
+    const at = addresses.indexOf(to);
+    const held = pictures?.get(key);
+    if (at >= 0 && held) return held[at];
+  }
+  return undefined;
 }
 // The address before or after this one in the list it was opened from, when one did,
 // or undefined; null at either end of it.
@@ -352,10 +373,12 @@ function Returning() {
       if (how === "PUSH") placesLeft.set(before, { scroll: placesLeft.get(before)?.scroll ?? 0, opened: here });
       if (how === "REPLACE") for (const place of placesLeft.values()) if (place.opened === before) place.opened = here;
       openedAmong.set(here, how === "PUSH" ? listsShown.get(before) : how === "REPLACE" ? openedAmong.get(before) : openedAmong.get(here));
+      picturesAmong.set(here, how === "PUSH" ? picturesShown.get(before) : how === "REPLACE" ? picturesAmong.get(before) : picturesAmong.get(here));
       amongListening.forEach((changed) => changed());
     } else if (before === undefined) {
       // The first page shown was opened from nothing.
       openedAmong.delete(here);
+      picturesAmong.delete(here);
       amongListening.forEach((changed) => changed());
     }
     const page = document.scrollingElement ?? document.documentElement;

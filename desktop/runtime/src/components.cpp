@@ -27,12 +27,18 @@ namespace one::desktop::runtime {
 
 		// What cards open, in their order, kept where the page is left, for a record opened
 		// from them to step through.
-		void opened_among(page& p, const std::string& list, const std::vector<card_model>& cards) {
+		void opened_among(page& p, const std::string& list, const std::vector<card_model>& cards, std::span<const value> rows = {}, const std::string& picture = "") {
 			if (cards.empty() || cards.front().address.empty()) return;
 			std::vector<std::string> addresses;
 			addresses.reserve(cards.size());
 			for (const auto& card : cards) addresses.push_back(card.address);
 			p.where_left().lists[list] = std::make_shared<const std::vector<std::string>>(std::move(addresses));
+			// And the picture each shows, for a slideshow to read the next one ahead.
+			if (picture.empty() || rows.size() != cards.size()) return;
+			std::vector<std::string> pictures;
+			pictures.reserve(rows.size());
+			for (const auto& row : rows) pictures.push_back(row[picture].as_string());
+			p.where_left().pictures[list] = std::make_shared<const std::vector<std::string>>(std::move(pictures));
 		}
 
 		// Pictures come in, each a record made by the cards' add, given what the address
@@ -561,12 +567,87 @@ namespace one::desktop::runtime {
 		return std::move(part).key("#" + name + "-" + std::to_string(times)).brought_to_top();
 	}
 
+	namespace {
+
+		// A slideshow on a page: whether it's been looked at since the page opened, and
+		// the wait for its next step, while there is one.
+		struct slideshow {
+			bool begun = false;
+			std::shared_ptr<bool> waiting;
+		};
+		// The one playing, by its page's, which is gone once the page is.
+		struct playing_now {
+			std::weak_ptr<slideshow> show;
+			page* on = nullptr;
+			std::string toggle;
+		};
+		playing_now playing;
+		std::string stopped_now;  // the toggle the key or click being heard stopped
+		std::string shown_next;   // where a slideshow last stepped, where it carries on
+
+		// every 4 seconds while slideshow: while its toggle's on, the next step waited for
+		// away from the window's thread, the picture it goes to read meanwhile. Opened
+		// some other way than by its own step, the page starts with it off.
+		void played(page& p, const step_spec& spec, const std::string& to) {
+			auto show = p.kept<std::shared_ptr<slideshow>>("slideshow " + spec.while_on, std::make_shared<slideshow>()).peek();
+			bool on = p.toggled(spec.while_on);
+			if (!std::exchange(show->begun, true) && on && shown_next != p.address()) {
+				p.toggle(spec.while_on);
+				on = false;
+			}
+			if (!on) {
+				show->waiting.reset();
+				return;
+			}
+			playing = {show, &p, spec.while_on};
+			if (show->waiting || !posting()) return;
+			show->waiting = std::make_shared<bool>(true);
+			if (std::string picture = picture_shown_for(p, to); !picture.empty()) read_ahead(p, picture);
+			auto every = std::chrono::duration<double>(spec.every);
+			std::thread([&p, spec, every, waited = std::weak_ptr(show->waiting)] {
+				std::this_thread::sleep_for(every);
+				post([&p, spec, waited] {
+					// Still waited for, the page is there and the show's still on.
+					if (!waited.lock()) return;
+					p.kept<std::shared_ptr<slideshow>>("slideshow " + spec.while_on, std::make_shared<slideshow>()).peek()->waiting.reset();
+					if (!p.toggled(spec.while_on)) return;
+					std::string next = stepped_to(p, spec);
+					// At the end of the list, it stops.
+					if (next.empty()) {
+						p.toggle(spec.while_on);
+						return;
+					}
+					shown_next = last_stepped_to() = next;
+					p.open_instead(next);
+				});
+			}).detach();
+		}
+
+	}  // namespace
+
+	void input_heard() {
+		stopped_now.clear();
+		auto show = playing.show.lock();
+		if (show && playing.on->toggled(playing.toggle)) {
+			show->waiting.reset();
+			playing.on->toggle(playing.toggle);
+			stopped_now = playing.toggle;
+		}
+		playing = {};
+		shown_next.clear();
+	}
+
+	bool stopped_just_now(const std::string& toggle) { return !toggle.empty() && stopped_now == toggle; }
+
 	desktop::view step(page& p, step_spec spec, std::string words, std::string icon, std::vector<std::string> keys) {
 		std::string to = stepped_to(p, spec);
 		bool off = to.empty() || (p.in_group() && p.off());
+		if (spec.every > 0 && !spec.while_on.empty()) played(p, spec, to);
 		// In the record's place, so going back goes where it was opened from.
 		auto go = [&p, to] {
-			if (!to.empty()) p.open_instead(to);
+			if (to.empty()) return;
+			last_stepped_to() = to;
+			p.open_instead(to);
 		};
 		// Where it goes, for a swipe across a picture alone to step there too.
 		*p.kept<std::shared_ptr<std::string>>(spec.next ? "step next" : "step previous", std::make_shared<std::string>()).peek() = off ? "" : to;
@@ -807,7 +888,7 @@ namespace one::desktop::runtime {
 			auto groups = time_groups(rows, spec.by, spec.unit);
 			if (groups.empty()) return spec.hide_empty ? desktop::view() : !spec.add.empty() ? quiet("Nothing here yet. Drop pictures here to add them.").padding(edges(48, 0)) : quiet("Nothing here yet.");
 			auto all = cards_of(p, spec);
-			opened_among(p, "cards " + spec.list + " " + spec.link, all);
+			opened_among(p, "cards " + spec.list + " " + spec.link, all, rows, spec.picture);
 			auto heading = t.strong();
 			heading.size = 22, heading.line_height = 1.25f;
 			std::vector<std::string> keys;
@@ -826,7 +907,7 @@ namespace one::desktop::runtime {
 			return desktop::view(std::move(made));
 		}
 		auto all = cards_of(p, spec);
-		opened_among(p, "cards " + spec.list + " " + spec.link, all);
+		opened_among(p, "cards " + spec.list + " " + spec.link, all, rows_of(v, spec.list), spec.picture);
 		if (all.empty()) return spec.hide_empty ? desktop::view() : !spec.add.empty() ? quiet("Nothing here yet. Drop pictures here to add them.").padding(edges(48, 0)) : quiet("Nothing here yet.");
 		return cards_shown(p, spec, std::move(all), rows_of(v, spec.list));
 	}

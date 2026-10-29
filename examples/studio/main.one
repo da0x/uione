@@ -333,8 +333,9 @@ namespace studio at / {
 		}
 	}
 
-	// A clipping on its own, all of the screen, stepped through as they're set out, its
-	// bars over it until the pointer's still, and what's known of it in a drawer beside.
+	// A clipping on its own, all of the screen, stepped through as they're set out, by
+	// hand or as a slideshow, its bars over it until the pointer's still, and what's
+	// known of it in a drawer beside.
 	screen "{clipping_page.name}" /clippings/:clipping {
 		layout workspace
 		bar {
@@ -343,7 +344,8 @@ namespace studio at / {
 		toolbar {
 			group "Clipping" {
 				link previous "Previous" icon previous key left
-				link next "Next" icon next key right
+				link next "Next" icon next key right every 4 seconds while slideshow
+				toggle slideshow "Slideshow" icon play key s
 			}
 			group "View" small at end {
 				zoom out "Smaller" icon zoom_out

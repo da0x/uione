@@ -193,6 +193,7 @@ namespace one::desktop::runtime {
 		if (e.symbol >= 0xffe1 && e.symbol <= 0xffee) return;
 		awake_before = woken_now.peek();
 		wake();
+		input_heard();
 	}
 
 	void stepped() {
@@ -379,7 +380,10 @@ namespace one::desktop::runtime {
 
 	desktop::view toggle(page& p, std::string name, std::string label, std::string icon, std::vector<std::string> keys) {
 		bool on = p.toggled(name);
-		auto flip = [&p, name] { p.toggle(name); };
+		// A slideshow's toggle pressed while it plays stops it, and stays off.
+		auto flip = [&p, name] {
+			if (!stopped_just_now(name)) p.toggle(name);
+		};
 		if (!(p.in_group() && p.off())) for (const auto& k : keys) p.on_key(k, flip);
 		if (p.in_group()) return tool(p, icon, label, keys, flip, on);
 		return desktop::tool_button(desktop::has_icon(icon) ? icon : "", hint_of(label, keys), flip, {.on = on});

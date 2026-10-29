@@ -270,6 +270,16 @@ namespace one::desktop::runtime {
 	// A file's picture as the window draws it, the same way: nothing until it's read,
 	// and an empty one when there's no such file or it isn't a picture.
 	std::optional<desktop::picture> picture_soon(page& p, const std::string& kept, int longest = 0);
+	// The whole of a file's picture read now, away from the window's thread, for a page
+	// about to show it, like the next of a slideshow.
+	void read_ahead(page& p, const std::string& kept);
+	// Where a step last went, which a picture alone shows the last picture on until its
+	// own is read.
+	std::string& last_stepped_to();
+	// A key pressed or a click made, before anything hears it: a slideshow playing stops,
+	// and its own toggle, if that's what it was, doesn't start it again.
+	void input_heard();
+	bool stopped_just_now(const std::string& toggle);
 	desktop::view pipeline_board(page& p, pipeline_spec spec);
 	desktop::view cards(page& p, cards_spec spec);
 	// The years and months of cards under headings by a date, as dated_timeline_spec says.

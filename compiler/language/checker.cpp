@@ -2636,6 +2636,13 @@ namespace one::language {
         // the one after it in a list of them, so the list is of what the address names,
         // in a view the screen reads whole, not one per record.
         void step(const std::string& ns, const std::string& screen_route, const content_link& link, location where) {
+            // every 4 seconds while slideshow: a toggle of this screen's, on or off alone.
+            if (!link.every_while.empty()) {
+                if (link.every <= 0) error(link.every_where, "a link " + link.step + " steps every so many seconds, more than none, like every 4 seconds");
+                if (!toggles_.contains(link.every_while) || choices_.contains(link.every_while)) {
+                    error(link.every_while_where, "there's no toggle " + link.every_while + " on this screen for it to step while; add one, like toggle " + link.every_while + " \"Slideshow\" icon play key s");
+                }
+            }
             // With no list, through the one it was opened from, so some list opens it.
             if (!link.step_view) {
                 if (screen_route.rfind("/:") == std::string::npos) {
@@ -3408,7 +3415,7 @@ namespace one::language {
                 "lower",  "rotate_left", "rotate_right", "flip_horizontal", "flip_vertical", "check", "close", "paste", "save", "undo", "redo",
                 "text",   "screenshot", "picture", "folder", "gallery", "fullscreen", "sun", "moon", "bold", "smaller", "larger", "fill", "fit", "stretch",
                 "center", "color", "edges", "blend", "harmonize", "clear", "square", "rounded", "pointer", "rectangle", "ellipse", "line", "italic", "magic", "align_left", "align_center", "align_right",
-                "title", "heading", "quote", "equation", "book", "letters", "quill", "typewriter", "coffee", "eye", "eye_off", "opacity", "spectrum", "zoom_in", "zoom_out", "zoom_fit", "star", "polygon", "cut", "group", "ungroup", "chevron_right", "chevron_down", "spread", "contents", "calendar", "bell", "inbox", "previous", "next", "info"};
+                "title", "heading", "quote", "equation", "book", "letters", "quill", "typewriter", "coffee", "eye", "eye_off", "opacity", "spectrum", "zoom_in", "zoom_out", "zoom_fit", "star", "polygon", "cut", "group", "ungroup", "chevron_right", "chevron_down", "spread", "contents", "calendar", "bell", "inbox", "previous", "next", "info", "play"};
             if (name && !known.contains(*name)) error(where, "there's no icon " + *name + nearest(*name, {known.begin(), known.end()}));
         }
 

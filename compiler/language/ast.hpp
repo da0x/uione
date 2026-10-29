@@ -717,6 +717,12 @@ namespace one::language {
         std::string step;                              // previous or next
         std::optional<qualified_name> step_view;
         std::string step_list;
+        // every 4 seconds while slideshow: stepped by itself that often while the toggle's
+        // on, which goes off at the list's end, or as a key is pressed or a click made.
+        double every = 0;
+        location every_where;
+        std::string every_while;
+        location every_while_where;
     };
 
     struct table_column {

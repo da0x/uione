@@ -426,6 +426,9 @@ namespace one::screens {
 	// after the one the page's address names. None at either end, as it doesn't go
 	// around, nor while the list isn't there or doesn't hold the one shown.
 	std::string stepped_to(page_base& p, const step_spec& spec);
+	// The picture the list a record was opened from shows for the address a step goes to,
+	// where its cards show one, for it to be read ahead; or nothing.
+	std::string picture_shown_for(page_base& p, const std::string& to);
 
 	// A list ordered by a date, under a heading for each year, month or day of it as
 	// it's read here, in the list's own order: each heading's key, like 2026-10, what

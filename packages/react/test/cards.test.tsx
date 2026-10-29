@@ -6,11 +6,11 @@
 // the fields that keep them; several at once one step to undo, and a drop target while empty.
 
 import { fireEvent, render, waitFor } from "@testing-library/react";
-import { App, Cards, DatedTimeline, Link, Messages, PaperButton, StepLink, Table, memorySource, mosaicRows, mosaicTile, screen as defineScreen, timeGroups, useView, within, yearsOf } from "../src/index.js";
+import { App, Cards, DatedTimeline, Link, Messages, PaperButton, StepLink, Table, Toggle, memorySource, mosaicRows, mosaicTile, screen as defineScreen, timeGroups, useView, within, yearsOf } from "../src/index.js";
 import { useNavigate, useParams } from "react-router";
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
-import { alreadyIn, alreadySaid, takeInTurn } from "../src/workspace.js";
+import { alreadyIn, alreadySaid, setToggled, takeInTurn } from "../src/workspace.js";
 import { vi } from "vitest";
 import { exif, jpeg } from "./photos.js";
 
@@ -384,6 +384,94 @@ describe("a record's screen stepping through its list", () => {
     Object.defineProperty(page, "scrollTop", { configurable: true, get: () => scrolled, set: (to: number) => void (scrolled = to) });
     Object.defineProperty(page, "scrollHeight", { configurable: true, get: () => 5000 });
     Object.defineProperty(page, "clientHeight", { configurable: true, get: () => 600 });
+  });
+
+  it("steps by itself while a slideshow plays, reading the next picture ahead, and stops at the end, at a key or a click, and when it's opened afresh", async () => {
+    const kept = new Map<string, string>();
+    vi.stubGlobal("localStorage", { getItem: (key: string) => kept.get(key) ?? null, setItem: (key: string, value: string) => void kept.set(key, value) });
+    const read: string[] = [];
+    vi.stubGlobal(
+      "Image",
+      class {
+        set src(to: string) {
+          read.push(to);
+        }
+        decode() {
+          return Promise.resolve();
+        }
+      },
+    );
+    const source = memorySource({ files: true });
+    const posters = ["Arches", "Bridges", "Canyons", "Dunes"].map((title, i) => ({ id: `p${i}`, title, image: `uploads/p${i}.png` }));
+    source.set("studio::archive", { posters });
+    function Posters() {
+      const archive = useView("studio::archive");
+      return <Cards view={archive} list="posters" columns={{ title: "Title" }} picture="image" link="/posters/:poster" />;
+    }
+    function Poster() {
+      const archive = useView("studio::archive");
+      const { poster } = useParams();
+      return (
+        <>
+          <p>Showing {poster}</p>
+          <Toggle name="/posters/:poster show" label="Slideshow" keys={["s"]} />
+          <StepLink view={archive} list="posters" to="/posters/:poster" next opened every={0.05} whileOn="/posters/:poster show">
+            Next
+          </StepLink>
+          <Link to="/posters">Posters</Link>
+        </>
+      );
+    }
+    const screens = [defineScreen({ title: "Posters", route: "/posters" }, () => <Posters />), defineScreen({ title: "Poster", route: "/posters/:poster" }, () => <Poster />)];
+    const drawn = render(<App name="studio" screens={screens} ui={plain} data={source} location="/posters" />);
+    const showing = () => drawn.container.querySelector("p")?.textContent;
+    const playing = () => kept.get("uione toggle /posters/:poster show");
+    const opened = async (title: string, id: string) => {
+      fireEvent.click(drawn.getByText("Posters"));
+      await waitFor(() => expect(drawn.getByText(title)).toBeTruthy());
+      fireEvent.click(drawn.getByText(title));
+      await waitFor(() => expect(showing()).toBe(`Showing ${id}`));
+    };
+    await waitFor(() => expect(drawn.getByText("Bridges")).toBeTruthy());
+    fireEvent.click(drawn.getByText("Bridges"));
+    await waitFor(() => expect(showing()).toBe("Showing p1"));
+    // On, it steps on by itself, the next picture read ahead, and goes off at the end.
+    fireEvent.keyDown(window, { key: "s" });
+    expect(playing()).toBe("on");
+    await waitFor(() => expect(read.some((to) => to.includes("p2"))).toBe(true));
+    await waitFor(() => expect(showing()).toBe("Showing p2"));
+    await waitFor(() => expect(showing()).toBe("Showing p3"));
+    await waitFor(() => expect(playing()).toBe("off"));
+    // Any key stops it, and so does its own toggle's key, which doesn't start it again.
+    await opened("Arches", "p0");
+    fireEvent.keyDown(window, { key: "s" });
+    await waitFor(() => expect(showing()).toBe("Showing p1"));
+    fireEvent.keyDown(window, { key: "a" });
+    expect(playing()).toBe("off");
+    await new Promise((done) => setTimeout(done, 150));
+    expect(showing()).toBe("Showing p1");
+    fireEvent.keyDown(window, { key: "s" });
+    expect(playing()).toBe("on");
+    fireEvent.keyDown(window, { key: "s" });
+    expect(playing()).toBe("off");
+    await new Promise((done) => setTimeout(done, 150));
+    expect(showing()).toBe("Showing p1");
+    // And a click anywhere, its toggle's included.
+    fireEvent.keyDown(window, { key: "s" });
+    const toggle = drawn.getByText("Slideshow").closest("button")!;
+    fireEvent.pointerDown(toggle);
+    fireEvent.click(toggle);
+    expect(playing()).toBe("off");
+    await new Promise((done) => setTimeout(done, 150));
+    expect(showing()).toBe("Showing p1");
+    drawn.unmount();
+    // Opened afresh, though it was left on, it starts off.
+    setToggled("/posters/:poster show", true);
+    const afresh = render(<App name="studio" screens={screens} ui={plain} data={source} location="/posters/p0" />);
+    await waitFor(() => expect(afresh.container.querySelector("p")?.textContent).toBe("Showing p0"));
+    await waitFor(() => expect(playing()).toBe("off"));
+    afresh.unmount();
+    vi.unstubAllGlobals();
   });
 
   it("steps through the list it was opened from, cards or a table in the order shown, and else through the one it names, not past either end", async () => {

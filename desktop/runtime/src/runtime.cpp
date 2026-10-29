@@ -460,6 +460,7 @@ namespace one::desktop::runtime {
 			return typed_into && typed_into(e);
 		};
 		window.on_pointer = [] { wake(); };
+		window.on_press = [] { input_heard(); };
 		// Started with agents that stop when it quits, as publish starts its own, it asks
 		// before closing while they're working on something.
 		const char* stops = std::getenv("ONE_QUIT_STOPS_AGENTS");

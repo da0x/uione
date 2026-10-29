@@ -121,6 +121,8 @@ namespace one::screens {
 		// The addresses each of its lists opens, in the order it shows them, as it was last
 		// built, by the list: for a record opened from one to step through.
 		std::map<std::string, std::shared_ptr<const std::vector<std::string>>> lists = {};
+		// And the picture each of those shows, where its cards show one, by the same list.
+		std::map<std::string, std::shared_ptr<const std::vector<std::string>>> pictures = {};
 	};
 
 	// A page that's open: the screen it shows, what its address said, and the views

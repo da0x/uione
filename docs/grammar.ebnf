@@ -333,9 +333,12 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? ("icon" NAME)? ("color" N
                  | "text" STRING ("when" condition)? END
                  | "code" STRING END
                  | "markdown" STRING ("as" "document")? END
+                 | "link" (ROUTE | ANCHOR | "namespace" qualified | STRING | "build" "." ("release" | "source")) STRING ("icon" NAME)? key* END
                  /* previous or next: the same screen for the record before or after, in the list named, or with
-                    none, in the list the record was opened from, else the first list whose rows open it */
-                 | "link" (ROUTE | ANCHOR | "namespace" qualified | STRING | "build" "." ("release" | "source") | ("previous" | "next") ("in" qualified ("." NAME)?)?) STRING ("icon" NAME)? key* END
+                    none, in the list the record was opened from, else the first list whose rows open it;
+                    every 4 seconds while slideshow: stepped by itself that often while the screen's toggle is on,
+                    the next picture read ahead, the toggle going off at the list's end, or at a key or a click */
+                 | "link" ("previous" | "next") ("in" qualified ("." NAME)?)? STRING ("icon" NAME)? key* ("every" NUMBER ("seconds" | "second") "while" NAME)? END
                  | "table" qualified ("." NAME)? ("by" NAME tabs_over?)? ("link" ROUTE)? ("when" expression)? ("{" NEWLINE? table_line* "}")? END
                  | "form" qualified+ STRING? "{" NEWLINE? form_line* "}" END
                  | "confirm" qualified STRING END

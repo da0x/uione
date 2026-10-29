@@ -1690,16 +1690,26 @@ namespace one::desktop::runtime {
 		return file ? read_soon(*file, longest) : std::optional(desktop::picture());
 	}
 
+	void read_ahead(page& p, const std::string& kept) {
+		if (auto file = kept.empty() ? std::nullopt : p.file_here(kept)) (void)read_soon(*file, 0);
+	}
+
+	std::string& last_stepped_to() {
+		static std::string to;
+		return to;
+	}
+
 	namespace {
 		// A file's picture to draw now: the whole of it, wanted for as long as the page
 		// is open, or a copy no longer than `longest`; until it's read, the copy a card
 		// drew of it, when there's one.
-		desktop::picture shown_now(page& p, const std::string& kept, int longest) {
+		desktop::picture shown_now(page& p, const std::string& kept, int longest, bool* waiting = nullptr) {
 			auto file = kept.empty() ? std::nullopt : p.file_here(kept);
 			std::optional<std::weak_ptr<void>> wanted;
 			if (longest <= 0) wanted = p.kept<std::shared_ptr<void>>("pictures wanted", std::make_shared<bool>()).peek();
 			auto read = file ? read_soon(*file, longest, wanted) : std::optional(desktop::picture());
 			if (!read && longest <= 0) read = pictures_kept(640).peek(std::format("{} {}", file->string(), 640));
+			if (waiting) *waiting = !read;
 			return read.value_or(desktop::picture());
 		}
 
@@ -1796,13 +1806,21 @@ namespace one::desktop::runtime {
 			else if (does == "zoom out") zoomed(*l, 0.8f, middle(*l));
 			else if (does == "zoom to fit") fit();
 		}
-		desktop::picture shown = shown_now(p, kept, 0);
+		bool waiting = false;
+		desktop::picture shown = shown_now(p, kept, 0, &waiting);
+		// Stepped to, the last picture shown stays until this one's read, so there's no
+		// black between them.
+		static desktop::picture last_shown;
+		if (shown) last_shown = shown;
+		else if (waiting && last_stepped_to() == p.address()) shown = last_shown;
 		bool shows_pointer = awake();
 		// To the record after, swiped to the left, as a photo app does, or the one before;
 		// where the screen's steps say, as they're built.
 		auto step = [&p](float dx) {
 			auto to = *p.kept<std::shared_ptr<std::string>>(dx < 0 ? "step next" : "step previous", std::make_shared<std::string>()).peek();
-			if (!to.empty()) p.open_instead(to);
+			if (to.empty()) return;
+			last_stepped_to() = to;
+			p.open_instead(to);
 		};
 		return desktop::drawing(
 		           [shown, l](desktop::canvas& c, desktop::rect area) {
