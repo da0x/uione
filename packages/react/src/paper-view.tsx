@@ -617,7 +617,7 @@ export function Paper({
         if (pictures.length === 0) return say({ text: "There's no picture on the clipboard to paste." });
         await addPictures(pictures);
       } catch {
-        say({ text: "This browser didn't let the page read the clipboard. Press Ctrl+V instead.", problem: true });
+        say({ text: "This browser didn't let the page read the clipboard. Press Ctrl+V, or choose the picture from your files.", problem: true });
       }
     })();
   }, [pasteAsked]);

@@ -1091,7 +1091,7 @@ export function Collage({
       if (words.trim()) return addWords(words);
       say({ text: "There's nothing to paste. Copy a picture or some words first." });
     } catch {
-      say({ text: "This browser didn't let the page read the clipboard. Press Ctrl+V instead.", problem: true });
+      say({ text: "This browser didn't let the page read the clipboard. Press Ctrl+V, or choose the picture from your files.", problem: true });
     }
   };
   // The screen as the browser shares it, one frame of it, added like any picture.
