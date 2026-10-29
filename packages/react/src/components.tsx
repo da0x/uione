@@ -2746,6 +2746,7 @@ export function Cards({
   hideEmpty = false,
   picture,
   fit = false,
+  mosaic = false,
   paste,
   name,
 }: {
@@ -2764,6 +2765,7 @@ export function Cards({
   hideEmpty?: boolean; // not there at all while it has no cards, or can't be read, like a project's private boards
   picture?: string; // a file each row holds, shown on top of its card
   fit?: boolean; // all of it fitted in, or filling its place
+  mosaic?: boolean; // set as a mosaic of their pictures, each filling its tile
   // Pictures dropped, pasted or chosen, each a record made by this command, given what's
   // given besides, each of its parts, like picture and picture_width, in the field named.
   paste?: { command: string; fields: Record<string, string>; given?: Record<string, unknown> };
@@ -2801,6 +2803,7 @@ export function Cards({
   const shown = (
     <ui.Cards
       status={view.status}
+      mosaic={mosaic || undefined}
       cards={rows.map((row) => {
         const to = link ? rowLink(link, row, params, keyed, named) : undefined;
         return {

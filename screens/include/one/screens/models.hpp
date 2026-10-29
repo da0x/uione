@@ -423,6 +423,20 @@ namespace one::screens {
 	};
 	std::vector<card_model> cards_of(page_base& p, const cards_spec& spec);
 
+	// Where the nth card of a mosaic goes, in its columns and rows: every 8 cards are
+	// two blocks, one above the other, each three equal columns by two rows as tall as
+	// a column is wide. In the first, its first card is a column wide and both rows
+	// tall at the left, its second two columns wide on the top row at the right, and
+	// its third and fourth a tile each under that; the second block is the first
+	// mirrored, its first card on the right. Worked out from n alone, so nothing moves
+	// as pictures come in. The same as the web's.
+	struct mosaic_place {
+		int column, row, columns, rows;
+	};
+	mosaic_place mosaic_tile(std::size_t n);
+	// How many rows a mosaic of `count` cards takes: the last block ends with them.
+	int mosaic_rows(std::size_t count);
+
 	// What find found in each list, and how many more.
 	struct found {
 		std::string label;

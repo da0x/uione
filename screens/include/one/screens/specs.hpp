@@ -736,6 +736,7 @@ namespace one::screens {
 		bool hide_empty = false;                                  // not there while it has no cards, or can't be read
 		std::string picture = "";                                 // a file field's picture on top of each card
 		bool fit = false;                                         // all of it fitted in, or filling its place
+		bool mosaic = false;                                      // set as a mosaic of pictures, each filling its tile (see mosaic_tile)
 		// Pictures dropped, pasted or chosen, each a record made by `add`, given what's
 		// `given` besides, its file in the picture and the rest of its parts, its own size,
 		// its file's name, bytes and date, each in the field `fields` says.

@@ -947,6 +947,80 @@ TEST("a card's title is set in the theme's text face, strong, not in its heading
 	one::desktop::detail::theme_in_use() = &tested_theme();
 }
 
+TEST("cards as a mosaic: every eight two blocks of a tall tile, a wide one and two small, the second mirrored, each picture filling its tile around its middle, its title over its foot") {
+	auto folder = std::filesystem::temp_directory_path() / "uione-mosaic";
+	std::filesystem::remove_all(folder);
+	std::filesystem::create_directories(folder);
+	// Each picture its color on the left and a lighter one on the right, some wide and
+	// some tall, so where it's cropped shows.
+	auto picture = [&](const std::string& name, int w, int h, std::uint32_t rgb) {
+		std::vector<std::uint8_t> pixels(static_cast<std::size_t>(w) * h * 4);
+		for (int y = 0; y < h; ++y) {
+			for (int x = 0; x < w; ++x) {
+				std::uint8_t* at = &pixels[(static_cast<std::size_t>(y) * w + x) * 4];
+				int lift = x < w / 2 ? 0 : 70;
+				at[0] = static_cast<std::uint8_t>(std::min(255, static_cast<int>((rgb >> 16) & 0xff) + lift));
+				at[1] = static_cast<std::uint8_t>(std::min(255, static_cast<int>((rgb >> 8) & 0xff) + lift));
+				at[2] = static_cast<std::uint8_t>(std::min(255, static_cast<int>(rgb & 0xff) + lift));
+				at[3] = 255;
+			}
+		}
+		CHECK(one::desktop::picture::of(w, h, std::move(pixels)).write_png(folder / name).has_value());
+	};
+	const std::uint32_t colors[] = {0x2457d6, 0x1a7f37, 0xc2312d, 0x9a6700, 0x6e40c9, 0x0f766e, 0xb4357a, 0x3f4a5a, 0x2d6a9f, 0x8a5a2b, 0x4f7c2a};
+	struct kept_there : memory_source {
+		std::filesystem::path in;
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return in / kept; }
+	} data;
+	data.in = folder;
+	list clippings;
+	for (int i = 0; i < 11; ++i) {
+		std::string name = std::format("clipping-{}.png", i + 1);
+		picture(name, i % 2 == 0 ? 160 : 90, i % 2 == 0 ? 90 : 160, colors[i]);
+		clippings.push_back(value(fields{{"id", std::format("c{}", i + 1)}, {"name", std::format("Clipping {}", i + 1)}, {"image", name}}));
+	}
+	data.set("studio::clippings_page", "", value(fields{{"clippings", clippings}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Clippings", "/", "", [](page& p) {
+		                     return items(cards(p, {.view = p.view("studio::clippings_page"), .list = "clippings", .columns = {{"name", "Name"}}, .link = "/clippings/:clipping", .picture = "image", .mosaic = true}));
+	                     }});
+	s.screens.push_back({"Clipping", "/clippings/:clipping", "", [](page&) { return items(); }});
+	navigator nav(s, data);
+	nav.open("/");
+	matches_golden("cards-mosaic", {900, 1820}, [&] { return drawn(nav); });
+	// Wider, it's the same tiles, larger, as tall as they are wide.
+	auto root = drawn(nav).take();
+	root->place({0, 0, 900, 1500});
+	std::function<one::desktop::element*(one::desktop::element&)> find = [&](one::desktop::element& e) -> one::desktop::element* {
+		if (e.children.size() == 11) return &e;
+		for (auto& child : e.children) {
+			if (auto* in = find(*child)) return in;
+		}
+		return nullptr;
+	};
+	one::desktop::element* mosaic = find(*root);
+	CHECK(mosaic != nullptr);
+	if (mosaic) {
+		auto captions = [&](float width) {
+			mosaic->place({0, 0, width, mosaic->measure(width).height});
+			std::vector<one::desktop::rect> at;
+			for (auto& c : mosaic->children) at.push_back(c->frame);
+			return at;
+		};
+		auto narrow = captions(600), wide = captions(1200);
+		CHECK(mosaic->measure(1200).height > mosaic->measure(600).height);
+		for (std::size_t i = 0; i < 11; ++i) CHECK(wide[i].width > narrow[i].width);
+		// The first card's tile is tall at the left, the second's wide at the top right.
+		CHECK(narrow[0].x < narrow[1].x);
+		CHECK(narrow[1].width > narrow[2].width * 2);
+		// A click on a tile opens its card.
+		CHECK(mosaic->click({wide[10].x + 4, wide[10].y - 40}));
+		CHECK(nav.current().address() == "/clippings/c11");
+	}
+	std::filesystem::remove_all(folder);
+}
+
 TEST("cards take pictures chosen or dropped, each a record made by their add, its file in their picture and its own size, name, bytes and date in the fields that keep them") {
 	auto folder = std::filesystem::temp_directory_path() / "uione-cards-pictures";
 	std::filesystem::remove_all(folder);

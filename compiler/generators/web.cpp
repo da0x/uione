@@ -2456,6 +2456,7 @@ namespace one::generators {
                                " columns={{ " + columns + " }}";
             if (cards.hide_empty) line += " hideEmpty";
             if (cards.picture) line += " picture=" + web_detail::js_string(*cards.picture) + (cards.picture_sits == "fit" ? " fit" : "");
+            if (cards.mosaic) line += " mosaic";
             if (cards.link) {
                 std::string target = full_route(ns, *cards.link);
                 line += " link=" + web_detail::js_string(target);

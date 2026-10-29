@@ -1255,6 +1255,10 @@ namespace one::language {
         std::optional<std::string> picture;
         std::string picture_sits = "fill";
         location picture_where;
+        // cards library.items mosaic: set as a mosaic of their pictures, each filling its
+        // tile, every eight two blocks of four, the second the first mirrored.
+        bool mosaic = false;
+        location mosaic_where;
         // add piece::create and paste: pictures dropped, pasted or chosen, each made a
         // record by add, its file in the picture.
         std::optional<qualified_name> add;

@@ -193,7 +193,10 @@ namespace one::desktop::runtime {
 						std::lock_guard hold(reading);
 						working.erase(key);
 					}
-					post([] { pictures_read.set(pictures_read.peek() + 1); });
+					post([] {
+						pictures_read.set(pictures_read.peek() + 1);
+						redraw();
+					});
 				});
 			}
 			return std::nullopt;

@@ -378,9 +378,47 @@ export interface CanvasCard {
 // Large cards, a third of a wide page each and the whole of a narrow one, like a
 // project's boards: each with its title, a summary of what's in it, and a few links
 // that open it filtered.
+// As a mosaic, each card is its picture, filling the tile mosaicTile gives it, what
+// else it shows over its foot.
 export interface CardsProps {
   status: ViewStatus;
   cards: Card[];
+  mosaic?: boolean;
+}
+
+// Where the nth card of a mosaic goes, in its columns and rows, counted from 0: every 8
+// cards are two blocks, one above the other, each three equal columns by two rows as
+// tall as a column is wide. In the first, its first card is a column wide and both
+// rows tall at the left, its second two columns wide on the top row at the right, and
+// its third and fourth a tile each under that; the second block is the first
+// mirrored, its first card on the right. Worked out from n alone, so nothing moves as
+// pictures come in. The same as the desktop's.
+export interface MosaicPlace {
+  column: number;
+  row: number;
+  columns: number;
+  rows: number;
+}
+const firstBlock: MosaicPlace[] = [
+  { column: 0, row: 0, columns: 1, rows: 2 },
+  { column: 1, row: 0, columns: 2, rows: 1 },
+  { column: 1, row: 1, columns: 1, rows: 1 },
+  { column: 2, row: 1, columns: 1, rows: 1 },
+];
+const secondBlock: MosaicPlace[] = [
+  { column: 2, row: 0, columns: 1, rows: 2 },
+  { column: 0, row: 0, columns: 2, rows: 1 },
+  { column: 0, row: 1, columns: 1, rows: 1 },
+  { column: 1, row: 1, columns: 1, rows: 1 },
+];
+export function mosaicTile(n: number): MosaicPlace {
+  const tile = n % 8;
+  const at = tile < 4 ? firstBlock[tile]! : secondBlock[tile - 4]!;
+  return { ...at, row: at.row + Math.floor(n / 8) * 4 + (tile < 4 ? 0 : 2) };
+}
+// How many rows a mosaic of `count` cards takes: the last block ends with them.
+export function mosaicRows(count: number): number {
+  return Math.ceil(count / 4) * 2;
 }
 
 export interface Card {

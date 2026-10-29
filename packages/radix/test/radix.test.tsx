@@ -210,6 +210,22 @@ describe("cards", () => {
     expect(title.tagName).toBe("H2");
     expect(title.className.split(" ")).toContain("font-sans");
   });
+
+  it("set as a mosaic, fill each card's tile with its picture, its title over its foot, a heading in the text's face", async () => {
+    const source = memorySource();
+    source.set("studio::room_page", { pieces: Array.from({ length: 5 }, (_, i) => ({ id: `c${i + 1}`, name: `Clipping ${i + 1}` })) });
+    function Pieces() {
+      const page = useView("studio::room_page");
+      return <Cards view={page} list="pieces" columns={{ name: "Name" }} mosaic />;
+    }
+    renderScreen(() => <Pieces />, source);
+    const tiles = screen.getAllByRole("article");
+    expect(tiles.length).toBe(5);
+    expect([tiles[1]!.style.gridColumn, tiles[1]!.style.gridRow]).toEqual(["2 / span 2", "1 / span 1"]);
+    expect([tiles[4]!.style.gridColumn, tiles[4]!.style.gridRow]).toEqual(["3 / span 1", "3 / span 2"]);
+    const title = within(tiles[0]!).getByRole("heading", { name: "Clipping 1" });
+    expect(title.className.split(" ")).toContain("font-sans");
+  });
 });
 
 describe("tables and live values", () => {

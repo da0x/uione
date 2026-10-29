@@ -879,6 +879,53 @@ TEST_CASE("cards take pictures dropped, pasted or chosen, each a record made by 
                                                      "45: cards make records of pictures dropped or pasted on them, so add goes with paste"});
 }
 
+TEST_CASE("cards set as a mosaic of their pictures say so to both runtimes, and say which picture each fills its tile with") {
+    const std::string pieces = R"(namespace studio at / {
+	entity poster {
+		title  text
+	}
+
+	entity clipping {
+		poster  poster  required
+		name    text
+		image   file
+	}
+
+	view poster_page per poster {
+		title
+		clippings = each clipping in poster {
+			name  image
+		}
+	}
+
+	screen "Clipping" /posters/:poster/clippings/:clipping {
+	}
+
+	screen "Clippings" /posters/:poster {
+		cards poster_page.clippings mosaic link /posters/:poster/clippings/:clipping {
+			picture image
+			name
+		}
+	}
+}
+)";
+    CHECK(messages(project + pieces).empty());
+    auto files = built(project + pieces);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    CHECK(web.find(R"(<Cards view={posterPage} list="clippings" columns={{ name: "Name" }} picture="image" mosaic link="/posters/:poster/clippings/:clipping")") != std::string::npos);
+    CHECK(native.find(R"(.picture = "image", .mosaic = true)") != std::string::npos);
+    // A mosaic is its pictures, each filling its tile.
+    std::string bare = project + pieces;
+    bare.replace(bare.find("\t\t\tpicture image\n"), std::string("\t\t\tpicture image\n").size(), "");
+    CHECK(messages(bare) == std::vector<std::string>{"30: a mosaic is its cards' pictures, so its cards say which file each shows, like picture image"});
+    std::string fitted = project + pieces;
+    fitted.replace(fitted.find("picture image\n"), std::string("picture image").size(), "picture image fit");
+    CHECK(messages(fitted) == std::vector<std::string>{"31: a mosaic's pictures each fill their tile, so its picture line says fill, or nothing"});
+}
+
 TEST_CASE("a collage reads each part from the field named like it, or from the one it says, and hands its runtimes which") {
     const std::string noted = R"(namespace studio at / {
 	entity poster {

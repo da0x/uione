@@ -7,6 +7,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import type { ComponentSet, DialogProps } from "./contract.js";
+import { mosaicTile } from "./contract.js";
 import { Surface } from "./surface.js";
 
 // Read by screen readers, not shown.
@@ -59,6 +60,12 @@ function PlainDialog({ open, title, onClose, children }: DialogProps) {
     </dialog>
   );
 }
+
+// A mosaic's card in its tile, by the grid's columns and rows.
+const placed = (n: number): CSSProperties => {
+  const at = mosaicTile(n);
+  return { gridColumn: `${at.column + 1} / span ${at.columns}`, gridRow: `${at.row + 1} / span ${at.rows}` };
+};
 
 // What a tally's part means, said: not started, under way, done or failed.
 const tallyWords: Record<string, string> = { none: "not started", partial: "under way", done: "done", failed: "failed" };
@@ -550,10 +557,10 @@ export const plain: ComponentSet = {
     </section>
   ),
   FilePicture: ({ source, fit }) => <div style={{ height: 320 }}>{source && <img src={source} alt="" style={{ width: "100%", height: "100%", objectFit: fit ? "contain" : "cover" }} />}</div>,
-  Cards: ({ status, cards }) => (
-    <div aria-busy={status === "loading"}>
-      {cards.map((card) => (
-        <article key={card.id}>
+  Cards: ({ status, cards, mosaic }) => (
+    <div aria-busy={status === "loading"} style={mosaic ? { display: "grid", gridTemplateColumns: "repeat(3, 1fr)" } : undefined}>
+      {cards.map((card, n) => (
+        <article key={card.id} style={mosaic ? placed(n) : undefined}>
           {card.picture?.source && <img src={card.picture.source} alt="" />}
           <h2>{card.link ? <a {...card.link}>{card.title}</a> : card.title}</h2>
           {card.tags && card.tags.length > 0 && <p>{card.tags.join(", ")}</p>}

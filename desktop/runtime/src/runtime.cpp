@@ -366,6 +366,10 @@ namespace one::desktop::runtime {
 		else task();
 	}
 
+	void redraw() {
+		if (shown_in) shown_in->redraw();
+	}
+
 	void hold_posted(bool on) {
 		held = on;
 		if (!on) {

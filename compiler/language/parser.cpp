@@ -2894,6 +2894,11 @@ namespace one::language {
                     advance();
                     cards.list = expect(token_kind::identifier, "the view's list, like boards").text;
                 }
+                // mosaic: their pictures set as a mosaic, each filling its tile.
+                if (at_word("mosaic")) {
+                    cards.mosaic_where = advance().where;
+                    cards.mosaic = true;
+                }
                 if (at_word("link")) {
                     advance();
                     cards.link_where = peek().where;

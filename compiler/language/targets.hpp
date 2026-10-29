@@ -149,6 +149,7 @@ namespace one::language {
         drawn_by{"cards.filter", "cards' filter", everywhere},
         drawn_by{"cards.picture", "a picture on each card", "web desktop"},
         drawn_by{"cards.paste", "pictures pasted and dropped on cards, each made a record", "web desktop"},
+        drawn_by{"cards.mosaic", "cards set as a mosaic of their pictures", "web desktop"},
         drawn_by{"chart", "chart", everywhere},
         drawn_by{"monitor", "monitor", everywhere},
         drawn_by{"details", "details", everywhere},
@@ -319,6 +320,7 @@ namespace one::language {
                         if (!n.filters.empty()) use("cards.filter");
                         if (n.picture) use("cards.picture");
                         if (n.paste) use("cards.paste");
+                        if (n.mosaic) use("cards.mosaic");
                     } else if constexpr (std::is_same_v<T, chart_item>) {
                         use("chart");
                     } else if constexpr (std::is_same_v<T, monitor_item>) {

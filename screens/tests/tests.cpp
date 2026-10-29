@@ -394,6 +394,32 @@ TEST("a canvas places its cards where they say, lays out those that don't by col
 	CHECK(p.error("tracker::issue::place") == "you can't move that one");
 }
 
+TEST("a mosaic's cards each go in their tile by their place alone, two blocks of four for every eight, the second the first mirrored") {
+	auto at = [](std::size_t n) {
+		auto t = mosaic_tile(n);
+		return std::to_string(t.column) + " " + std::to_string(t.row) + " " + std::to_string(t.columns) + " " + std::to_string(t.rows);
+	};
+	// The first block: a tall tile at the left, a wide one at the top right, two under it.
+	CHECK(at(0) == "0 0 1 2");
+	CHECK(at(1) == "1 0 2 1");
+	CHECK(at(2) == "1 1 1 1");
+	CHECK(at(3) == "2 1 1 1");
+	// The second, under it, mirrored: the tall one at the right.
+	CHECK(at(4) == "2 2 1 2");
+	CHECK(at(5) == "0 2 2 1");
+	CHECK(at(6) == "0 3 1 1");
+	CHECK(at(7) == "1 3 1 1");
+	// And again for the next eight, under those.
+	CHECK(at(8) == "0 4 1 2");
+	CHECK(at(13) == "0 6 2 1");
+	// The last block ends with the cards.
+	CHECK(mosaic_rows(0) == 0);
+	CHECK(mosaic_rows(1) == 2);
+	CHECK(mosaic_rows(4) == 2);
+	CHECK(mosaic_rows(5) == 4);
+	CHECK(mosaic_rows(11) == 6);
+}
+
 TEST("a page reads from and runs on its source, which keeps no file ahead of a command unless it keeps files itself") {
 	memory_source data;
 	auto s = tracker();

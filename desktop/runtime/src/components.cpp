@@ -43,6 +43,94 @@ namespace one::desktop::runtime {
 			}
 		}
 
+		// Cards as a mosaic of their pictures, each in the tile mosaic_tile gives it, filling
+		// it, cropped around its middle, what else it shows over its foot. Its columns share
+		// its width, less the gaps between, and its rows are as tall as a column is wide, so
+		// it scales as it's resized and no card changes tile. Only what's in view, and as
+		// much again around it, is drawn, each picture read as it comes into view.
+		class mosaic_element : public element {
+		public:
+			struct tile {
+				std::string picture, address;
+			};
+			mosaic_element(page& p, std::vector<tile> tiles, std::vector<desktop::view> captions) : p_(p), tiles_(std::move(tiles)) {
+				for (auto& c : captions) {
+					children.push_back(std::move(c).take());
+					children.back()->parent = this;
+				}
+			}
+
+			extent measure_content(float width) override {
+				int rows = mosaic_rows(tiles_.size());
+				return {width, rows * column(width) + std::max(0, rows - 1) * gap};
+			}
+
+			void place_content(const rect& area) override {
+				frames_.clear();
+				float side = column(area.width);
+				for (std::size_t i = 0; i < tiles_.size(); ++i) {
+					auto at = mosaic_tile(i);
+					rect f{area.x + at.column * (side + gap), area.y + at.row * (side + gap), at.columns * side + (at.columns - 1) * gap, at.rows * side + (at.rows - 1) * gap};
+					frames_.push_back(f);
+					extent e = children[i]->measure(f.width - 2 * inset);
+					children[i]->place({f.x + inset, f.y + f.height - e.height - inset, f.width - 2 * inset, e.height});
+				}
+			}
+
+			void paint_content(canvas& c) override {
+				const auto& t = current_theme();
+				rect view = c.clipped().value_or(frame);
+				rect near{view.x, view.y - view.height, view.width, view.height * 3};
+				for (std::size_t i = 0; i < tiles_.size(); ++i) {
+					const rect& f = frames_[i];
+					if (f.y > near.y + near.height || f.y + f.height < near.y) continue;
+					c.box(f, {.fill = t.sunken, .radius = t.corners});
+					if (auto shown = picture_soon(p_, tiles_[i].picture, 640); shown && *shown) {
+						float pw = static_cast<float>(shown->width()), ph = static_cast<float>(shown->height());
+						float s = std::max(f.width / pw, f.height / ph);
+						float fw = f.width / (pw * s), fh = f.height / (ph * s);
+						c.picture(*shown, f, {(1 - fw) / 2, (1 - fh) / 2, fw, fh}, 1, t.corners);
+					}
+					children[i]->paint(c);
+				}
+			}
+
+			bool click(point at) override {
+				for (std::size_t i = 0; i < frames_.size(); ++i) {
+					if (frames_[i].contains(at) && !tiles_[i].address.empty()) {
+						p_.open(tiles_[i].address);
+						return true;
+					}
+				}
+				return false;
+			}
+
+			element* hit(point at) override { return frame.contains(at) ? this : nullptr; }
+			one::desktop::cursor cursor() const override { return cursor::pointer; }
+
+		private:
+			static constexpr float gap = 16;   // as plain cards are apart
+			static constexpr float inset = 8;  // a caption from its tile's edges
+			static float column(float width) { return std::max(0.f, (width - 2 * gap) / 3); }
+			page& p_;
+			std::vector<tile> tiles_;
+			std::vector<rect> frames_;
+		};
+
+		// What a mosaic's tile says over its picture's foot: its title, strong, and what
+		// else it shows, light on a shade of the picture, so it reads on any.
+		desktop::view caption_of(const card_model& card) {
+			const auto& t = current_theme();
+			auto title = t.strong();
+			title.color = color::hex(0xffffff);
+			auto rest = t.quiet();
+			rest.color = color::hex(0xffffff, 0.85f);
+			std::vector<desktop::view> said;
+			said.push_back(desktop::text(card.title, title));
+			for (const auto& d : card.details) said.push_back(desktop::text(d, rest));
+			return desktop::column(std::move(said)).spacing(2).padding(edges(10, 12)).background({.fill = color::hex(0x000000, 0.45f), .radius = t.corners});
+		}
+
 		// The short line over a front page's title, small and in the accent.
 		desktop::view overline(std::string words) {
 			const auto& t = current_theme();
@@ -386,6 +474,21 @@ namespace one::desktop::runtime {
 		if (spec.hide_empty && v.status != status::ready) return {};
 		if (auto instead = not_shown(v)) return std::move(*instead);
 		const auto& t = current_theme();
+		if (spec.mosaic) {
+			std::vector<mosaic_element::tile> tiles;
+			std::vector<desktop::view> captions;
+			auto rows = rows_of(v, spec.list);
+			for (const auto& card : cards_of(p, spec)) {
+				std::string picture;
+				for (const auto& row : rows) {
+					if (row["id"].as_string() == card.id) picture = row[spec.picture].as_string();
+				}
+				tiles.push_back({picture, card.address});
+				captions.push_back(caption_of(card));
+			}
+			if (tiles.empty()) return spec.hide_empty ? desktop::view() : !spec.add.empty() ? quiet("Nothing here yet. Drop pictures here to add them.").padding(edges(48, 0)) : quiet("Nothing here yet.");
+			return desktop::view(std::make_unique<mosaic_element>(p, std::move(tiles), std::move(captions)));
+		}
 		std::vector<desktop::list_row> shown;
 		std::map<std::string, std::string> opens;
 		for (const auto& card : cards_of(p, spec)) {

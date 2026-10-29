@@ -21,8 +21,8 @@ import "@fontsource-variable/fraunces/wght-italic.css";
 import { Children, Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CSSProperties, ReactNode } from "react";
-import type { ButtonProps, ChoiceProps, ColorPickerProps, ComponentSet, OptionsProps, SliderProps } from "@uione/react";
-import { Surface } from "@uione/react";
+import type { ButtonProps, CardsProps, ChoiceProps, ColorPickerProps, ComponentSet, OptionsProps, SliderProps } from "@uione/react";
+import { Surface, mosaicTile } from "@uione/react";
 import { highlight, highlightCodeBlocks } from "./highlight.js";
 import { MarkdownField, MarkdownText } from "./markdown.js";
 import { nameStyles, setCodeDisplay, tabWidths, useCodeDisplay } from "./display.js";
@@ -522,6 +522,45 @@ function ColorPicker({ label, value, disabled, onSettle }: ColorPickerProps) {
           className="h-7 w-24 rounded-control border border-line bg-surface px-2 font-mono text-xs text-ink focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent"
         />
       </div>
+    </div>
+  );
+}
+
+// Cards as a mosaic of their pictures, edge to edge but for the gap cards keep, each
+// filling the tile mosaicTile gives it around its middle, its title and what else it
+// shows over its foot on a shade of it, so it reads on any picture. Its rows are as
+// tall as a column is wide, so it scales as it's resized and no card changes tile;
+// a tile out of view isn't drawn, and its picture isn't fetched, until it's near.
+function Mosaic({ status, cards }: CardsProps) {
+  return (
+    <div className="@container" aria-busy={status === "loading"}>
+      <div className="grid grid-cols-3 gap-4" style={{ gridAutoRows: "calc((100cqw - var(--spacing) * 8) / 3)" }}>
+        {cards.map((card, n) => {
+          const at = mosaicTile(n);
+          return (
+            <article
+              key={card.id}
+              className="relative overflow-hidden rounded-box bg-sunken [contain-intrinsic-size:auto_16rem] [content-visibility:auto]"
+              style={{ gridColumn: `${at.column + 1} / span ${at.columns}`, gridRow: `${at.row + 1} / span ${at.rows}` }}
+            >
+              {card.picture?.source && <img src={card.picture.source} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />}
+              <div className="absolute inset-x-2 bottom-2 flex flex-col gap-0.5 rounded-box bg-black/45 px-3 py-2 text-white">
+                <h2 className="font-sans text-base leading-snug font-semibold">
+                  {card.link ? (
+                    <a {...card.link} className="text-white after:absolute after:inset-0 hover:underline">
+                      {card.title}
+                    </a>
+                  ) : (
+                    card.title
+                  )}
+                </h2>
+                {card.details.length > 0 && <div className="flex flex-wrap gap-x-3 text-sm text-white/85">{card.details.map((detail, i) => <span key={i}>{detail}</span>)}</div>}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+      {cards.length === 0 && <p className="text-sm text-muted">{status === "loading" ? "Loading…" : "Nothing here yet."}</p>}
     </div>
   );
 }
@@ -1145,7 +1184,7 @@ export const radix: ComponentSet = {
       {source && <img src={source} alt="" className={`h-full w-full ${fit ? "object-contain" : "object-cover"}`} />}
     </div>
   ),
-  Cards: ({ status, cards }) => (
+  Cards: ({ status, cards, mosaic }) => (mosaic ? <Mosaic status={status} cards={cards} /> : (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy={status === "loading"}>
       {cards.map((card) => {
         const total = card.tally?.reduce((n, part) => n + part.count, 0) ?? 0;
@@ -1229,7 +1268,7 @@ export const radix: ComponentSet = {
       })}
       {cards.length === 0 && <p className="text-sm text-muted">{status === "loading" ? "Loading…" : "Nothing here yet."}</p>}
     </div>
-  ),
+  )),
 
   // Columns side by side, scrolled across when there are many, each with its cards and
   // how many; a card dragged dims the columns it can't go to and marks the one it's

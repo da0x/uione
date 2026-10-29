@@ -6,7 +6,7 @@
 // that keep them; several at once one step to undo, and a drop target while empty.
 
 import { fireEvent, render, waitFor } from "@testing-library/react";
-import { App, Cards, PaperButton, memorySource, screen as defineScreen, useView } from "../src/index.js";
+import { App, Cards, PaperButton, memorySource, mosaicRows, mosaicTile, screen as defineScreen, useView } from "../src/index.js";
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
 import { takeInTurn } from "../src/workspace.js";
@@ -108,5 +108,35 @@ describe("pictures taken in turn", () => {
     const drawn = render(<App name="studio" screens={[only]} ui={plain} data={{ ...source, subscribe: source.subscribe, run: source.run, files }} location="/" />);
     await waitFor(() => expect(drawn.container.querySelector("img")?.getAttribute("src")).toBe("small:files/abc"));
     expect(asked).toEqual([["files/abc", 640]]);
+  });
+});
+
+describe("cards as a mosaic", () => {
+  it("place every eight as two blocks of a tall tile, a wide one and two small, the second mirrored, by their place alone", () => {
+    const at = (n: number) => Object.values(mosaicTile(n));
+    expect([0, 1, 2, 3].map(at)).toEqual([[0, 0, 1, 2], [1, 0, 2, 1], [1, 1, 1, 1], [2, 1, 1, 1]]);
+    expect([4, 5, 6, 7].map(at)).toEqual([[2, 2, 1, 2], [0, 2, 2, 1], [0, 3, 1, 1], [1, 3, 1, 1]]);
+    expect(at(8)).toEqual([0, 4, 1, 2]);
+    expect(at(13)).toEqual([0, 6, 2, 1]);
+    expect([0, 1, 4, 5, 11].map(mosaicRows)).toEqual([0, 2, 2, 4, 6]);
+  });
+
+  it("set each card in its tile, opened by its link, and still take pictures dropped on them", async () => {
+    const source = memorySource({ files: true, commands: { "studio::piece::create": () => ({ id: "n1" }) } });
+    source.set("studio::room_page", { pieces: Array.from({ length: 11 }, (_, i) => ({ id: `c${i + 1}`, name: `Clipping ${i + 1}`, image: "" })) }, "r1");
+    function Pieces() {
+      const page = useView("studio::room_page", "r1");
+      return <Cards view={page} list="pieces" columns={{ name: "Name" }} picture="image" mosaic link="/pieces/:piece" paste={paste} name="/ cards pieces" />;
+    }
+    const only = defineScreen({ title: "Pieces", route: "/" }, () => <Pieces />);
+    const drawn = render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
+    await waitFor(() => expect(drawn.getAllByRole("article").length).toBe(11));
+    const tiles = drawn.getAllByRole("article");
+    expect([tiles[0]!.style.gridColumn, tiles[0]!.style.gridRow]).toEqual(["1 / span 1", "1 / span 2"]);
+    expect([tiles[4]!.style.gridColumn, tiles[4]!.style.gridRow]).toEqual(["3 / span 1", "3 / span 2"]);
+    expect([tiles[10]!.style.gridColumn, tiles[10]!.style.gridRow]).toEqual(["2 / span 1", "6 / span 1"]);
+    expect(drawn.getByRole("link", { name: "Clipping 11" }).getAttribute("href")).toBe("/pieces/c11");
+    fireEvent.drop(drawn.container.querySelector(".one-cards-taking")!, { dataTransfer: { files: [new File(["abcd"], "harbor.jpg", { type: "image/jpeg" })], getData: () => "", types: ["Files"] } });
+    await waitFor(() => expect(source.runs.some((r) => r.command === "studio::piece::create")).toBe(true));
   });
 });

@@ -4544,6 +4544,9 @@ namespace one::language {
             }
             // A picture on each card is a file each row holds.
             if (cards.picture) verify_picture(ns, *rows, cards.view, cards.list, *cards.picture, cards.picture_where);
+            // A mosaic is its cards' pictures, each filling its tile.
+            if (cards.mosaic && !cards.picture) error(cards.mosaic_where, "a mosaic is its cards' pictures, so its cards say which file each shows, like picture image");
+            else if (cards.mosaic && cards.picture_sits == "fit") error(cards.picture_where, "a mosaic's pictures each fill their tile, so its picture line says fill, or nothing");
             // Pictures dropped, pasted or chosen, each made a record by add, the file in its
             // picture, and each other part in the field named like it, of the part's type.
             if (cards.add || cards.paste) {

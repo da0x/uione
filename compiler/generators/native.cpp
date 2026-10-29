@@ -1302,6 +1302,7 @@ namespace one::generators {
             if (!choices.empty()) out += ", .choices = {" + choices + "}";
             if (c.hide_empty) out += ", .hide_empty = true";
             if (c.picture) out += ", .picture = " + str(*c.picture) + (c.picture_sits == "fit" ? ", .fit = true" : "");
+            if (c.mosaic) out += ", .mosaic = true";
             // Pictures dropped, pasted or chosen, each a record made by its add, given what the
             // address names, each part in the field it's kept in.
             if (c.paste && c.add && c.picture && entity) {

@@ -2066,6 +2066,18 @@ form step::update "Save" {
   boards to someone outside it. `picture preview fit` shows a file each row holds as
   a picture on top of its card, all of it fitted in, or, with `fill` or nothing
   said, filling its place. A terminal draws no pictures, so it can't show one.
+  `cards clippings_page.clippings mosaic { picture image ... }` sets them as a mosaic
+  of their pictures instead, each filling its tile, cropped around its middle, its
+  title and what else it shows over the picture's foot. Every eight cards are two
+  blocks, one above the other, each three equal columns by two rows as tall as a
+  column is wide: in the first, a tile a column wide and both rows tall at the left,
+  one two columns wide on the top row at the right, and two small ones under that;
+  the second is the first mirrored. A card's tile follows from its place in the list
+  alone, so nothing moves as pictures load, and resizing scales the whole mosaic
+  with no card changing tile. The last block ends with the cards, its empty tiles
+  left blank. Only what's in view is drawn, each picture read as it comes near.
+  A mosaic says which picture each card shows, and its pictures fill their tiles,
+  so its picture line says `fill` or nothing. A terminal draws no pictures, so it can't set one.
   `add clipping::create` and `paste` make a record of each picture dropped on the
   cards, or pasted or chosen by the screen's `paste` and `add pictures` buttons,
   which go to cards that say `paste` when the screen has no collage or paper that

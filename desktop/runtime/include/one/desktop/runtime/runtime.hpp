@@ -84,6 +84,9 @@ namespace one::desktop::runtime {
 	// What that work found, handed back to the window's thread by post; or, with no
 	// window, done now, as the work was.
 	void handed_back(std::function<void()> task);
+	// The window drawn again, its view as it is, as what's drawn only once it's in view,
+	// like a mosaic's pictures, is when they're read.
+	void redraw();
 	// For a test of what's worked out away: while held, work is done in the background
 	// as in a window, and what's handed back waits until it's run, in turn, as the
 	// window's loop would run it, no more than `most` at a time; how many were.

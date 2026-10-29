@@ -1769,6 +1769,17 @@ namespace one::screens {
 		}, true);
 	}
 
+	mosaic_place mosaic_tile(std::size_t n) {
+		static constexpr mosaic_place first[] = {{0, 0, 1, 2}, {1, 0, 2, 1}, {1, 1, 1, 1}, {2, 1, 1, 1}};
+		static constexpr mosaic_place second[] = {{2, 0, 1, 2}, {0, 0, 2, 1}, {0, 1, 1, 1}, {1, 1, 1, 1}};
+		std::size_t tile = n % 8;
+		mosaic_place at = tile < 4 ? first[tile] : second[tile - 4];
+		at.row += static_cast<int>(n / 8) * 4 + (tile < 4 ? 0 : 2);
+		return at;
+	}
+
+	int mosaic_rows(std::size_t count) { return static_cast<int>((count + 3) / 4) * 2; }
+
 	std::vector<card_model> cards_of(page_base& p, const cards_spec& spec) {
 		std::vector<card_model> out;
 		std::string title = spec.columns.empty() ? "" : spec.columns.front().field;

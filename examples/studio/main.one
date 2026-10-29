@@ -295,7 +295,8 @@ namespace studio at / {
 		}
 	}
 
-	// Pictures kept to go on posters, each one dropped, pasted or chosen made a clipping.
+	// Pictures kept to go on posters, each one dropped, pasted or chosen made a clipping,
+	// set edge to edge as a mosaic.
 	screen "Clippings" /clippings {
 		layout workspace
 		bar {
@@ -308,8 +309,8 @@ namespace studio at / {
 			}
 		}
 		main {
-			cards clippings_page.clippings {
-				picture image fit
+			cards clippings_page.clippings mosaic {
+				picture image
 				name
 				add clipping::create
 				paste
