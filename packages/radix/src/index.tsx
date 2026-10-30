@@ -637,9 +637,11 @@ export const radix: ComponentSet = {
       {/* The header stays in view, over a blur of the page as it scrolls. The page
           you're on is underlined in the accent, along the header's edge. */}
       <header className="sticky top-0 z-20 border-b border-line bg-page/80 backdrop-blur-md">
-        {/* On a phone, the navigation takes a row of its own under the name. */}
-        <div className="flex flex-wrap items-center gap-x-7 gap-y-1 px-4 pt-3 sm:px-6 sm:pt-0 lg:px-8">
-          <a {...home} className="flex shrink-0 items-center gap-2.5 py-0 text-[1.05rem] font-semibold tracking-[-0.01em] sm:py-3.5">
+        {/* On a phone, the navigation takes a row of its own under the name. As tall as
+            an app's bar, its line under it included, its name as large and in the same
+            face, so a site and its apps share one top bar. */}
+        <div className="flex flex-wrap items-center gap-x-7 px-3">
+          <a {...home} className="flex h-[calc(2.75rem-1px)] shrink-0 items-center gap-2 text-lg leading-none font-semibold" style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}>
             {icon && <img src={icon} alt="" className="h-7 w-7" />}
             {name}
             {badges
@@ -651,14 +653,14 @@ export const radix: ComponentSet = {
                 </span>
               ))}
           </a>
-          <nav className="order-last -mb-px flex w-full flex-wrap gap-x-5 text-sm sm:order-none sm:w-auto">
+          <nav className="order-last -mb-px flex w-full flex-wrap gap-x-5 text-sm sm:order-none sm:w-auto sm:self-stretch">
             {nav.map((item) => (
               <a
                 key={item.href}
                 href={item.href}
                 onClick={item.onClick}
                 aria-current={item.current ? "page" : undefined}
-                className={`border-b-2 py-3 transition-colors sm:py-4 ${item.current ? "border-accent font-medium text-ink" : "border-transparent text-muted hover:text-ink"}`}
+                className={`flex items-center border-b-2 py-3 transition-colors sm:py-0 ${item.current ? "border-accent font-medium text-ink" : "border-transparent text-muted hover:text-ink"}`}
               >
                 {item.label}
               </a>
