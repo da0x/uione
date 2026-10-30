@@ -100,6 +100,7 @@ namespace one::desktop::runtime::paper_kinds {
 	const kind& text_kind();
 	const kind& quote_kind();
 	const kind& math_kind();
+	const kind& chem_kind();
 	const kind& code_kind();
 	const kind& picture_kind();
 

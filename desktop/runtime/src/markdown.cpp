@@ -149,7 +149,8 @@ namespace one::desktop::runtime {
 				case md::block_kind::code_block: {
 					std::string code = b.literal;
 					while (!code.empty() && code.back() == '\n') code.pop_back();
-					if (b.info == "math") return alone(equation(code, true)).align(align::center).padding(edges(4, 0));
+					// A math block set as an equation; a chem block as a chemical one, as ce( ) reads it.
+					if (b.info == "math" || b.info == "chem") return alone(equation(b.info == "chem" ? "ce(" + code + ")" : code, true)).align(align::center).padding(edges(4, 0));
 					return desktop::text(code, t.code()).padding(edges(10, 14)).background({.fill = t.sunken, .radius = 6});
 				}
 				case md::block_kind::block_quote: return desktop::row(desktop::edge(t.line), blocks(b.children).grow()).spacing(12).align(align::stretch);

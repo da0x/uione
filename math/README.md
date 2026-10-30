@@ -179,7 +179,8 @@ elements: `H2O` is 18.02 g/mol.
 ## In Markdown
 
 `$…$` holds an equation in a line of text, and a ```` ```math ```` block holds one set
-on its own lines, centered.
+on its own lines, centered. A ```` ```chem ```` block is a chemical equation the same way,
+its words what `ce( )` holds.
 
 ## Status
 

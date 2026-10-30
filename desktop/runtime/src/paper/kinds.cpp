@@ -12,7 +12,7 @@ namespace one::desktop::runtime::paper_kinds {
 	const kind& kind_of(const std::string& name) {
 		static const std::map<std::string, const kind*, std::less<>> kinds{
 		    {"title", &title_kind()}, {"subtitle", &subtitle_kind()}, {"heading", &heading_kind()}, {"text", &text_kind()},
-		    {"quote", &quote_kind()}, {"math", &math_kind()},         {"code", &code_kind()},
+		    {"quote", &quote_kind()}, {"math", &math_kind()}, {"chem", &chem_kind()},         {"code", &code_kind()},
 		    {"picture", &picture_kind()},
 		};
 		auto found = kinds.find(name);

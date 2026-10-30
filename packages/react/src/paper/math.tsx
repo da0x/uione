@@ -4,7 +4,8 @@
 // An equation: its words in one::math's notation, set as math. While the caret's in it,
 // it's its words, in a well; otherwise its equation, aligned as the block says. Both are
 // in the one place, so it keeps the room of the larger and the page doesn't move. On a
-// phone it's written apart, its equation over its words as they're typed.
+// phone it's written apart, its equation over its words as they're typed. A chemical
+// equation is the same block, its words read as ce( ) reads them.
 
 import { Equation } from "../equation.js";
 import { parseMath } from "../math.js";
@@ -13,8 +14,8 @@ import { inCode, well } from "./kinds.js";
 
 // Each key: what it's called, the notation its face is set from, what it puts, and what
 // it puts around words chosen.
-type Key = [name: string, face: string, put: string, around?: string];
-const row = (name: string, keys: Key[]): ApartKeys => ({ name, keys: keys.map(([name, face, put, around]) => ({ name, face: <Equation written={face} />, put, around })) });
+export type Key = [name: string, face: string, put: string, around?: string];
+export const row = (name: string, keys: Key[]): ApartKeys => ({ name, keys: keys.map(([name, face, put, around]) => ({ name, face: <Equation written={face} />, put, around })) });
 const greek = (names: string[]): Key[] => names.map((n) => [n[0] === n[0]!.toUpperCase() ? `Capital ${n.toLowerCase()}` : n, n, n]);
 const applied = (names: string[]): Key[] => names.map((n) => [n, `${n}(x)`, `${n}(‸)`, `${n}(§)‸`]);
 
@@ -78,42 +79,48 @@ const mathKeys: ApartKeys[] = [
   ]),
 ];
 
-export const math: BlockKind = {
-  look: inCode,
-  room: [10, 18],
-  joins: false,
-  apart: {
-    name: "Equation",
-    keys: mathKeys,
-    problem: (words) => {
-      const read = parseMath(words);
-      return words.trim() === "" ? undefined : "problem" in read ? read.problem.says : undefined;
+// A block set as an equation, from what its words are written as; what's said of them
+// under it as they're typed, and when it's pointed at.
+export function equationKind(apart: NonNullable<BlockKind["apart"]>, written: (words: string) => string = (words) => words): BlockKind {
+  return {
+    look: inCode,
+    room: [10, 18],
+    joins: false,
+    apart: {
+      ...apart,
+      problem: (words) => {
+        const read = parseMath(written(words));
+        return words.trim() === "" ? undefined : "problem" in read ? read.problem.says : undefined;
+      },
     },
-  },
-  showing: ({ words, focused, readOnly, zoom, align, toWords }) => {
-    const set = words.trim() !== "" && "node" in parseMath(words);
-    const raw = !set || (focused && !readOnly);
-    return {
-      raw,
-      // Not shown while its equation is, but still there to take the caret, as a hidden
-      // element can't.
-      words: raw ? well : { opacity: 0 },
-      over: set ? (
-        <div
-          style={{ gridArea: "1 / 1", alignSelf: "center", textAlign: align, fontSize: 16 * zoom, fontStyle: "normal", cursor: readOnly ? "default" : "text", visibility: raw ? "hidden" : "visible" }}
-          onMouseDown={(e) => {
-            if (readOnly) return;
-            e.preventDefault();
-            toWords();
-          }}
-          // A tap on a phone: its click is what lets the caret in, and the keyboard up.
-          onClick={() => {
-            if (!readOnly) toWords();
-          }}
-        >
-          <Equation written={words} displayed />
-        </div>
-      ) : undefined,
-    };
-  },
-};
+    showing: ({ words, focused, readOnly, zoom, align, toWords }) => {
+      const set = words.trim() !== "" && "node" in parseMath(written(words));
+      const raw = !set || (focused && !readOnly);
+      return {
+        raw,
+        // Not shown while its equation is, but still there to take the caret, as a hidden
+        // element can't.
+        words: raw ? well : { opacity: 0 },
+        over: set ? (
+          <div
+            title={apart.note?.(words)}
+            style={{ gridArea: "1 / 1", alignSelf: "center", textAlign: align, fontSize: 16 * zoom, fontStyle: "normal", cursor: readOnly ? "default" : "text", visibility: raw ? "hidden" : "visible" }}
+            onMouseDown={(e) => {
+              if (readOnly) return;
+              e.preventDefault();
+              toWords();
+            }}
+            // A tap on a phone: its click is what lets the caret in, and the keyboard up.
+            onClick={() => {
+              if (!readOnly) toWords();
+            }}
+          >
+            <Equation written={written(words)} displayed />
+          </div>
+        ) : undefined,
+      };
+    },
+  };
+}
+
+export const math = equationKind({ name: "Equation", keys: mathKeys, apart: true });

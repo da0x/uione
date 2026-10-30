@@ -3,7 +3,8 @@
 
 // An equation: its words in one::math's notation, set as math. While the caret's in it,
 // it's its words, in a well; otherwise its equation, aligned as the block says. It keeps
-// the room of the larger, so the page doesn't move as the caret comes and goes.
+// the room of the larger, so the page doesn't move as the caret comes and goes. A
+// chemical equation is the same block, its words read as ce( ) reads them.
 
 #include "kinds.hpp"
 
@@ -18,6 +19,8 @@ namespace one::desktop::runtime::paper_kinds {
 
 		class math final : public kind {
 		public:
+			explicit math(bool chemical) : chemical_(chemical) {}
+
 			text_style words_look(const setting& at) const override {
 				text_style s = at.look.code();
 				s.line_height = 1.5f;
@@ -28,7 +31,7 @@ namespace one::desktop::runtime::paper_kinds {
 
 			void lay_out(laid& l, const setting& at, bool here) const override {
 				if (l.b.words.empty()) return;
-				set made{equation_set(l.b.words, at.look.text_size * 1.25f * at.zoom, true, at.look.ink), 0};
+				set made{equation_set(chemical_ ? "ce(" + l.b.words + ")" : l.b.words, at.look.text_size * 1.25f * at.zoom, true, at.look.ink), 0};
 				if (!made.equation.read) return;
 				float tall = made.equation.ascent + made.equation.descent;
 				made.down = std::max(0.f, l.height - tall) / 2;
@@ -49,12 +52,20 @@ namespace one::desktop::runtime::paper_kinds {
 				float x = l.b.align == "left" ? at.x : l.b.align == "right" ? at.x + l.width - w : at.x + (l.width - w) / 2;
 				made->equation.draw(c, {x, at.y + made->down});
 			}
+
+		private:
+			bool chemical_;
 		};
 
 	}  // namespace
 
 	const kind& math_kind() {
-		static const math k;
+		static const math k(false);
+		return k;
+	}
+
+	const kind& chem_kind() {
+		static const math k(true);
 		return k;
 	}
 

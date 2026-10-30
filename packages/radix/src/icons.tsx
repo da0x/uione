@@ -539,6 +539,11 @@ export const buttonIcons: Record<string, ReactNode> = {
       <path d="M2.5 4.5h4M4.5 2.5v4M9.5 4.5h4M2.5 11.5l3-3M2.5 8.5l3 3M9.5 10h4M9.5 12.5h4" />
     </svg>
   ),
+  flask: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M6 2.5h4M6.75 2.5v4.25L3 12.75a.85.85 0 0 0 .75 1.25h8.5a.85.85 0 0 0 .75-1.25L9.25 6.75V2.5M4.6 10h6.8" />
+    </svg>
+  ),
   square: (
     <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M3 13V3h10" />

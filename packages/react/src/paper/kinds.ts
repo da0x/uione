@@ -67,8 +67,10 @@ export interface BlockKind {
   showing?(asked: ShowingAsked): Showing;
   // On a phone, written apart, on a sheet over the page: what it makes of its words
   // shown above them as they're typed, then kept or let go. Its name, what's wrong
-  // with words it can't make anything of yet, and the keys that write what it can.
-  apart?: { name: string; problem?(words: string): string | undefined; keys?: ApartKeys[] };
+  // with words it can't make anything of yet, what's worth saying of words it can, and
+  // the keys that write them; and whether a key's name is put apart from a letter
+  // before it, as letters together are one name in math, but not in a formula.
+  apart?: { name: string; problem?(words: string): string | undefined; note?(words: string): string | undefined; keys?: ApartKeys[]; apart?: boolean };
 }
 
 // A row of keys on the sheet a block's written apart on, under a tab of its name. Each

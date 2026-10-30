@@ -43,8 +43,9 @@ function remarkMath() {
     if (!node.children) return;
     node.children = node.children.flatMap((child) => {
       if (child.type === "text") return mathOf(child.value ?? "");
-      if (child.type === "code" && child.lang === "math") {
-        const written = (child.value ?? "").trim();
+      // A math block set as an equation; a chem block as a chemical one, as ce( ) reads it.
+      if (child.type === "code" && (child.lang === "math" || child.lang === "chem")) {
+        const written = child.lang === "chem" ? `ce(${(child.value ?? "").trim()})` : (child.value ?? "").trim();
         return [{ type: "math", value: written, data: { hName: "div", hProperties: { dataMath: written, dataDisplayed: true }, hChildren: [] } }];
       }
       walk(child);

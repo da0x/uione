@@ -2550,7 +2550,7 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   ([decision 0022](https://github.com/da0x/uione/blob/main/docs/decisions/0022-a-paper-is-a-page-written-in-place.md)).
   Each row is a block, in the order its `position` says, set as its `kind` says
   (`title`, `subtitle`, `heading`, `text`, `quote`, `math`, an equation set from its
-  words, `code`, kept as it's typed, or `picture`, with its words its caption) and
+  words, `chem`, a chemical equation set from its words, `code`, kept as it's typed, or `picture`, with its words its caption) and
   aligned as its `align` says (`left`, `center` or `right`). Its words
   are its `words`.
   - `write block::write`: what's typed in a block, sent once typing pauses or the
@@ -2573,14 +2573,19 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     with Cancel. Under its words are keys for all the notation writes, a tab of them
     at a time: Basic, Powers, Greek, Calculus, Functions and Layout. Each puts its
     words at the caret, the caret then where the next thing goes, and with words
-    chosen it's put around them, so √ makes `x+1` into `sqrt(x+1)`. In a code block, Enter starts a new line, and Enter on an empty last
+    chosen it's put around them, so √ makes `x+1` into `sqrt(x+1)`. A chem block is
+    written the same way, in what `ce( )` holds, like `2H2 + O2 -> 2H2O`. Its keys are
+    Common, Arrows, States, Charges and Elements, all 118, and under its words it says
+    as they're typed whether the reaction balances, or, one thing alone, its molar
+    mass, like `18.02 g/mol`. In a code block, Enter starts a new line, and Enter on an empty last
     line leaves it for text after it. Words pasted over several lines are a block a
     paragraph, but in code, which keeps its lines.
-  - `insert "Equation" icon equation { kind = kind::math }`, a button anywhere on the
+  - `insert "Equation" icon equation { kind = kind::math }`, or `insert "Chemistry"
+    icon flask { kind = kind::chem }`, a button anywhere on the
     screen, makes an empty block where the caret is, given those values, by the
     paper's `add`, and puts the caret in it: after the caret's block, before it from its
     start, or between its two halves from its middle, as one step. A code block or an
-    equation isn't cut in two; the new one goes after it.
+    equation, chemical or not, isn't cut in two; the new one goes after it.
   - `empty "Title"`: where an empty page's first words go, said faintly.
   - The block the caret is in is the screen's `pick block from document_page.blocks`,
     so the toolbar's buttons, like `block::style "Center" icon align_center { align =

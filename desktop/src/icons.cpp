@@ -185,6 +185,7 @@ namespace one::desktop {
 			    {"heading", {path("M4 3v10M12 3v10M4 8h8")}},
 			    {"quote", {path("M3.5 3.5v9M6.5 5h7M6.5 8h7M6.5 11h5")}},
 			    {"equation", {path("M2.5 4.5h4M4.5 2.5v4M9.5 4.5h4M2.5 11.5l3-3M2.5 8.5l3 3M9.5 10h4M9.5 12.5h4")}},
+			    {"flask", {path("M6 2.5h4M6.75 2.5v4.25L3 12.75a.85.85 0 0 0 .75 1.25h8.5a.85.85 0 0 0 .75-1.25L9.25 6.75V2.5M4.6 10h6.8")}},
 			    // A wand and the sparks off its tip.
 			    {"magic", {path("M2.5 13.5l8-8M12 1.5v2M12 7.5v2M8 5.5h2M14 5.5h2")}},
 			    {"rounded", {path("M3 13V8a5 5 0 0 1 5-5h5")}},

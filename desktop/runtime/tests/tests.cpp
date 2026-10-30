@@ -1933,6 +1933,16 @@ TEST("in a toolbar, a group that doesn't apply now is there, off, its keys doing
 	CHECK(data.runs().size() == 2);
 }
 
+TEST("a chemical equation is set as math, through ce( ), its arrow as long as what's over it needs, and an element there isn't, not read") {
+	auto plain = one::desktop::runtime::equation_set("ce(2KClO3 -> 2KCl + 3O2)", 20, true, {});
+	auto heated = one::desktop::runtime::equation_set("ce(2KClO3 ->[when it's heated] 2KCl + 3O2)", 20, true, {});
+	CHECK(plain.read);
+	CHECK(heated.read);
+	CHECK(heated.width > plain.width);
+	CHECK(heated.ascent > plain.ascent);
+	CHECK(!one::desktop::runtime::equation_set("ce(Xx2)", 20, true, {}).read);
+}
+
 TEST("an equation is drawn as one::math sets it, in the math font the app brings, and one that can't be read is shown as it's written") {
 	site s{.name = "studio", .id = "org.uione.runtime-tests"};
 	s.look = tested_theme();

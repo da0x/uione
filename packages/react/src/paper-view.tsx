@@ -1278,6 +1278,7 @@ function Apart({ block, words, zoom, retyped, done }: { block?: Block; words: st
   const align = "center" as CSSProperties["textAlign"];
   const made = kind.showing?.({ parts: block?.parts ?? {}, across: 320, tall: 320, words, focused: false, readOnly: true, zoom, align, toWords: () => {} });
   const wrong = kind.apart?.problem?.(words);
+  const note = kind.apart?.note?.(words);
   // Its keys, a tab at a time: each put at the caret, or around what's chosen, the
   // caret then where it says, and the keyboard kept up as it's pressed.
   const tabs = kind.apart?.keys ?? [];
@@ -1296,8 +1297,8 @@ function Apart({ block, words, zoom, retyped, done }: { block?: Block; words: st
     const chosen = words.slice(from, to);
     let put = chosen && key.around ? key.around.replace("§", chosen) : key.put;
     if (!put.includes("‸")) put += "‸";
-    // A name put after a letter is apart from it, as letters together are one name.
-    if (/[A-Za-z]$/.test(words.slice(0, from)) && /^[A-Za-z]/.test(put)) put = " " + put;
+    // A name put after a letter is apart from it, where letters together are one name.
+    if (kind.apart?.apart && /[A-Za-z]$/.test(words.slice(0, from)) && /^[A-Za-z]/.test(put)) put = " " + put;
     caretNext.current = from + put.indexOf("‸");
     retyped(words.slice(0, from) + put.replace("‸", "") + words.slice(to));
     t?.focus();
@@ -1317,6 +1318,7 @@ function Apart({ block, words, zoom, retyped, done }: { block?: Block; words: st
       </div>
       <div style={{ display: "grid", placeItems: "center", minHeight: 120, padding: 16, overflowX: "auto", textAlign: "center" }}>
         {made?.over && !wrong ? <div style={{ display: "grid" }}>{made.over}</div> : <span style={{ fontSize: 13, color: "var(--color-muted, #5b6577)" }}>{wrong ?? "\u00a0"}</span>}
+        {made?.over && !wrong && note && <span style={{ marginTop: 8, fontSize: 13, color: "var(--color-muted, #5b6577)" }}>{note}</span>}
       </div>
       <textarea
         ref={area}
@@ -1499,8 +1501,8 @@ function PaperBlock({
         aria-label={hint ?? block.kind}
         // An equation's and code's words are written as they're meant, so a phone's
         // keyboard neither corrects nor capitalizes them.
-        spellCheck={block.kind !== "math" && block.kind !== "code"}
-        {...(block.kind === "math" || block.kind === "code" ? { autoCorrect: "off", autoCapitalize: "off" } : {})}
+        spellCheck={block.kind !== "math" && block.kind !== "chem" && block.kind !== "code"}
+        {...(block.kind === "math" || block.kind === "chem" || block.kind === "code" ? { autoCorrect: "off", autoCapitalize: "off" } : {})}
         style={editable}
         onInput={(e) => {
           setWords(wordsOf(e.currentTarget));

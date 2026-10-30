@@ -189,6 +189,44 @@ describe("a paper", () => {
     }
   });
 
+  it("writes a chemical equation apart, saying as it's typed whether it balances, or what a mole of one thing weighs", async () => {
+    const was = window.matchMedia;
+    window.matchMedia = ((query: string) => ({ matches: true, media: query, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia;
+    try {
+      const source = sourceWith([
+        { id: "b1", kind: "text", words: "Before", position: 1, align: "left" },
+        { id: "b2", kind: "chem", words: "H2 + O2 -> H2O", position: 2, align: "center" },
+      ]);
+      const drawn = renderPaper(source);
+      await waitFor(() => expect(blocks(drawn).length).toBe(2));
+      act(() => blocks(drawn)[0]!.focus());
+      act(() => blocks(drawn)[1]!.focus());
+      const sheet = await drawn.findByRole("dialog", { name: "Chemistry" });
+      const words = sheet.querySelector("textarea")!;
+      expect(sheet.textContent).toContain("not balanced: 2 O on the left, 1 on the right");
+      words.setSelectionRange(0, 0);
+      fireEvent.click(drawn.getByRole("tab", { name: "Common" }));
+      fireEvent.click(drawn.getByRole("button", { name: "H" }));
+      // Letters put together, as a formula's are.
+      expect(words.value).toBe("HH2 + O2 -> H2O");
+      fireEvent.change(words, { target: { value: "2H2 + O2 -> 2H2O" } });
+      expect(sheet.textContent).toContain("Balanced");
+      fireEvent.change(words, { target: { value: "H2O" } });
+      expect(sheet.textContent).toContain("18.02 g/mol");
+      fireEvent.change(words, { target: { value: "Xy" } });
+      expect(sheet.textContent).toContain("there's no element Xy");
+    } finally {
+      window.matchMedia = was;
+    }
+  });
+
+  it("sets the face of every chemistry key, as ce( ) reads it", () => {
+    const tabs = kindOf("chem").apart?.keys ?? [];
+    expect(tabs.map((t) => t.name)).toEqual(["Common", "Arrows", "States", "Charges", "Elements"]);
+    const unset = tabs.flatMap((t) => t.keys.filter((k) => !renderToStaticMarkup(<>{k.face}</>).includes('role="img"')).map((k) => `${t.name}: ${k.name}`));
+    expect(unset).toEqual([]);
+  });
+
   it("sets the face of every equation key, as the notation reads it", () => {
     const tabs = kindOf("math").apart?.keys ?? [];
     expect(tabs.map((t) => t.name)).toEqual(["Basic", "Powers", "Greek", "Calculus", "Functions", "Layout"]);
