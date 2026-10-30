@@ -744,8 +744,8 @@ namespace one::desktop {
 					paint_icon(c, t);
 					return;
 				}
-				color fill = primary_ ? t.accent : t.surface;
-				if (hovered) fill = primary_ ? mixed(t.accent, t.ink, 0.15f) : t.sunken;
+				color fill = danger_ ? t.danger : primary_ ? t.accent : t.surface;
+				if (hovered) fill = primary_ ? mixed(fill, t.ink, 0.15f) : t.sunken;
 				c.box(frame, {.fill = fill, .border = primary_ ? fill : t.line, .border_width = 1, .radius = std::min(t.corners, 8.f)});
 				// The ring once the person moves to it, not where the window put the keyboard first.
 				if (shows_focus()) c.box(frame.inset(-3), {.border = mixed(t.accent, t.page, 0.4f), .border_width = 2, .radius = std::min(t.corners, 8.f) + 3});
@@ -879,8 +879,8 @@ namespace one::desktop {
 			}
 			// Its icon in place of its words, which show under it while it's pointed at.
 			void paint_icon(canvas& c, const theme& t) {
-				color fill = primary_ ? t.accent : t.surface;
-				if (hovered) fill = primary_ ? mixed(t.accent, t.ink, 0.15f) : t.sunken;
+				color fill = danger_ ? t.danger : primary_ ? t.accent : t.surface;
+				if (hovered) fill = primary_ ? mixed(fill, t.ink, 0.15f) : t.sunken;
 				c.box(frame, {.fill = fill, .border = primary_ ? fill : t.line, .border_width = 1, .radius = std::min(t.corners, 8.f)});
 				if (shows_focus()) c.box(frame.inset(-3), {.border = mixed(t.accent, t.page, 0.4f), .border_width = 2, .radius = std::min(t.corners, 8.f) + 3});
 				rect area = inner();
@@ -897,6 +897,10 @@ namespace one::desktop {
 				}
 				return *laid_;
 			}
+		public:
+			bool danger_ = false;  // filled in the danger, as one that destroys something is
+
+		private:
 			std::string label_;
 			std::function<void()> pressed_;
 			bool primary_;
@@ -1275,6 +1279,11 @@ namespace one::desktop {
 
 	view button(std::string label, std::function<void()> pressed, bool primary) {
 		return made<button_element>(std::move(label), std::move(pressed), primary);
+	}
+	view danger_button(std::string label, std::function<void()> pressed) {
+		auto danger = std::make_unique<button_element>(std::move(label), std::move(pressed), true);
+		danger->danger_ = true;
+		return view(std::move(danger));
 	}
 	view icon_button(std::string icon, std::string label, std::function<void()> pressed, bool primary) {
 		return made<button_element>(std::move(label), std::move(pressed), primary, std::move(icon));

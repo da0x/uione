@@ -364,9 +364,10 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? ("icon" NAME)? ("color" N
                  | ("grid" | "diagram") qualified "." NAME "by" NAME "and" NAME "over" qualified "." NAME ("{" NEWLINE? (postfix END)? "}")? END
                  | "component" NAME END
                  /* a button, and the form it opens, issue::update "Edit" form "Save" { title } */
-                 /* layer::scale "2×" { by = 2 }: what it's sent; on when: drawn pressed; then open: what it made, opened */
+                 /* layer::scale "2×" { by = 2 }: what it's sent; on when: drawn pressed; confirm: asked first;
+                    then open: what it made, opened */
                  | NAME ("::" NAME)+ ("along" qualified "." NAME | STRING? ("icon" NAME)? ("about" STRING)? key* button_given? ("on" "when" expression)? ("when" condition)?
-                                    ("then" "open" ROUTE)? ("form" STRING? "{" NEWLINE? form_line* "}")?) END
+                                    ("confirm" STRING)? ("then" "open" ROUTE)? ("form" STRING? "{" NEWLINE? form_line* "}")?) END
                  | "board" qualified "." NAME "by" NAME ("over" qualified "." NAME)? ("link" ROUTE)? ("when" expression)? ("{" NEWLINE? board_line* "}")? END
                  /* a list's rows on the days a date of theirs says, a week side by side, or a month's grid while it
                     says; one picked with a click, and dragged to another day sent to move, its time of day kept */

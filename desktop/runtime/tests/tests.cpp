@@ -1807,6 +1807,58 @@ TEST("a workspace: its bar, the app's name in its middle and light and dark at i
 	matches_golden("workspace", {900, 420}, [&] { return drawn(nav); });
 }
 
+TEST("a tool that asks first asks for its key too, over the work, and nothing under the question hears a key while it's asked") {
+	memory_source data;
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Studio", "/", "", [](page& p) {
+		                     return workspace(p, region{"toolbar", along(group(p, "Piece", false, false, [&] {
+			                                                          return tools(command(p, {.command = "studio::piece::delete", .label = "Remove", .icon = "delete", .keys = {"delete"}, .confirm = "Remove this piece?", .destroys = true}),
+			                                                                       command(p, {.command = "studio::piece::create", .label = "New", .icon = "add", .keys = {"ctrl+n"}}));
+		                                                          }))},
+		                                      region{"main", items(text({words("The pieces")}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	(void)drawn(nav);
+	auto pressed = [&](std::uint32_t symbol, bool control = false) { return key(nav, one::desktop::key_event{.symbol = symbol, .text = "", .control = control}); };
+	// The key alone only asks.
+	CHECK(pressed(one::desktop::keys::delete_key));
+	CHECK(data.runs().empty());
+	CHECK(nav.current().asked().peek().has_value());
+	matches_golden("asked", {700, 360}, [&] { return drawn(nav); });
+	// Asked, the key again and any other are the question's.
+	CHECK(pressed(one::desktop::keys::delete_key));
+	CHECK(pressed('n', true));
+	CHECK(data.runs().empty());
+	CHECK(pressed(one::desktop::keys::escape));
+	CHECK(!nav.current().asked().peek().has_value());
+	CHECK(data.runs().empty());
+	// What has the keyboard is Cancel.
+	CHECK(pressed(one::desktop::keys::delete_key));
+	auto root = built(nav);
+	auto all = focusable_in(*root);
+	auto first = std::ranges::find_if(all, [](auto* e) { return e->wants_focus; });
+	CHECK(first != all.end());
+	if (first != all.end()) (*first)->click({(*first)->frame.x + 4, (*first)->frame.y + 4});
+	CHECK(!nav.current().asked().peek().has_value());
+	CHECK(data.runs().empty());
+	// Enter says yes.
+	CHECK(pressed(one::desktop::keys::delete_key));
+	CHECK(pressed(one::desktop::keys::enter));
+	CHECK(data.runs().size() == 1);
+	CHECK(!nav.current().asked().peek().has_value());
+	// A press outside it says no.
+	CHECK(pressed(one::desktop::keys::delete_key));
+	root = built(nav);
+	auto* outside = root->hit({5, 890});
+	CHECK(outside != nullptr);
+	for (auto* e = outside; e; e = e->parent)
+		if (e->press({5, 890}, 1)) break;
+	CHECK(!nav.current().asked().peek().has_value());
+	CHECK(data.runs().size() == 1);
+}
+
 TEST("a toolbar is a thin strip while every group it shows is a single row of small tools, and full with any other") {
 	memory_source data;
 	site s{.name = "studio", .id = "org.uione.runtime-tests"};

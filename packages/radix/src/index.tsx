@@ -2346,7 +2346,7 @@ export const radix: ComponentSet = {
     );
   },
 
-  Button: ({ kind = "secondary", disabled, error, onClick, children, icon, tool, pressed: on, hint, swatch }) => {
+  Button: ({ kind = "secondary", disabled, error, onClick, children, icon, tool, pressed: on, hint, swatch, focused }) => {
     // Drawn as an icon, its words still name it, and show when it's pointed at.
     const words = typeof children === "string" ? children : undefined;
     // A color it gives, drawn as a circle of it, outlined so white shows; none, a
@@ -2402,6 +2402,7 @@ export const radix: ComponentSet = {
         aria-label={icon ? words : undefined}
         aria-pressed={on}
         title={hint ?? (icon ? words : undefined)}
+        data-focused={focused || undefined}
         className={`self-start ${pressable} ${button[kind]} ${icon && buttonIcons[icon] ? "!px-2" : ""}`}
       >
         {(icon && buttonIcons[icon]) || children}

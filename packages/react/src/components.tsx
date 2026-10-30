@@ -1088,7 +1088,7 @@ function useConfirmedRunner() {
   const { questions, ask } = useConfirmContext();
   const run = async (command: string, input: CommandInput = {}, about: CommandInput = input) => {
     const question = questions.get(command);
-    if (question !== undefined && !(await ask(fill(question, about)))) {
+    if (question !== undefined && !(await ask({ ...question, words: fill(question.words, about) }))) {
       // Declining is a choice about this attempt, so the last one's failure goes.
       runner.clear(command);
       return false;
@@ -1098,7 +1098,7 @@ function useConfirmedRunner() {
   // And run so what it answers is had, like the id of what it made.
   const reply = async (command: string, input: CommandInput = {}, about: CommandInput = input) => {
     const question = questions.get(command);
-    if (question !== undefined && !(await ask(fill(question, about)))) {
+    if (question !== undefined && !(await ask({ ...question, words: fill(question.words, about) }))) {
       runner.clear(command);
       return undefined;
     }
@@ -1111,7 +1111,7 @@ function useConfirmedRunner() {
 export function Confirm({ command, question }: { command: string; question: string }) {
   const { questions } = useConfirmContext();
   useEffect(() => {
-    questions.set(command, question);
+    questions.set(command, { words: question, destroys: command.endsWith("::delete") });
     return () => {
       questions.delete(command);
     };
@@ -1224,6 +1224,8 @@ export function Command({
   color,
   remembers = false,
   picks,
+  confirm,
+  destroys = false,
 }: {
   name: string;
   id?: string;
@@ -1241,9 +1243,12 @@ export function Command({
   color?: { field: string; now: unknown }; // or as a color picker, run with each one chosen
   remembers?: boolean; // what it gives remembered for what's drawn next; with nothing to act on, only that
   picks?: string; // and the pick whose collage says what it acts on, several chosen or a group's all
+  confirm?: string; // asked before it runs, its own words the answer that runs it
+  destroys?: boolean; // and that answer drawn as a danger, as a delete's is
 }) {
   const ui = useUI();
   const runner = useConfirmedRunner();
+  const { questions } = useConfirmContext();
   const replier = useRunner();
   const navigate = useNavigate();
   const tool = useTool();
@@ -1280,14 +1285,22 @@ export function Command({
     if (overRun?.(name, sent)) return;
     if (!thenOpen) return void runner.run(name, sent);
     // What it made, opened: its id in the route's last parameter.
-    void replier.reply(name, sent).then((made) => {
+    void runner.reply(name, sent).then((made) => {
       if (made?.id) void navigate(thenOpen.replace(/:[a-z_]+\*?$/, encodeURIComponent(made.id)));
     });
   };
   const closeOptions = useInOptions();
   useKeys(keys, run, shown && !off && !runner.busy(name));
-  if (!shown) return null;
   const words = says ?? label(action(name));
+  // Asked first, while it's there.
+  useEffect(() => {
+    if (!confirm || !shown || off) return;
+    questions.set(name, { words: confirm, yes: words, destroys });
+    return () => {
+      questions.delete(name);
+    };
+  }, [questions, name, confirm, words, destroys, shown, off]);
+  if (!shown) return null;
   // Any color, from a color picker, run with each one chosen.
   if (color) {
     const was = onlyRemembers ? last[color.field] : color.now;

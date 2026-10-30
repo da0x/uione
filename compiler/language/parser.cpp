@@ -1540,7 +1540,7 @@ namespace one::language {
             while (in_block()) {
                 // A button on the notice: a command on its row, its words, and what it's given.
                 if (peek().kind == token_kind::identifier && peek(1).kind == token_kind::scope) {
-                    button_item button{parse_qualified_name("a command on its row, like task::finish"), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}, {}, {}, nullptr, std::nullopt, {}, std::nullopt};
+                    button_item button{parse_qualified_name("a command on its row, like task::finish"), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}, {}, {}, nullptr, std::nullopt, {}, std::nullopt, std::nullopt};
                     if (at(token_kind::string)) button.label = advance().text;
                     parse_given(button.given);
                     n.buttons.push_back(std::move(button));
@@ -2268,7 +2268,7 @@ namespace one::language {
                         // move issue::move along project_page.steps: how a card is moved.
                         if (at_word("move") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::scope) {
                             advance();
-                            button_item move{parse_qualified_name("the command that moves a card, like issue::move"), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}, {}, {}, nullptr, std::nullopt, {}, std::nullopt};
+                            button_item move{parse_qualified_name("the command that moves a card, like issue::move"), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}, {}, {}, nullptr, std::nullopt, {}, std::nullopt, std::nullopt};
                             // Without along, it goes along the steps its workflow writes.
                             if (at_word("along")) {
                                 advance();
@@ -2777,7 +2777,7 @@ namespace one::language {
                         // move issue::move along board_page.steps: a card let go in another region moves there.
                         if (at_word("move") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::scope) {
                             advance();
-                            button_item move{parse_qualified_name("the command that moves a card, like issue::move"), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}, {}, {}, nullptr, std::nullopt, {}, std::nullopt};
+                            button_item move{parse_qualified_name("the command that moves a card, like issue::move"), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}, {}, {}, nullptr, std::nullopt, {}, std::nullopt, std::nullopt};
                             if (at_word("along")) {
                                 advance();
                                 move.along = parse_qualified_name("the view whose list of steps it goes along, like board_page");
@@ -3254,7 +3254,7 @@ namespace one::language {
                     fail(where, "'" + name.text() + "' isn't a screen element; a button names its "
                                 "command in full, like book::create");
                 }
-                button_item button{std::move(name), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}, {}, {}, nullptr, std::nullopt, {}, std::nullopt};
+                button_item button{std::move(name), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}, {}, {}, nullptr, std::nullopt, {}, std::nullopt, std::nullopt};
                 if (at_word("along")) {
                     advance();
                     button.along = parse_qualified_name("the view whose list of steps it goes along, like project_page");
@@ -3287,6 +3287,11 @@ namespace one::language {
                 if (at_word("when")) {
                     advance();
                     button.when = parse_when();
+                }
+                // confirm "Remove this photo?": asked first, run only once it's said yes to.
+                if (at_word("confirm") && peek(1).kind == token_kind::string) {
+                    advance();
+                    button.confirm = advance().text;
                 }
                 // then open /:poster: what it made, opened.
                 if (at_word("then") && peek(1).kind == token_kind::identifier && peek(1).text == "open") {

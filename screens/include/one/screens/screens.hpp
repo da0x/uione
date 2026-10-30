@@ -170,10 +170,19 @@ namespace one::screens {
 		void run(const std::string& command, const value& fields, attached_files files, std::function<void(const answer&)> after, bool says_why_itself);
 		bool running(const std::string& command) const;
 		// A question asked before a command runs from this page, like "Remove this
-		// person?", answered on the page itself; and the one being asked, if any.
-		void ask_before(const std::string& command, std::string question) { questions_[command] = std::move(question); }
+		// person?", answered on the page itself, with the words that say yes, like Remove,
+		// and whether it destroys something, drawn as a danger; and the one being asked, if any.
+		struct question {
+			std::string words, yes = "";
+			bool destroys = false;
+		};
+		void ask_before(const std::string& command, std::string words, std::string yes = "", bool destroys = false) {
+			questions_[command] = {std::move(words), std::move(yes), destroys};
+		}
 		struct asking {
 			std::string command, question;
+			std::string yes = "";
+			bool destroys = false;
 			value fields;
 			std::function<void(const answer&)> after;
 			bool says_why_itself = false;
@@ -302,7 +311,7 @@ namespace one::screens {
 		state<std::map<std::string, std::string>> errors_;   // why each was last turned down
 		state<std::string> problem_;
 		state<std::string> told_;
-		std::map<std::string, std::string> questions_;
+		std::map<std::string, question> questions_;
 		state<std::optional<asking>> asked_;
 	};
 

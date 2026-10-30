@@ -160,6 +160,20 @@ describe("forms", () => {
 });
 
 describe("dialogs", () => {
+  it("asks before a button that says to, Cancel holding the keyboard and its own words, in red, saying yes", async () => {
+    const source = memorySource();
+    renderScreen(() => <Command name="studio::piece::delete" label="Remove" keys={["delete"]} confirm="Remove this piece?" destroys />, source);
+    fireEvent.keyDown(window, { key: "Delete" });
+    const dialog = await screen.findByRole("dialog", { name: "Are you sure?" });
+    await waitFor(() => expect(document.activeElement).toBe(within(dialog).getByRole("button", { name: "Cancel" })));
+    expect(within(dialog).getByRole("button", { name: "Remove" }).className).toContain("bg-danger");
+    fireEvent.keyDown(document.activeElement!, { key: "Delete" });
+    expect(source.runs).toEqual([]);
+    fireEvent.keyDown(document.activeElement!, { key: "Enter" });
+    await waitFor(() => expect(source.runs).toEqual([{ command: "studio::piece::delete", input: {} }]));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
   it("moves focus into the dialog, and closes on Escape without running anything", async () => {
     const source = memorySource();
     renderScreen(

@@ -39,6 +39,7 @@ function PlainDialog({ open, title, onClose, children }: DialogProps) {
     // showModal keeps focus inside and closes on Escape; jsdom doesn't have it.
     if (typeof dialog.showModal === "function") dialog.showModal();
     else dialog.setAttribute("open", "");
+    dialog.querySelector<HTMLElement>("[data-focused]")?.focus();
     return () => {
       if (before instanceof HTMLElement && before.isConnected) before.focus();
     };
@@ -1081,9 +1082,9 @@ export const plain: ComponentSet = {
     );
   },
 
-  Button: ({ disabled, error, onClick, children, pressed, hint }) => (
+  Button: ({ disabled, error, onClick, children, pressed, hint, focused }) => (
     <>
-      <button type="button" disabled={disabled} onClick={onClick} aria-pressed={pressed} title={hint}>
+      <button type="button" disabled={disabled} onClick={onClick} aria-pressed={pressed} title={hint} data-focused={focused || undefined}>
         {children}
       </button>
       {error && <span role="alert">{error}</span>}

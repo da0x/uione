@@ -736,6 +736,8 @@ namespace one::desktop::runtime {
 		auto shown = command_of(p, b);
 		if (!shown) return {};
 		std::string label_now = shown->label;
+		// Asked first, its own words the answer that runs it.
+		if (!b.confirm.empty() && !off) p.ask_before(b.command, b.confirm, b.label, b.destroys);
 		auto give = [&p, many](const std::string& name, value sent) {
 			if (many.empty()) return p.run(name, sent);
 			bool joined = false;
@@ -860,7 +862,7 @@ namespace one::desktop::runtime {
 	}
 
 	desktop::view confirm(page& p, std::string command, std::string question) {
-		p.ask_before(command, std::move(question));
+		p.ask_before(command, std::move(question), "", command.ends_with("::delete"));
 		return {};
 	}
 

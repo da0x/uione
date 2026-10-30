@@ -346,6 +346,8 @@ namespace one::desktop {
 	// workspace is: paint is told the canvas and where on it, each time it's drawn.
 	view drawing(std::function<void(canvas& c, rect area)> paint, drawing_pointer pointer = {});
 	view button(std::string label, std::function<void()> pressed, bool primary = false);
+	// One that destroys something, like Delete, filled in the theme's danger.
+	view danger_button(std::string label, std::function<void()> pressed);
 	// Drawn as an icon, like edit or delete, as the web draws one; its words name it,
 	// shown under it while it's pointed at or has the keyboard. One with no such icon
 	// is drawn with its words.

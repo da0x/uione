@@ -37,8 +37,8 @@ namespace one::terminal::runtime {
 		auto asked = p.asked();
 		if (const auto& asking = asked.get()) {
 			parts.push_back(terminal::column(terminal::text(asking->question, {.bold = true}),
-			                                 terminal::row(terminal::button("Yes, go ahead", [&p] { p.answer_asked(true); }, true).autofocus(),
-			                                               terminal::button("Cancel", [&p] { p.answer_asked(false); }))
+			                                 terminal::row(terminal::button(asking->yes.empty() ? "Yes, go ahead" : asking->yes, [&p] { p.answer_asked(true); }, true),
+			                                               terminal::button("Cancel", [&p] { p.answer_asked(false); }).autofocus())
 			                                     .spacing(2))
 			                    .spacing(1)
 			                    .padding(0, 1)

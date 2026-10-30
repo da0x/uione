@@ -2732,6 +2732,13 @@ board project_page.issues by stage over project_page.stages link /:project/issue
 - `then open /posters/:poster` after a button that makes something opens it, its id
   in the route's last parameter: `poster::create "New" { width = screen.width } then
   open /posters/:poster`.
+- `confirm "..."` on a button asks before it runs, whether it's pressed or its key
+  is: `layer::delete "Remove" icon delete key delete confirm "Remove it from
+  {poster_page.title}?" then open /posters/:poster`. The question opens over the
+  page and reads it as text does. Its answers are Cancel, which has the keyboard so
+  the key pressed again doesn't answer it, and the button's own words, drawn as a
+  danger for a delete. Enter says yes, Escape or a press outside it says no, and no
+  other key reaches what's under it.
 - `on open` lines say what a screen does as it's opened, so an app can open straight
   into work (decision 0020). `on open open /posters/:poster for posters where
   poster.first_layer == none` opens the first row of the view's list the condition
@@ -2909,7 +2916,7 @@ issue::verify "Verify" when {
   "Comment" { body "Comment" }` asks for the body, labeled Comment.
 - A field can say what it means under it: `takes_reports "Public reports" { hint
   "Anyone may report a problem, signed in or not" }`.
-- `confirm` asks before a command runs.
+- `confirm` asks before a command runs, wherever on the screen it's run from; a button's own `confirm "..."` asks before that button.
 - `themes` tries themes made at random from a palette on the whole app at once:
   pick a scheme, complementary, analogous, triadic, split complementary or
   monochrome, and press New theme. Every role comes from the palette, light and

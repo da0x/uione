@@ -3897,6 +3897,7 @@ namespace one::language {
                     if (button->pressed_when) verify_condition(ns, *button->pressed_when, route);
                     verify_given(ns, *button, route);
                     if (button->along) verify_along(ns, *button, route);
+                    if (button->confirm) verify_live_text(ns, *button->confirm, route, item.where);
                 } else if (auto* component = std::get_if<component_item>(&item.node)) {
                     snake(component->name, item.where);
                     // Its file for each kind of app built: React on the web, C++ in the others.

@@ -1685,3 +1685,21 @@ TEST_CASE("on open, a screen opens the first row a condition holds for, or runs 
     CHECK(spread["web/src/screens/main.tsx"].find(R"(<OnOpen ready={true} lines={[{ run: { name: "studio::poster::create" } }]} />)") != std::string::npos);
     CHECK(spread["desktop/src/screens/main.cpp"].find(R"(on_open(p, true, {opening{.run = command_button{.command = "studio::poster::create", .label = "Create"}}}))") != std::string::npos);
 }
+
+TEST_CASE("a button can ask first, its key too, the question reading the view and its own words saying yes") {
+    auto files = built(layered_screen(R"(		layer::delete "Remove" icon delete key delete confirm "Remove it from {poster_page.title}?" then open /posters/:poster
+		poster::arrange "Ink" { tint = tint::ink } confirm "Make it ink?"
+)"));
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    // Its question reads the view, and a delete's answer is drawn as a danger.
+    CHECK(web.find(R"(<Command name="studio::layer::delete" label="Remove" icon="delete" keys={["delete"]} thenOpen="/posters/:poster" confirm={`Remove it from ${show(posterPage.data?.["title"])}?`} destroys />)") != std::string::npos);
+    CHECK(web.find(R"(confirm={"Make it ink?"} />)") != std::string::npos);
+    CHECK(native.find(R"(.then_open = "/posters/:poster", .confirm = said({words("Remove it from "), live(poster_page, "title"), words("?")}), .destroys = true})") != std::string::npos);
+    CHECK(native.find(R"(.confirm = "Make it ink?"})") != std::string::npos);
+    // What it reads is checked as any text is.
+    CHECK(messages(layered_screen(R"(		layer::delete "Remove" confirm "Remove it from {build.name}?"
+)")) == std::vector<std::string>{"43: {build.name} isn't something a site is built from; it's {build.version} or {build.commit}"});
+}

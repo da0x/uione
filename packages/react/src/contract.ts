@@ -868,6 +868,7 @@ export interface ButtonProps {
   pressed?: boolean; // a toggle, or a choice already made, drawn as pressed
   hint?: string; // said when it's pointed at, like "Undo (Ctrl+Z)"
   swatch?: string; // in a toolbar, drawn as a circle of this color, like #ffffff, its words said when it's pointed at
+  focused?: boolean; // given the keyboard when the dialog it's in opens, like a question's Cancel
 }
 
 // A named part of a workspace's toolbar, like Rotate, with a line between it and the

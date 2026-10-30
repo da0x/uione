@@ -862,6 +862,9 @@ namespace one::language {
         std::optional<std::string> then_open;  // then open /:poster: where what it made is opened
         location then_where;
         std::optional<std::string> about;  // about "For slides and video": what it's for, said beside it among options
+        // confirm "Remove {photo_page.name}?": asked before it runs, its command run only
+        // once the person says yes.
+        std::optional<std::string> confirm;
     };
 
     // collage poster_page.layers size width height { ... }: a picture made of layers, as

@@ -511,9 +511,9 @@ namespace one::screens {
 		auto was = asked_.peek();
 		asked_.set(std::nullopt);
 		if (!yes || !was) return;
-		std::string question = std::exchange(questions_[was->command], "");  // asked once
+		question asked = std::exchange(questions_[was->command], {});  // asked once
 		run(was->command, was->fields, was->files, was->after, was->says_why_itself);
-		questions_[was->command] = question;
+		questions_[was->command] = std::move(asked);
 	}
 
 	void page_base::say(std::string words) {
@@ -538,8 +538,8 @@ namespace one::screens {
 	}
 
 	void page_base::run(const std::string& command, const value& fields, attached_files files, std::function<void(const answer&)> after, bool says_why_itself) {
-		if (auto q = questions_.find(command); q != questions_.end() && !q->second.empty()) {
-			asked_.set(asking{command, q->second, fields, std::move(after), says_why_itself, std::move(files)});
+		if (auto q = questions_.find(command); q != questions_.end() && !q->second.words.empty()) {
+			asked_.set(asking{command, q->second.words, q->second.yes, q->second.destroys, fields, std::move(after), says_why_itself, std::move(files)});
 			return;
 		}
 		// Told through states, which outlive the page if it's left before the answer.

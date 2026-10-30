@@ -92,6 +92,8 @@ namespace one::screens {
 		bool pressed = false;                // drawn pressed, like a choice already made
 		std::string then_open = "";          // a route like /:poster, opened with what it made
 		std::string about = "";              // among options, what it's for, said beside it
+		std::string confirm = "";            // asked before it runs, its label the answer that runs it
+		bool destroys = false;               // and that answer drawn as a danger, as a delete's is
 		std::optional<command_slide> slide = std::nullopt;  // drawn as a slider, run as it's let go
 		std::optional<command_color> color = std::nullopt;  // or as a color picker, run as one's chosen
 		bool remembers = false;  // what it gives remembered for what's drawn next; with nothing to act on, only that
