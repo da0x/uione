@@ -260,6 +260,39 @@ describe("a paper", () => {
     expect(source.runs[0]).toMatchObject({ command: "studio::passage::create", input: { kind: "math", words: "", position: 1.5, poster: "p1" } });
   });
 
+  it("inserts where the caret was before the button took it: between a block's halves from its middle, before it from its start", async () => {
+    const source = sourceWith([
+      { id: "b1", kind: "text", words: "One two", position: 1, align: "left" },
+      { id: "b2", kind: "text", words: "Three", position: 2, align: "left" },
+    ]);
+    const drawn = renderPaper(source);
+    await waitFor(() => expect(blocks(drawn).length).toBe(2));
+    const caretAt = (el: HTMLElement, at: number) => {
+      fireEvent.focus(el);
+      const range = document.createRange();
+      range.setStart(el.firstChild!, at);
+      range.collapse(true);
+      document.getSelection()!.removeAllRanges();
+      document.getSelection()!.addRange(range);
+      fireEvent(document, new Event("selectionchange"));
+      // The button takes the selection with it, as a phone's does.
+      document.getSelection()!.removeAllRanges();
+    };
+    caretAt(blocks(drawn)[0]!, 4);
+    fireEvent.click(drawn.getByRole("button", { name: "Equation" }));
+    await waitFor(() => expect(source.runs).toHaveLength(3));
+    expect(source.runs[0]).toMatchObject({ command: "studio::passage::write", input: { id: "b1", words: "One " } });
+    expect(source.runs[1]).toMatchObject({ command: "studio::passage::create", input: { kind: "math", words: "", position: 1.5, "one:history": "joined" } });
+    expect(source.runs[2]).toMatchObject({ command: "studio::passage::create", input: { kind: "text", words: "two", position: 1.75, "one:history": "joined" } });
+    caretAt(blocks(drawn).at(-1)!, 0);
+    fireEvent.click(drawn.getByRole("button", { name: "Equation" }));
+    await waitFor(() => expect(source.runs).toHaveLength(4));
+    expect(source.runs[3]!.input).toMatchObject({ kind: "math", words: "" });
+    // Before Three, after One two, as the page holds only those.
+    expect(source.runs[3]!.input["position"]).toBe(1.5);
+    expect(source.runs).toHaveLength(4);
+  });
+
   it("starts a new line with Enter in code, and leaves it from an empty last line", async () => {
     const source = sourceWith([{ id: "b1", kind: "code", words: "let x = 1\n", position: 1, align: "left" }]);
     const drawn = renderPaper(source);

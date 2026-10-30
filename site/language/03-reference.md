@@ -2434,8 +2434,10 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     line leaves it for text after it. Words pasted over several lines are a block a
     paragraph, but in code, which keeps its lines.
   - `insert "Equation" icon equation { kind = kind::math }`, a button anywhere on the
-    screen, makes an empty block after the one the caret is in, given those values, by
-    the paper's `add`, and puts the caret in it.
+    screen, makes an empty block where the caret is, given those values, by the
+    paper's `add`, and puts the caret in it: after the caret's block, before it from its
+    start, or between its two halves from its middle, as one step. A code block or an
+    equation isn't cut in two; the new one goes after it.
   - `empty "Title"`: where an empty page's first words go, said faintly.
   - The block the caret is in is the screen's `pick block from document_page.blocks`,
     so the toolbar's buttons, like `block::style "Center" icon align_center { align =

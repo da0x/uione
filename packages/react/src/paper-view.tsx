@@ -413,6 +413,9 @@ export function Paper({
   const opened = useRef(false);
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const caretBlock = useRef<string | undefined>(undefined);
+  // Where the caret last was in its block, kept as a press on a toolbar takes the
+  // keyboard, and with it the page's selection, away.
+  const caretWas = useRef<{ id: string; start: number; end: number } | undefined>(undefined);
   // The selection's other end when it runs into other blocks: the block, by its id, and
   // the place in its words. The caret's block is then chosen from its edge nearest that
   // end to the caret, so the browser draws and moves that part as it would alone.
@@ -576,17 +579,48 @@ export function Paper({
     () => undefined,
   );
   useEffect(() => {
+    const kept = () => {
+      const id = caretBlock.current, el = id ? elements.current.get(id) : undefined;
+      if (id && el && el.contains(el.ownerDocument.getSelection()?.anchorNode ?? null)) caretWas.current = { id, ...caretIn(el) };
+    };
+    document.addEventListener("selectionchange", kept);
+    return () => document.removeEventListener("selectionchange", kept);
+  });
+  // Inserted where the caret is: after its block, before it from its start, or between
+  // its two halves from its middle, all one step to undo.
+  useEffect(() => {
     if (!asked || !name || !add) return;
     inserts.delete(name);
     sendAll();
     const i = shown.findIndex((b) => b.id === caretBlock.current);
     const here = i >= 0 ? shown[i]! : shown[shown.length - 1];
     const at = here ? shown.indexOf(here) : -1;
-    const position = first || !here ? 1 : between(here.position, shown[at + 1]?.position);
+    const el = here?.id ? elements.current.get(here.id) : undefined;
+    const words = el ? wordsOf(el) : (here?.words ?? "");
+    const caret = here && caretWas.current?.id === here.id ? caretWas.current : { start: words.length, end: words.length };
+    const parts = here && el && kindOf(here.kind).joins !== false && (kindOf(here.kind).enter?.(words, caret.start, false) ?? "split") === "split";
+    const head = words.slice(0, caret.start), tail = words.slice(caret.end);
+    const before = parts && head === "" && tail !== "";
+    const prior = shown[at - 1];
+    const position = first || !here ? 1 : !before ? between(here.position, shown[at + 1]?.position) : prior ? between(prior.position, here.position) : here.position - 1;
+    const middle = parts && !before && tail !== "";
+    if (middle) {
+      el!.textContent = head;
+      written.current.set(here!.id, head);
+      sent.current.set(here!.id, head);
+      void run(write, fieldsOf({ id: here!.id, words: head }, fields));
+    }
     const made: Row = { ...asked, words: "", position };
     if (parent && subject) made[parent] = subject;
+    if (middle) made["one:history"] = "joined";
     going.current = { position, at: 0, known: new Set(shown.map((b) => b.id)) };
     void run(add, fieldsOf(made, fields));
+    if (middle) {
+      const rest: Row = { position: between(position, shown[at + 1]?.position), words: tail, kind: here!.kind, "one:history": "joined" };
+      if (here!.align && here!.align !== "left") rest["align"] = here!.align;
+      if (parent && subject) rest[parent] = subject;
+      void run(add, fieldsOf(rest, fields));
+    }
   }, [asked]);
 
   // Pictures, each a block after the caret's, in turn, the caret then in the first's
