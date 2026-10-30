@@ -232,7 +232,9 @@ address. A setting whose
 type is another `settings`, like `redirect`, takes its fields in
 order, `redirect "/old" "https://example.com/new"`. `domain` can name a second
 domain after the first, `domain "uione.io" "www.uione.io"`: the same site answers
-there, and sends whoever opens it to the first, so one project serves both. A setting
+there, and sends whoever opens it to the first, so one project serves both. Swapped,
+`domain "www.uione.io" "uione.io"`, each only changes where it sends people: neither
+is taken off the site and checked again. A setting
 is said once,
 unless its type is a `list of`, whose lines each add one, or one line several,
 `signin google github`. A name the library

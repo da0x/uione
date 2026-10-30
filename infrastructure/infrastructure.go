@@ -277,13 +277,17 @@ func Declare(ctx *pulumi.Context, p Project) error {
 	if err != nil {
 		return err
 	}
-	domain, err := firebase.NewHostingCustomDomain(ctx, "domain", &firebase.HostingCustomDomainArgs{
+	// Each domain is named for itself, so swapping which one is served and which sends
+	// people to it only changes where each sends them: neither is taken off the site and
+	// put back, which would have Firebase check it was owned, and certify it, again.
+	// Each was once named for its part, which its alias still answers to.
+	domain, err := firebase.NewHostingCustomDomain(ctx, p.Domain, &firebase.HostingCustomDomainArgs{
 		Project:      project,
 		SiteId:       site.SiteId.Elem(),
 		CustomDomain: pulumi.String(p.Domain),
 		// DNS is changed by hand at the registrar, so a deploy doesn't wait for it.
 		WaitDnsVerification: pulumi.Bool(false),
-	})
+	}, pulumi.Aliases([]pulumi.Alias{{Name: pulumi.String("domain")}}))
 	if err != nil {
 		return err
 	}
@@ -291,13 +295,13 @@ func Declare(ctx *pulumi.Context, p Project) error {
 	// whoever opens it to the first.
 	dnsRecords := domain.RequiredDnsUpdates.ApplyT(recordsOf)
 	if p.Redirect != "" {
-		second, err := firebase.NewHostingCustomDomain(ctx, "redirect", &firebase.HostingCustomDomainArgs{
+		second, err := firebase.NewHostingCustomDomain(ctx, p.Redirect, &firebase.HostingCustomDomainArgs{
 			Project:             project,
 			SiteId:              site.SiteId.Elem(),
 			CustomDomain:        pulumi.String(p.Redirect),
 			RedirectTarget:      pulumi.String(p.Domain),
 			WaitDnsVerification: pulumi.Bool(false),
-		}, pulumi.DependsOn([]pulumi.Resource{domain}))
+		}, pulumi.DependsOn([]pulumi.Resource{domain}), pulumi.Aliases([]pulumi.Alias{{Name: pulumi.String("redirect")}}))
 		if err != nil {
 			return err
 		}
