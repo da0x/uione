@@ -569,9 +569,13 @@ function WorkspaceBar({ site, end, children }: { site?: string; end?: ReactNode;
           {children}
         </div>
       </div>
-      <span ref={last} className={`flex items-center justify-end gap-2 ${stacked ? "" : "col-start-3 row-start-1"}`}>
-        {end}
-        <ThemeToggle />
+      {/* What's in it measured, not the side it's stretched across, so the measure
+          doesn't change with the layout it chooses. */}
+      <span className={`flex justify-end ${stacked ? "" : "col-start-3 row-start-1"}`}>
+        <span ref={last} className="flex w-max items-center gap-2">
+          {end}
+          <ThemeToggle />
+        </span>
       </span>
     </div>
   );
