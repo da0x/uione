@@ -4047,9 +4047,13 @@ namespace one::language {
         void verify_on_open(const std::string& ns, const on_open_item& opening, location where, const std::string& route) {
             if (!opening.route) {
                 auto* choosing = opening.run.size() == 1 ? std::get_if<toggle_item>(&opening.run.front().node) : nullptr;
-                if (opening.run.size() != 1 || (!std::holds_alternative<button_item>(opening.run.front().node) && !(choosing && choosing->choice))) {
+                if (opening.run.size() != 1 || (!std::holds_alternative<button_item>(opening.run.front().node) && !(choosing && (choosing->choice || choosing->turned)))) {
                     error(where, "on open runs a command, like poster::create { width = screen.width } then open /posters/:poster, opens a row, like open /posters/:poster for posters, "
-                                 "or picks one of a choice, like toggle mode::edit");
+                                 "picks one of a choice, like toggle mode::edit, or turns a toggle on or off, like toggle layers off");
+                    return;
+                }
+                if (choosing && choosing->turned && (!toggles_.contains(choosing->name) || choices_.contains(choosing->name))) {
+                    error(choosing->name_where, "there's no toggle " + choosing->name + " on this screen, on or off, for on open to turn");
                     return;
                 }
                 screen_items(ns, opening.run, route);

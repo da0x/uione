@@ -263,7 +263,8 @@ namespace one::generators {
                         if (v.value) (void)condition_of(parts, ns, *v.value, read);
                     }
                 } else if (auto* t = std::get_if<language::toggle_item>(&o->run.front().node)) {
-                    line = ".choose = " + str(route_ + " " + t->name) + ", .choice = " + str(*t->choice);
+                    line = t->turned ? ".turn = " + str(route_ + " " + t->name) + ", .on = " + (*t->turned ? "true" : "false")
+                                     : ".choose = " + str(route_ + " " + t->name) + ", .choice = " + str(*t->choice);
                     if (o->run.front().when) line += ", .when = " + condition_of(parts, ns, *o->run.front().when, read);
                 }
                 // A command's own when is its button's, in its spec.

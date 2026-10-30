@@ -1087,6 +1087,8 @@ namespace one::language {
         // toggle tool::pen: one of an enum's choices, pressed while it's the one; the
         // screen's toggles over one enum are one choice, its first until another's pressed.
         std::optional<std::string> choice;
+        // on open toggle layers off: turned on or off as the screen's opened.
+        std::optional<bool> turned;
         std::optional<std::string> label;
         std::optional<std::string> icon;
         location icon_where;

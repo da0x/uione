@@ -2617,7 +2617,9 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   poster::create { width = screen.width } then open /posters/:poster` runs a command,
   as its button would. `on open toggle mode::edit when document_page.written == 0`
   picks one of a choice as its toggle would, so a new document opens to be written
-  and one with words in it, after `on open toggle mode::read`, to be read. They're
+  and one with words in it, after `on open toggle mode::read`, to be read. `on open
+  toggle layers off when drawing_page.drawn == 0` turns a toggle on or off as its
+  press would, so an empty drawing opens without its layers beside it. They're
   tried in order, and only the first that applies is
   done, once a visit, once every view they read is there; "Opening…" shows until
   then. What's opened takes the screen's place, so going back doesn't open it again.

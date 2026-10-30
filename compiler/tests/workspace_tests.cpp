@@ -1079,7 +1079,7 @@ TEST_CASE("on open, a screen opens the first row a condition holds for, or runs 
     CHECK(messages(source) == std::vector<std::string>{"24: a picked poster's row has no depth; add it to the list's block", "25: there's no screen at /nowhere/:poster to open",
                                                        "25: the screen is measured by screen.width and screen.height",
                                                        "27: on open runs a command, like poster::create { width = screen.width } then open /posters/:poster, opens a row, like open /posters/:poster for posters, "
-                                                       "or picks one of a choice, like toggle mode::edit"});
+                                                       "picks one of a choice, like toggle mode::edit, or turns a toggle on or off, like toggle layers off"});
     std::string fine = source;
     for (const char* wrong : {" && poster.depth == 1", "\t\ton open open /nowhere/:poster for posters where poster.width == screen.size\n", "\t\ton open text \"Not a command\"\n"}) {
         fine.erase(fine.find(wrong), std::string(wrong).size());
@@ -1158,6 +1158,48 @@ TEST_CASE("a mode the person switches to: only when takes a toolbar's line away,
     CHECK(web.find(R"(<Applies when={((chosenMode === "edit"))}>)") != std::string::npos);
     CHECK(web.find(R"(<Applies when={((chosenMode === "read"))}>)") == std::string::npos);
     CHECK(native.find(R"(if ((same(value(p.chosen("/posters/:poster mode", "edit")), value("edit")))) return group(p, "Write")") != std::string::npos);
+}
+
+TEST_CASE("on open turns a toggle on or off, as its press would, and only one the screen has") {
+    const std::string source = project + R"(namespace studio at / {
+	entity poster {
+		title   text
+	}
+
+	view poster_page per poster {
+		title
+		named = count(poster where title != none)
+	}
+
+	screen "Poster" /posters/:poster {
+		layout workspace
+		on open toggle layers off when poster_page.named == 0
+		toolbar {
+			group "View" {
+				toggle layers "Layers" icon layers
+			}
+		}
+		main {
+			text "{poster_page.title}"
+		}
+		side when layers {
+			text "Layers"
+		}
+	}
+}
+)";
+    CHECK(messages(source).empty());
+    auto files = built(source);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    CHECK(web.find(R"({ turn: { name: "/posters/:poster layers", on: false }, when: ((posterPage.data?.["named"] ?? null) === 0) })") != std::string::npos);
+    CHECK(native.find(R"(opening{.turn = "/posters/:poster layers", .on = false, .when = )") != std::string::npos);
+
+    std::string missing = source;
+    missing.replace(missing.find("toggle layers off"), 17, "toggle outline on");
+    CHECK(messages(missing) == std::vector<std::string>{"20: there's no toggle outline on this screen, on or off, for on open to turn"});
 }
 
 TEST_CASE("a workspace's bar holds one group, at its end, before light and dark") {

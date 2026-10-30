@@ -2839,6 +2839,21 @@ TEST("on open, a screen opens the first row its condition holds for in its place
 	CHECK(nav.current().address() == "/posters/p9");
 }
 
+TEST("on open, a toggle is turned on or off as its press would, where its line applies") {
+	memory_source data;
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Drawing", "/drawn", "", [](page& p) {
+		                     return items(on_open(p, true, {opening{.turn = "/drawn layers", .on = false, .when = false}, opening{.turn = "/drawn layers", .on = true}}));
+	                     }});
+	navigator nav(s, data);
+	nav.open("/drawn");
+	(void)drawn(nav);
+	CHECK(nav.current().toggled("/drawn layers"));
+	(void)drawn(nav);
+	CHECK(nav.current().toggled("/drawn layers"));
+}
+
 TEST("work handed back from another thread is dropped when no app is running to take it") {
 	bool ran = false;
 	one::desktop::runtime::post([&ran] { ran = true; });

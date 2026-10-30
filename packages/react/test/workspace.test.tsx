@@ -8,7 +8,7 @@
 
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useLocation } from "react-router";
-import { App, Choose, Command, Form, FullScreen, Group, History, Layout, Live, Messages, OnOpen, Region, Table, Options, Toggle, Tools, keyShown, memorySource, screen as defineScreen, useChosen, useToggled, useView } from "../src/index.js";
+import { App, Choose, Command, Form, FullScreen, Group, History, Layout, Live, Messages, OnOpen, Region, Table, Options, Toggle, Tools, keyShown, memorySource, screen as defineScreen, setToggled, useChosen, useToggled, useView } from "../src/index.js";
 import { lastGiven, styleThese, usePicked } from "../src/workspace.js";
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
@@ -330,5 +330,26 @@ describe("a workspace", () => {
     await waitFor(() => expect(screen.getByText(/^At/).textContent).toBe("At /posters/p9"));
     // Never a step undo takes back: the person didn't do it.
     expect(none.runs).toEqual([{ command: "studio::poster::create", input: { width: 1920, "one:history": "apart" } }]);
+  });
+
+  it("on open, turns a toggle off as its press would, where its line applies", async () => {
+    function Shown() {
+      return <p>{useToggled("/drawings/:drawing layers") ? "Layers shown" : "Layers hidden"}</p>;
+    }
+    function Opening({ empty }: { empty: boolean }) {
+      return (
+        <>
+          <OnOpen ready lines={[{ turn: { name: "/drawings/:drawing layers", on: false }, when: empty }]} />
+          <Shown />
+        </>
+      );
+    }
+    for (const empty of [false, true]) {
+      act(() => setToggled("/drawings/:drawing layers", true));
+      const only = defineScreen({ title: "Drawing", route: "/" }, () => <Opening empty={empty} />);
+      const drawn = render(<App name="studio" screens={[only]} ui={plain} data={memorySource()} location="/" />);
+      await waitFor(() => expect(screen.getByText(/^Layers/).textContent).toBe(empty ? "Layers hidden" : "Layers shown"));
+      drawn.unmount();
+    }
   });
 });

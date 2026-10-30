@@ -371,6 +371,8 @@ namespace one::screens {
 		std::optional<command_button> run = std::nullopt;
 		std::string choose = "";
 		std::string choice = "";
+		std::string turn = "";
+		bool on = false;
 		std::string open = "";
 		state<view_state> view = {};
 		std::string list = "";

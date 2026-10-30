@@ -1940,7 +1940,8 @@ namespace one::generators {
                     line = "run: { " + run + " }";
                     if (b->when) line += ", when: " + condition_of(parts, ns, *b->when, read);
                 } else if (auto* t = std::get_if<language::toggle_item>(&o->run.front().node)) {
-                    line = "choose: { name: " + web_detail::js_string(route_ + " " + t->name) + ", choice: " + web_detail::js_string(*t->choice) + " }";
+                    line = t->turned ? "turn: { name: " + web_detail::js_string(route_ + " " + t->name) + ", on: " + (*t->turned ? "true" : "false") + " }"
+                                     : "choose: { name: " + web_detail::js_string(route_ + " " + t->name) + ", choice: " + web_detail::js_string(*t->choice) + " }";
                     if (o->run.front().when) line += ", when: " + condition_of(parts, ns, *o->run.front().when, read);
                 }
                 lines += (lines.empty() ? "" : ", ") + std::string("{ ") + line + " }";

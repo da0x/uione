@@ -1832,6 +1832,20 @@ namespace one::language {
                     end_line();
                     return item;
                 }
+                // on open toggle layers off: an on or off toggle turned, as its press would.
+                if (at_word("toggle") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::identifier && (peek(2).text == "on" || peek(2).text == "off")) {
+                    location at = peek().where;
+                    advance();
+                    toggle_item toggle;
+                    toggle.name_where = peek().where;
+                    toggle.name = advance().text;
+                    toggle.turned = advance().text == "on";
+                    screen_item turning{at, std::move(toggle)};
+                    turning.when = shown_while();
+                    end_line();
+                    opening.run.push_back(std::move(turning));
+                    return {where, std::move(opening)};
+                }
                 opening.run.push_back(parse_screen_item());
                 return {where, std::move(opening)};
             }

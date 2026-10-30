@@ -498,6 +498,10 @@ namespace one::screens {
 				p.choose(line.choose, line.choice);
 				return false;
 			}
+			if (!line.turn.empty()) {
+				if (p.toggled(line.turn) != line.on) p.toggle(line.turn);
+				return false;
+			}
 			if (line.run) {
 				auto shown = command_of(p, *line.run);
 				if (!shown) continue;
