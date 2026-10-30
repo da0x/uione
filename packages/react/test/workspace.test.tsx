@@ -8,7 +8,7 @@
 
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useLocation } from "react-router";
-import { App, Choose, Command, Form, Group, History, Layout, Live, Messages, OnOpen, Region, Table, Options, Toggle, Tools, keyShown, memorySource, screen as defineScreen, useChosen, useToggled, useView } from "../src/index.js";
+import { App, Choose, Command, Form, FullScreen, Group, History, Layout, Live, Messages, OnOpen, Region, Table, Options, Toggle, Tools, keyShown, memorySource, screen as defineScreen, useChosen, useToggled, useView } from "../src/index.js";
 import { lastGiven, styleThese, usePicked } from "../src/workspace.js";
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
@@ -65,6 +65,29 @@ describe("a workspace", () => {
       </Layout>
     ));
     await waitFor(() => expect(document.querySelector("[data-region=bar]")?.textContent).toBe("studio Undo"));
+  });
+
+  it("fills the window by itself where the browser won't give a page the screen, only its work and a way out", async () => {
+    renderScreen(memorySource(), () => (
+      <Layout name="workspace">
+        <Region name="bar">
+          <FullScreen label="Full screen" icon="fullscreen" />
+        </Region>
+        <Region name="main">
+          <p>The letter</p>
+        </Region>
+      </Layout>
+    ));
+    expect(document.documentElement.requestFullscreen).toBeUndefined();
+    fireEvent.click(screen.getByRole("button", { name: "Full screen" }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Full screen" })).toBeNull());
+    expect(screen.getByText("The letter")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Leave full screen" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Full screen" })).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Full screen" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Leave full screen" })).toBeTruthy());
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Leave full screen" })).toBeNull());
   });
 
   it("remembers a toggle, which the screen reads by its name, and shows a region while it's on", () => {

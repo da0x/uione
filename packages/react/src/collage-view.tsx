@@ -24,7 +24,7 @@ import type { ViewState } from "./data.js";
 import { useUI } from "./ui.js";
 import { useSaying } from "./said.js";
 import { useSite } from "./app.js";
-import { OverKind, OverLayer, OverRun, choosePictures, lastGiven, styleThese, hintOf, setChosen, setPicked, typing, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
+import { OverKind, OverLayer, OverRun, choosePictures, lastGiven, leaveFull, styleThese, hintOf, setChosen, setPicked, typing, useFull, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
 
 type Row = Record<string, unknown>;
 
@@ -852,7 +852,7 @@ export function Collage({
   const [, setRead] = useState(0);
   const [, redraw] = useState(0);
   const [frame, setFrame] = useState<Box | undefined>();
-  const [full, setFull] = useState(() => typeof document !== "undefined" && Boolean(document.fullscreenElement));
+  const full = useFull();
   const [dropping, setDropping] = useState(false);
 
   // Read as its parts, whichever of the app's fields keep them.
@@ -894,11 +894,8 @@ export function Collage({
     const changed = () => setRead((n) => n + 1);
     readListeners.add(changed);
     void wordsLoaded().then(changed);
-    const screen = () => setFull(Boolean(document.fullscreenElement));
-    document.addEventListener("fullscreenchange", screen);
     return () => {
       readListeners.delete(changed);
-      document.removeEventListener("fullscreenchange", screen);
     };
   }, []);
 
@@ -1933,7 +1930,7 @@ export function Collage({
 
   const press = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (full) {
-      void document.exitFullscreen();
+      leaveFull();
       return;
     }
     if (w.scale <= 0) return;

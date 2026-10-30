@@ -11,7 +11,7 @@ import type { ReactElement, ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { partsOf } from "./keys.js";
 import { ShownPath, fill, useConfirmContext, useFill, usePageTitle, useSignIn, useSite } from "./app.js";
-import { hintOf, rememberGiven, setPicked as pickRow, useInGroup, useInOptions, useLastGiven, useOverRun, useStyled, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
+import { hintOf, leaveFull, rememberGiven, setPicked as pickRow, useFull, useInGroup, useInOptions, useLastGiven, useOverRun, useStyled, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
 import type { BoardCard, CanvasRegion, ChartProps, FieldProps, Filtered, Hue, LandingFeature, LandingProps, LinkProps, PipelineRow, TrackStep } from "./contract.js";
 import { readValue, scaleTop, seriesOf, toneOfState, valueAt, type ChartUnit } from "./series.js";
 import { calendarGo, calendarOf, dateOf, dayOf, movedTo } from "./calendar.js";
@@ -370,22 +370,28 @@ export function Layout({ name, children }: { name: string; children?: ReactNode 
   const ui = useUI();
   const site = useSite();
   useFill(name === "workspace");
-  // Filling the screen, a workspace is only its work, like a picture on a wall.
-  const full = useSyncExternalStore(
-    (changed) => {
-      if (typeof document === "undefined") return () => {};
-      document.addEventListener("fullscreenchange", changed);
-      return () => document.removeEventListener("fullscreenchange", changed);
-    },
-    () => typeof document !== "undefined" && Boolean(document.fullscreenElement),
-    () => false,
-  );
+  // Filling the screen, a workspace is only its work, like a picture on a wall, with one
+  // way out at its top right, as Escape is.
+  const full = useFull() && name === "workspace";
+  useKeys(["escape"], leaveFull, full);
   const regions: Record<string, ReactNode> = {};
   Children.forEach(children, (child) => {
     if (isValidElement<{ name: string; children?: ReactNode }>(child) && child.type === Region && (!full || name !== "workspace" || child.props.name === "main")) {
       regions[child.props.name] = child.props.children;
     }
   });
+  if (full) {
+    regions["main"] = (
+      <>
+        {regions["main"]}
+        <div style={{ position: "fixed", top: "calc(env(safe-area-inset-top) + 8px)", right: "calc(env(safe-area-inset-right) + 8px)", zIndex: 40 }}>
+          <ui.Button kind="secondary" icon="close" tool="small" hint="Leave full screen (Esc)" onClick={leaveFull}>
+            Leave full screen
+          </ui.Button>
+        </div>
+      </>
+    );
+  }
   return <ui.Layout name={name} regions={regions} site={site.name} />;
 }
 
