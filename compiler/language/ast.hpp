@@ -66,6 +66,9 @@ namespace one::language {
     struct where_expression {   // loan where returned_at == none
         expression_ptr source;
         expression_ptr condition;
+        // first(photo where ... order by taken descending): what first takes the first
+        // of, as a list's order says it; descending is a minus, as there.
+        std::vector<expression_ptr> order = {};
     };
 
     struct unary_expression {   // !done, -created_at

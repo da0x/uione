@@ -2486,6 +2486,10 @@ namespace one::generators {
                 unsupported(path_, row.where, "a row value other than first(... where ...).field");
                 return std::nullopt;
             }
+            if (!w->order.empty()) {
+                unsupported(path_, w->order[0]->where, "first(...) in an order");
+                return std::nullopt;
+            }
             auto q = query(pkg, *w->source, w->condition.get(), "First", each_entity);
             if (!q) return std::nullopt;
             return "Value(" + api_detail::go_string(*row.name) + ", " + *q + ", " + api_detail::go_string(m->member) + ")";
@@ -3152,6 +3156,10 @@ namespace one::generators {
                     auto* named = first ? std::get_if<language::name_expression>(&first->callee->node) : nullptr;
                     auto* w = first && first->arguments.size() == 1 ? std::get_if<language::where_expression>(&first->arguments[0]->node) : nullptr;
                     if (named && named->name.text() == "first" && w) {
+                        if (!w->order.empty()) {
+                            unsupported(path_, w->order[0]->where, "first(...) in an order");
+                            return false;
+                        }
                         auto q = query(pkg, *w->source, w->condition.get());
                         if (!q) return false;
                         calls.push_back({"FirstOf(" + api_detail::go_string(*value.name) + ", " + *q + ", " + api_detail::go_string(m->member) + ")",

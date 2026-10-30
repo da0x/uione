@@ -158,7 +158,10 @@ if             ::= "if" expression block ("else" (if | block))?
 /* view */
 
 /* a value can count the rows of the view's own list that pass, compared with its
- * other values: unread = count(changes where created_at > seen) */
+ * other values: unread = count(changes where created_at > seen); and a list's row can
+ * count, add up or take the first of another entity's that name it:
+ * total = count(photo where photo.library == library.id),
+ * size = sum(photo where photo.library == library.id).bytes */
 view           ::= "view" NAME "public"? "{" NEWLINE? ("readers" NAME END)* view_line* "}" END
                  | "view" NAME "public"? "per" NAME "public"? "{" NEWLINE? ("readers" NAME END)* (view_line | view_fields)* "}" END
 view_line      ::= (NAME "=")? each
@@ -418,7 +421,9 @@ sum            ::= product (("+" | "-") product)*
 product        ::= unary (("*" | "/" | "%") unary)*   /* a / alone between two values divides; % leaves what's over, as a clock counts */
 unary          ::= ("!" | "-") unary | "was" postfix | postfix
 postfix        ::= primary ("(" (argument ("," argument)*)? ")" | "." NAME)*
-argument       ::= expression ("where" expression)?
+/* first(photo where library == library.id order by taken descending).picture: the first by an order,
+   or else the earliest made */
+argument       ::= expression ("where" expression ("order" "by" order_key+)?)?
 primary        ::= STRING | time | NUMBER | built_in | qualified | "(" expression ")" | "[" NEWLINE? (expression NEWLINE? ("," NEWLINE? expression NEWLINE?)* ("," NEWLINE?)?)? "]"
                  | match
 /* a value for each choice of an enum, one a line, and else for the rest */

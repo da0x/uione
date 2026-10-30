@@ -20,7 +20,8 @@
 //         .each(all("library::book").except("status", "withdrawn"))
 //         .order(by("title", sort_title))
 //         .fields({"shelfmark", "title", "author", "status"})
-//         .value("lent_to", first("library::loan").where("book", row).where("returned_at", none), "member");
+//         .value("lent_to", first("library::loan").where("book", row).where("returned_at", none), "member")
+//         .counted("loans", all("library::loan").where("book", row));
 //
 //     package("library", {book, loan}, {book_create, withdraw}, {shelf}).install(source);
 //
@@ -145,10 +146,15 @@ namespace one::local {
 	};
 
 	struct view_description {
+		// A value worked out for each row of a list, from the rows of another its query
+		// picks: a field of the first, in its order or else the earliest made; how many
+		// there are; or what a number of theirs adds up to.
 		struct value_of {
 			std::string name;
 			query from;
 			std::string field;
+			enum { first, counted, summed } kind = first;
+			std::vector<by> order = {};
 		};
 		struct listing {
 			std::string name;  // rows, for each
@@ -187,7 +193,9 @@ namespace one::local {
 		view_description& order(by key) { return order(std::vector<by>{std::move(key)}); }
 		view_description& limit(int rows);
 		view_description& fields(std::vector<std::string> names);
-		view_description& value(std::string name, query from, std::string field);
+		view_description& value(std::string name, query from, std::string field, std::vector<by> order = {});
+		view_description& counted(std::string name, query from);
+		view_description& summed(std::string name, query from, std::string field);
 	};
 	view_description view(std::string name);
 
@@ -260,9 +268,10 @@ namespace one::local {
 		screens::answer run(const command_description& c, const value& sent, step& changes) const;
 
 		// What a query reads from: the store, for a view, or a command's step, which
-		// sees its own changes.
+		// sees its own changes. Each row of an entity is handed over where it's kept,
+		// copied only by what keeps it.
 		struct reading {
-			std::function<std::vector<value>(const std::string& entity)> each;
+			std::function<void(const std::string& entity, const std::function<void(const value&)>& row)> each;
 			std::function<std::optional<value>(const std::string& entity, const std::string& id)> find;
 		};
 		static reading from(const store& entities);
@@ -274,6 +283,7 @@ namespace one::local {
 		                                             const std::function<std::expected<void, std::string>(value&)>& body) const;
 
 	private:
+		class row_values;
 		std::string name_;
 		std::map<std::string, entity_description> entities_;
 		std::vector<command_description> commands_;

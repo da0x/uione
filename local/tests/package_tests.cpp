@@ -9,6 +9,7 @@
 
 #include <unistd.h>
 
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <set>
@@ -78,6 +79,17 @@ namespace {
 		                 .order(by("title", sort_title))
 		                 .fields({"shelfmark", "title", "author", "status"})
 		                 .value("lent_to", first("library::loan").where("book", row).where("returned_at", none), "member");
+		// For each book: how many times it's been lent, how many are out, their numbers
+		// added up, and who had it last and first.
+		auto lending = view("library::lending")
+		                   .each(all("library::book"))
+		                   .order("title")
+		                   .fields({"title"})
+		                   .counted("times_lent", where("library::loan", "book", row))
+		                   .counted("out", where("library::loan", "book", row).where("returned_at", none))
+		                   .summed("numbers", where("library::loan", "book", row), "number")
+		                   .value("last_member", where("library::loan", "book", row), "member", {by("-number")})
+		                   .value("first_member", where("library::loan", "book", row), "member");
 		auto desk = view("library::desk").each(where("library::loan", "returned_at", none)).order("due_at").fields({"book.title", "member", "due_at"});
 		auto book_page = view("library::book_page")
 		                     .per("library::book")
@@ -92,7 +104,7 @@ namespace {
 		                     .fields({"number", "member", "returned_at"});
 		// A summary written again by itself, kept, but never a step undo takes back.
 		auto summarize = command("library::book::summarize").on("library::book").fields({"summary"}).apart();
-		return package("library", {book, loan}, {book_create, update, withdraw, loan_create, checkin, summarize}, {shelf, desk, book_page});
+		return package("library", {book, loan}, {book_create, update, withdraw, loan_create, checkin, summarize}, {shelf, lending, desk, book_page});
 	}
 
 	// A source on a folder of its own, the library installed, and every command's answer.
@@ -222,6 +234,68 @@ TEST("a page per book copies the book, counts and lists its loans, counts and ad
 	CHECK(loans[2]["number"].as_integer() == 1);
 	CHECK(loans[0]["returned_at"].is_time());  // a time, handed to screens as one
 	CHECK(a.view("library::book_page", "NOT-0000").is_null());
+}
+
+TEST("a view says for each row how many of another name it, what a number of theirs adds up to, and a field of the first in an order, kept as they come and go") {
+	app a;
+	a.ok("library::book::create", book("Dune", "SCI-0001"));
+	a.ok("library::book::create", book("Emma", "LIT-0002"));
+	for (std::string member : {"maya", "omar", "lena"}) {
+		a.ok("library::loan::create", value(fields{{"book", "SCI-0001"}, {"member", member}, {"due_at", "2999-01-01T00:00:00.000000000Z"}}));
+		if (member != "lena") a.ok("library::loan::checkin", value(fields{{"id", "SCI-0001-" + std::to_string(member == "maya" ? 1 : 2)}}));
+	}
+	std::vector<value> seen;
+	auto listening = a.source->listen("library::lending", "", [&](const one::screens::view_state& v) { seen.push_back(v.data); });
+	const auto& rows = seen.back()["rows"].as_array();
+	CHECK(rows.size() == 2);
+	CHECK(rows[0]["title"].as_string() == "Dune");
+	CHECK(rows[0]["times_lent"].as_integer() == 3);
+	CHECK(rows[0]["out"].as_integer() == 1);
+	CHECK(rows[0]["numbers"].as_double() == 6);
+	CHECK(rows[0]["last_member"].as_string() == "lena");
+	CHECK(rows[0]["first_member"].as_string() == "maya");
+	CHECK(rows[1]["times_lent"].as_integer() == 0);
+	CHECK(rows[1]["numbers"].as_double() == 0);
+	CHECK(rows[1]["last_member"].is_null());
+	// Lent again, it's told at once.
+	a.ok("library::loan::create", value(fields{{"book", "LIT-0002"}, {"member", "maya"}, {"due_at", "2999-01-01T00:00:00.000000000Z"}}));
+	CHECK(seen.back()["rows"].as_array()[1]["times_lent"].as_integer() == 1);
+	CHECK(seen.back()["rows"].as_array()[1]["last_member"].as_string() == "maya");
+}
+
+TEST("a value for each row reads the rows it counts once, not once a row, so a view of many over many more is quick") {
+	store kept;
+	std::vector<change> made;
+	for (int b = 0; b < 50; ++b) made.push_back({.entity = "x::shelf", .id = "s" + std::to_string(b), .fields = value(fields{{"name", "s" + std::to_string(b)}})});
+	for (int i = 0; i < 20000; ++i) {
+		made.push_back({.entity = "x::clipping", .id = "c" + std::to_string(i),
+		                .fields = value(fields{{"shelf", "s" + std::to_string(i % 50)}, {"bytes", i}})});
+	}
+	kept.apply({.command = "", .at = "", .changes = std::move(made)});
+	package m("x", {entity("x::shelf", {{.name = "name"}}), entity("x::clipping", {{.name = "shelf", .refers = "x::shelf"}, {.name = "bytes"}})}, {}, {});
+	auto v = view("x::shelves")
+	             .each(all("x::shelf"))
+	             .fields({"name"})
+	             .counted("total", where("x::clipping", "shelf", row))
+	             .summed("size", where("x::clipping", "shelf", row), "bytes")
+	             .value("newest", where("x::clipping", "shelf", row), "bytes", {by("-bytes")});
+	auto started = std::chrono::steady_clock::now();
+	auto shown = m.build(v, kept, "");
+	auto took = std::chrono::steady_clock::now() - started;
+	CHECK(shown.has_value());
+	if (!shown) return;
+	const auto& rows = (*shown)["rows"].as_array();
+	CHECK(rows.size() == 50);
+	long long all = 0;
+	for (const auto& r : rows) all += r["total"].as_integer();
+	CHECK(all == 20000);
+	for (const auto& r : rows) {
+		if (r["name"].as_string() != "s7") continue;
+		CHECK(r["total"].as_integer() == 400);
+		CHECK(r["newest"].as_integer() == 19957);
+		CHECK(r["size"].as_double() == 400.0 * 7 + 50.0 * 399 * 400 / 2);
+	}
+	CHECK_SAYING(took < std::chrono::seconds(2), std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(took).count()) + " ms");
 }
 
 TEST("views are told as commands change them, through the source the screens read") {

@@ -3918,14 +3918,23 @@ namespace one::language {
             }
         }
 
-        // A call's argument can filter what it's given: count(loan where returned_at == none).
+        // A call's argument can filter what it's given: count(loan where returned_at == none),
+        // and order it, as a list is: first(loan where ... order by due descending).
         expression_ptr parse_argument() {
             auto value = parse_expression();
             if (!at_word("where")) return value;
             location where = advance().where;
             auto e = std::make_unique<expression>();
             e->where = where;
-            e->node = where_expression{std::move(value), parse_expression()};
+            where_expression filtered{std::move(value), parse_expression()};
+            if (at_word("order") && peek(1).kind == token_kind::identifier && peek(1).text == "by") {
+                advance();
+                advance();
+                do {
+                    filtered.order.push_back(parse_order_key());
+                } while (!at(token_kind::right_paren) && !at(token_kind::comma) && !at_line_end());
+            }
+            e->node = std::move(filtered);
             return e;
         }
 
