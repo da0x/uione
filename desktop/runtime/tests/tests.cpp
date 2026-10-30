@@ -2039,6 +2039,46 @@ TEST("a paper: its blocks set as their kinds say and aligned as they say, writte
 	CHECK(data.runs()[4].fields["position"].as_double() == 9);
 }
 
+TEST("a paper's insert button puts its block where the caret is: between a block's halves from its middle, as one step") {
+	memory_source data;
+	list passages{value(fields{{"id", "b1"}, {"kind", "text"}, {"words", "One two"}, {"position", 1}, {"align", "left"}})};
+	data.set("studio::notes_page", "p1", value(fields{{"passages", passages}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Notes", "/", "", [](page& p) {
+		                     return workspace(p, region{"main", items(paper(p, {.view = p.view("studio::notes_page", "p1"), .list = "passages", .fields = {{"words", "words"}, {"kind", "kind"}, {"position", "position"}},
+		                                                                        .write = "studio::passage::write", .add = "studio::passage::create", .key = "/ paper", .fills = true}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	auto root = built(nav);
+	(void)one::desktop::offscreen::draw({900, 600}, 1, tested_theme().page, [&](one::desktop::canvas& c) { root->paint(c); });
+	std::function<one::desktop::element*(one::desktop::element&)> sheet = [&](one::desktop::element& e) -> one::desktop::element* {
+		if (e.entry() && e.frame.width > 400) return &e;
+		for (auto& child : e.children) {
+			if (auto* found = sheet(*child)) return found;
+		}
+		return nullptr;
+	};
+	auto* page = sheet(*root);
+	CHECK(page != nullptr);
+	if (!page) return;
+	// Opened, the caret's at the end; three to the left, it's before "two".
+	for (int n = 0; n < 3; ++n) CHECK(page->handle_key(one::desktop::key_event{.symbol = one::desktop::keys::left, .text = ""}));
+	nav.current().kept<std::optional<value>>("paper insert / paper").set(value(fields{{"kind", "math"}}));
+	(void)built(nav);
+	CHECK(data.runs().size() == 3);
+	if (data.runs().size() < 3) return;
+	CHECK(data.runs()[0].command == "studio::passage::write");
+	CHECK(data.runs()[0].fields["words"].as_string() == "One ");
+	CHECK(data.runs()[1].fields["kind"].as_string() == "math");
+	CHECK(data.runs()[1].fields["position"].as_double() == 2);
+	CHECK(data.runs()[1].fields["one:history"].as_string() == "joined");
+	CHECK(data.runs()[2].fields["kind"].as_string() == "text");
+	CHECK(data.runs()[2].fields["words"].as_string() == "two");
+	CHECK(data.runs()[2].fields["position"].as_double() == 3);
+}
+
 TEST("a paper's math block is its words while the caret's in it, in a well, and keeps the room its equation takes") {
 	memory_source data;
 	auto block = [](std::string id, std::string kind, std::string words, double position, std::string align = "left") {
@@ -3507,6 +3547,21 @@ TEST("on open, a screen opens the first row its condition holds for in its place
 	// Never a step undo takes back: the person didn't do it.
 	if (!data.runs().empty()) CHECK(data.runs().front().fields["one:history"].as_string() == "apart");
 	CHECK(nav.current().address() == "/posters/p9");
+}
+
+TEST("on open, a toggle is turned on or off as its press would, where its line applies") {
+	memory_source data;
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Drawing", "/drawn", "", [](page& p) {
+		                     return items(on_open(p, true, {opening{.turn = "/drawn layers", .on = false, .when = false}, opening{.turn = "/drawn layers", .on = true}}));
+	                     }});
+	navigator nav(s, data);
+	nav.open("/drawn");
+	(void)drawn(nav);
+	CHECK(nav.current().toggled("/drawn layers"));
+	(void)drawn(nav);
+	CHECK(nav.current().toggled("/drawn layers"));
 }
 
 TEST("work handed back from another thread is dropped when no app is running to take it") {

@@ -39,6 +39,7 @@ namespace one::generators {
         bool files = false;  // a field holds a file, kept in a bucket of the project's
         bool backend = true;  // there's a backend to run; without one, it's only the web app on Hosting
         std::string redirect;  // a second domain, like www.uione.io, that sends whoever opens it to domain
+        std::string site;  // its own Hosting site in a Firebase project it shares, like vectra-da0x
         std::vector<std::pair<std::string, std::string>> redirects;  // each address, and where it goes
     };
 

@@ -27,6 +27,7 @@ type mocks struct {
 	resources map[string]resource.PropertyMap // by type and name, like gcp:firestore/database:Database::database
 	imports   map[string]string               // the ID each imported resource was imported from
 	waits     map[string][]string             // the resources each one waits for, by URN
+	aliases   map[string][]string             // the names each one also answers to
 	hosting   []string                        // the projects whose Hosting API was waited for
 }
 
@@ -40,6 +41,14 @@ func (m *mocks) NewResource(args pulumi.MockResourceArgs) (string, resource.Prop
 			m.imports[key] = args.RegisterRPC.ImportId
 		}
 		m.waits[key] = args.RegisterRPC.Dependencies
+		for _, alias := range args.RegisterRPC.GetAliases() {
+			if name := alias.GetSpec().GetName(); name != "" {
+				m.aliases[key] = append(m.aliases[key], name)
+			}
+		}
+		for _, urn := range args.RegisterRPC.GetAliasURNs() {
+			m.aliases[key] = append(m.aliases[key], urn[strings.LastIndex(urn, "::")+2:])
+		}
 	}
 	outputs := args.Inputs.Copy()
 	switch args.TypeToken {
@@ -115,7 +124,7 @@ func declareChanged(t *testing.T, dir string, settings string, billing string, c
 func declareIn(t *testing.T, dir string, settings string, billing string, fresh bool, change func(*Project)) (*mocks, error) {
 	t.Helper()
 	t.Setenv("PULUMI_CONFIG", settings)
-	m := &mocks{billing: billing, resources: map[string]resource.PropertyMap{}, imports: map[string]string{}, waits: map[string][]string{}}
+	m := &mocks{billing: billing, resources: map[string]resource.PropertyMap{}, imports: map[string]string{}, waits: map[string][]string{}, aliases: map[string][]string{}}
 	firebaseAdded = func(context.Context, string) (bool, error) { return !fresh, nil }
 	siteReachable = func(context.Context, string) (bool, error) { return !fresh, nil }
 	waitForHosting = func(_ context.Context, project string) error {
@@ -557,7 +566,7 @@ func TestAProjectWithNoBackendIsOnlyItsSiteAndNeedsNoBilling(t *testing.T) {
 		}
 	}
 	for _, key := range []string{"gcp:firebase/webApp:WebApp::web", "gcp:firebase/hostingSite:HostingSite::site",
-		"gcp:firebase/hostingCustomDomain:HostingCustomDomain::domain", "gcp:firebase/hostingCustomDomain:HostingCustomDomain::redirect"} {
+		"gcp:firebase/hostingCustomDomain:HostingCustomDomain::uione.io", "gcp:firebase/hostingCustomDomain:HostingCustomDomain::www.uione.io"} {
 		m.get(t, key)
 	}
 	var turnedOn []string
@@ -569,6 +578,27 @@ func TestAProjectWithNoBackendIsOnlyItsSiteAndNeedsNoBilling(t *testing.T) {
 	sort.Strings(turnedOn)
 	if strings.Join(turnedOn, " ") != strings.Join(staticAPIs, " ") {
 		t.Errorf("a project with no backend turns on %v", turnedOn)
+	}
+}
+
+func TestAProjectSharingItsFirebaseProjectMakesASiteOfItsOwn(t *testing.T) {
+	m, err := declareChanged(t, t.TempDir(), settings, "", func(p *Project) { p.Static = true; p.Site = "tracker-ui-one" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := "gcp:firebase/hostingSite:HostingSite::site"
+	if got := m.imports[key]; got != "" {
+		t.Errorf("a site of its own is imported from %q, rather than made", got)
+	}
+	if got := m.get(t, key)["siteId"].StringValue(); got != "tracker-ui-one" {
+		t.Errorf("the site is %q", got)
+	}
+	if got := m.get(t, "gcp:firebase/hostingCustomDomain:HostingCustomDomain::uione.io")["siteId"].StringValue(); got != "tracker-ui-one" {
+		t.Errorf("the domain is served by %q", got)
+	}
+	// A project with a backend keeps its Firebase project to itself.
+	if _, err := declareChanged(t, build(t), settings, "", func(p *Project) { p.Site = "tracker-ui-one" }); err == nil || !strings.Contains(err.Error(), "no backend") {
+		t.Errorf("got %v", err)
 	}
 }
 
@@ -657,7 +687,7 @@ func TestCloudRunCantBeDeletedByAccident(t *testing.T) {
 
 func TestTheMasterSecretIsAnOutputUnderItsName(t *testing.T) {
 	var outputs map[string]pulumi.Input
-	m := &mocks{billing: "000000-000000-000000", resources: map[string]resource.PropertyMap{}, imports: map[string]string{}, waits: map[string][]string{}}
+	m := &mocks{billing: "000000-000000-000000", resources: map[string]resource.PropertyMap{}, imports: map[string]string{}, waits: map[string][]string{}, aliases: map[string][]string{}}
 	dir := build(t)
 	t.Setenv("PULUMI_CONFIG", settings)
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
@@ -988,7 +1018,7 @@ func TestASecondDomainSendsPeopleToTheFirst(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	second := m.get(t, "gcp:firebase/hostingCustomDomain:HostingCustomDomain::redirect")
+	second := m.get(t, "gcp:firebase/hostingCustomDomain:HostingCustomDomain::www.uione.io")
 	if second["customDomain"].StringValue() != "www.uione.io" || second["redirectTarget"].StringValue() != "uione.io" {
 		t.Errorf("www.uione.io is declared as %v", second)
 	}
@@ -996,7 +1026,30 @@ func TestASecondDomainSendsPeopleToTheFirst(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := m.resources["gcp:firebase/hostingCustomDomain:HostingCustomDomain::redirect"]; ok {
-		t.Errorf("a project with one domain declares a second")
+	for key := range m.resources {
+		if strings.HasPrefix(key, "gcp:firebase/hostingCustomDomain:") && key != "gcp:firebase/hostingCustomDomain:HostingCustomDomain::uione.io" {
+			t.Errorf("a project with one domain declares %s", key)
+		}
+	}
+}
+
+func TestEachDomainIsNamedForItselfSoSwappingThemOnlyChangesWhereEachSendsPeople(t *testing.T) {
+	served := "gcp:firebase/hostingCustomDomain:HostingCustomDomain::uione.io"
+	sending := "gcp:firebase/hostingCustomDomain:HostingCustomDomain::www.uione.io"
+	m, err := declareChanged(t, build(t), settings, "000000-000000-000000", func(p *Project) { p.Redirect = "www.uione.io" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	// What each was named for its part, before, it still answers to.
+	if got := strings.Join(m.aliases[served], " ") + " | " + strings.Join(m.aliases[sending], " "); got != "domain | redirect" {
+		t.Errorf("the domains also answer to %q", got)
+	}
+	m, err = declareChanged(t, build(t), settings, "000000-000000-000000", func(p *Project) { p.Domain, p.Redirect = "www.uione.io", "uione.io" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Swapped, each is the same resource, only sending people elsewhere.
+	if m.get(t, served)["redirectTarget"].StringValue() != "www.uione.io" || !m.get(t, sending)["redirectTarget"].IsNull() {
+		t.Errorf("swapped, uione.io is %v and www.uione.io is %v", m.get(t, served), m.get(t, sending))
 	}
 }

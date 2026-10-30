@@ -494,6 +494,14 @@ namespace one::screens {
 		opened.set(true);
 		for (const auto& line : lines) {
 			if (!line.when) continue;
+			if (!line.choose.empty()) {
+				p.choose(line.choose, line.choice);
+				return false;
+			}
+			if (!line.turn.empty()) {
+				if (p.toggled(line.turn) != line.on) p.toggle(line.turn);
+				return false;
+			}
 			if (line.run) {
 				auto shown = command_of(p, *line.run);
 				if (!shown) continue;

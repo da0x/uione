@@ -11,7 +11,7 @@ import type { ReactElement, ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { partsOf } from "./keys.js";
 import { ShownPath, fill, pictureShownFor, useConfirmContext, useFill, useListOpens, usePageTitle, useSignIn, useSite, useSteppedAmong } from "./app.js";
-import { hintOf, rememberGiven, setPicked as pickRow, useInGroup, useInOptions, useLastGiven, useOverRun, usePicturesHanded, useStyled, takeInTurn, alreadyIn, notAPicture, useKeys, useOff, usePickedId, useTool, setToggled, stoppedBy, useToggled } from "./workspace.js";
+import { hintOf, leaveFull, rememberGiven, setPicked as pickRow, useInGroup, useInOptions, useLastGiven, useOverRun, usePicturesHanded, useStyled, takeInTurn, alreadyIn, notAPicture, useKeys, useOff, usePickedId, useFull, useTool, setToggled, stoppedBy, useToggled } from "./workspace.js";
 import { useSaying } from "./said.js";
 import { PictureAlone, stepped, useAwakeOn, useSwipeStep } from "./alone.js";
 import { pictureSize } from "./vectors.js";
@@ -241,22 +241,28 @@ function elementsOf(children: ReactNode): Part[] {
   return Children.toArray(children).filter((part): part is Part => isValidElement(part));
 }
 
-// What a section of words says: the short line over its title, its words, and the
-// sections it holds; or nothing, when it holds anything else.
-function offered(section: Part): LandingFeature | undefined {
+// What a section of words says: the short line over its title, its words, the
+// sections it holds, and the one link it opens; or nothing, when it holds anything else,
+// or a link with no words.
+function offered(section: Part, linked: (to: string) => LinkProps): LandingFeature | undefined {
   let overline: ReactNode;
+  let link: LandingFeature["link"];
   const text: ReactNode[] = [];
   const features: LandingFeature[] = [];
   for (const part of elementsOf(section.props.children)) {
     if (part.type === Overline) overline = part.props.children;
     else if (part.type === Text) text.push(part.props.children);
+    else if (part.type === Link && !link) link = { ...linked((part.props as { to?: string }).to ?? "/"), label: part.props.children };
     else if (part.type === Section && !part.props.steps) {
-      const inner = offered(part);
+      const inner = offered(part, linked);
       if (!inner) return undefined;
       features.push(inner);
     } else return undefined;
   }
-  return { title: section.props.title ?? "", ...(overline !== undefined ? { overline } : {}), ...(section.props.icon ? { icon: section.props.icon } : {}), text, features };
+  // A link alone, with no words, is a way to reach the site, like a contact's, asked of
+  // its reader rather than offered.
+  if (link && text.length === 0) return undefined;
+  return { title: section.props.title ?? "", ...(overline !== undefined ? { overline } : {}), ...(section.props.icon ? { icon: section.props.icon } : {}), text, features, ...(link ? { link } : {}) };
 }
 
 export function Landing({ design, children }: { design: string; children?: ReactNode }) {
@@ -309,7 +315,7 @@ export function Landing({ design, children }: { design: string; children?: React
         });
         continue;
       }
-      const feature = offered(child);
+      const feature = offered(child, (to) => link(filled(to)));
       if (feature) {
         order.push("feature");
         features.push(feature);
@@ -520,17 +526,11 @@ export function Layout({ name, alone = false, children }: { name: string; alone?
   useFill(name === "workspace");
   // Only its picture: its bars over it while the pointer's moved lately.
   const awake = useAwakeOn(alone);
-  // Filling the screen, a workspace is only its work, like a picture on a wall; a
-  // picture alone keeps its bars, hidden, for their keys.
-  const full = useSyncExternalStore(
-    (changed) => {
-      if (typeof document === "undefined") return () => {};
-      document.addEventListener("fullscreenchange", changed);
-      return () => document.removeEventListener("fullscreenchange", changed);
-    },
-    () => typeof document !== "undefined" && Boolean(document.fullscreenElement),
-    () => false,
-  );
+  // Filling the screen, a workspace is only its work, like a picture on a wall, with one
+  // way out at its top right, as Escape is; a picture alone keeps its bars, hidden, for
+  // their keys.
+  const full = useFull();
+  useKeys(["escape"], leaveFull, full && name === "workspace");
   const regions: Record<string, ReactNode> = {};
   const drawers: string[] = [];
   Children.forEach(children, (child) => {
@@ -539,6 +539,18 @@ export function Layout({ name, alone = false, children }: { name: string; alone?
       if (child.props.drawer) drawers.push(child.props.name);
     }
   });
+  if (full && name === "workspace" && !alone) {
+    regions["main"] = (
+      <>
+        {regions["main"]}
+        <div style={{ position: "fixed", top: "calc(env(safe-area-inset-top) + 8px)", right: "calc(env(safe-area-inset-right) + 8px)", zIndex: 40 }}>
+          <ui.Button kind="secondary" icon="close" tool="small" hint="Leave full screen (Esc)" onClick={leaveFull}>
+            Leave full screen
+          </ui.Button>
+        </div>
+      </>
+    );
+  }
   return <ui.Layout name={name} regions={regions} site={site.name} alone={alone ? { awake: awake && !full, drawers } : undefined} />;
 }
 

@@ -841,18 +841,39 @@ namespace one::desktop::runtime {
 				tick_.set(tick_.peek() + 1);
 			}
 
-			// Inserted from a toolbar: an empty block after the caret's, given what the button
-			// gives, the caret then in it.
+			// Inserted from a toolbar: an empty block where the caret is, given what the button
+			// gives, the caret then in it: after its block, before it from its start, or
+			// between its two halves from its middle, all one step to undo.
 			void insert(const value& given) {
 				if (spec_.add.empty()) return;
 				std::size_t i = index();
-				if (block* here = current()) send(here->id);
+				block* here = current();
+				std::string words = here ? s_->edit.text() : "";
+				std::size_t from = s_->edit.selecting() ? s_->edit.selection().first : s_->edit.caret();
+				std::size_t to = s_->edit.selecting() ? s_->edit.selection().second : from;
+				if (!here) from = to = 0;
+				std::string head = words.substr(0, std::min(from, words.size())), tail = words.substr(std::min(to, words.size()));
+				bool parts = here && kind_of(here->kind).joins() && kind_of(here->kind).enter(words, from, false) == paper_kinds::on_enter::split;
+				bool before = parts && head.empty() && !tail.empty();
+				bool middle = parts && !before && !tail.empty();
+				if (here && !middle) send(here->id);
+				std::optional<double> next = i + 1 < blocks_.size() ? std::optional(blocks_[i + 1].position) : std::nullopt;
 				double position = 1;
-				if (i < blocks_.size() && !s_->first) position = between(blocks_[i].position, i + 1 < blocks_.size() ? std::optional(blocks_[i + 1].position) : std::nullopt);
+				if (i < blocks_.size() && !s_->first) {
+					position = !before ? between(blocks_[i].position, next) : i > 0 ? between(blocks_[i - 1].position, blocks_[i].position) : blocks_[i].position - 1;
+				}
+				if (middle) {
+					s_->written[here->id] = head;
+					s_->sent[here->id] = head;
+					p_.run(spec_.write, collage_fields_of(value(fields{{"id", here->id}, {"words", head}}), spec_.fields));
+					here->words = head;
+					s_->edit = editing(head, true);
+				}
 				value made = given;
 				made.fields["words"] = value("");
 				made.fields["position"] = value(position);
 				if (!spec_.parent.empty()) made.fields[spec_.parent] = value(spec_.subject);
+				if (middle) made.fields["one:history"] = value("joined");
 				s_->coming = position;
 				s_->coming_id.clear();
 				s_->known.clear();
@@ -860,6 +881,12 @@ namespace one::desktop::runtime {
 				s_->coming_caret = 0;
 				s_->first = false;
 				p_.run(spec_.add, collage_fields_of(made, spec_.fields));
+				if (middle) {
+					value rest = value(fields{{"position", between(position, next)}, {"words", tail}, {"kind", here->kind}, {"one:history", "joined"}});
+					if (here->align != "" && here->align != "left") rest.fields["align"] = value(here->align);
+					if (!spec_.parent.empty()) rest.fields[spec_.parent] = value(spec_.subject);
+					p_.run(spec_.add, collage_fields_of(rest, spec_.fields));
+				}
 				tick_.set(tick_.peek() + 1);
 			}
 

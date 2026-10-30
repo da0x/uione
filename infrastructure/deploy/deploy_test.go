@@ -60,7 +60,7 @@ func (w *world) tools() Tools {
 			}
 			return nil
 		},
-		Upload: func(_ context.Context, project, web string, progress func(string, string)) error {
+		Upload: func(_ context.Context, project, _, web string, progress func(string, string)) error {
 			w.did = append(w.did, "upload "+project+" from "+filepath.Base(web))
 			progress("release", "released")
 			return w.fails("upload")
@@ -106,7 +106,7 @@ func TestADeployRunsEveryStepInOrderAndReportsEach(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []string{"api: go mod tidy", "infrastructure: go mod tidy", "open infrastructure production", "preview", "up",
-		"web: yarn install --non-interactive", "web: yarn build", "upload ui-one from web"}
+		"web: yarn install --non-interactive --force", "web: yarn build", "upload ui-one from web"}
 	if !reflect.DeepEqual(w.did, want) {
 		t.Errorf("the deploy did\n%v\nwant\n%v", w.did, want)
 	}
@@ -199,7 +199,7 @@ func TestADomainFirebaseHasntWorkedOutYetIsAskedAboutAgain(t *testing.T) {
 		"firebase_auth_domain": "uione-cloud.firebaseapp.com", "dns_records": []any{}, "domain": "studio.uione.io",
 	}}
 	tools := w.tools()
-	tools.Records = func(_ context.Context, project, domain string) ([]string, error) {
+	tools.Records = func(_ context.Context, project, _, domain string) ([]string, error) {
 		return []string{"add CNAME " + domain + " " + project + ".web.app"}, nil
 	}
 	needed, err := Run(context.Background(), Options{Build: dir, Stack: "production", Progress: io.Discard,
@@ -395,7 +395,7 @@ func TestAProjectWithNoBackendDeploysOnlyItsSite(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []string{"infrastructure: go mod tidy", "open infrastructure production", "preview", "up",
-		"web: yarn install --non-interactive", "web: yarn build", "upload ui-one from web"}
+		"web: yarn install --non-interactive --force", "web: yarn build", "upload ui-one from web"}
 	if !reflect.DeepEqual(w.did, want) {
 		t.Errorf("the deploy did\n%v\nwant\n%v", w.did, want)
 	}

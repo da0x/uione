@@ -252,7 +252,7 @@ TEST_CASE("two screens can't share a route, counting the namespace") {
 
 TEST_CASE("one project block, with known settings") {
     CHECK(only_error("import one\nproject a {\n\thue \"red\"\n}\n").message ==
-          "'hue' isn't a setting of a project; it says one, extends, title, domain, firebase, region, ui, storage, signin, target, icon, theme, appearance, layout, serve, redirect, accessibility or analytics");
+          "'hue' isn't a setting of a project; it says one, extends, title, domain, firebase, region, site, ui, storage, signin, target, icon, theme, appearance, layout, serve, redirect, accessibility or analytics");
     CHECK(check_source("import one\nproject p {\n\tanalytics google\n}\n").empty());
     CHECK(only_error("import one\nproject p {\n\tanalytics plausible\n}\n").message == "analytics is google, written plainly, like analytics google");
     CHECK(only_error("import one\nproject a {\n\tui radix\n}\nproject b {\n\tui radix\n}\n").message.starts_with(

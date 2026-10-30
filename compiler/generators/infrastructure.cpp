@@ -12,6 +12,7 @@
 #include "code/stream.hpp"
 #include "generators/output.hpp"
 #include "language/ast.hpp"
+#include "language/storage.hpp"
 #include "platform/files.hpp"
 #include "version.hpp"
 
@@ -84,11 +85,19 @@ namespace one::generators {
                     if (setting.key == "domain") s.domain = setting.value, s.redirect = setting.to;
                     if (setting.key == "firebase") s.firebase = setting.value;
                     if (setting.key == "region") s.region = setting.value;
+                    if (setting.key == "site") s.site = setting.value;
                     if (setting.key == "redirect") s.redirects.emplace_back(setting.value, setting.to);
                     if (setting.key == "signin") s.signs_in = true;
                 }
                 if (s.domain.empty() || s.firebase.empty() || s.region.empty()) return std::nullopt;
                 if (!p->environment.empty()) s.stack = s.firebase;
+                // A project kept on its machine has no backend wherever it's served: its
+                // web app keeps its data, files too, in the browser, so it's only the app
+                // on Hosting.
+                if (language::stores_locally(files)) {
+                    s.backend = false;
+                    return s;
+                }
                 for (const auto& other : files) {
                     if (s.github.empty()) s.github = hook_route(other.declarations, "github");
                     if (s.stripe.empty()) s.stripe = hook_route(other.declarations, "stripe");
@@ -195,6 +204,7 @@ namespace one::generators {
             if (s.signs_in) g.line("SignIn:   true,");
             if (s.files) g.line("Files:    true,");
             if (!s.redirect.empty()) g.line("Redirect: " + quoted(s.redirect) + ",");
+            if (!s.site.empty()) g.line("Site:     " + quoted(s.site) + ",");
             if (!s.backend) g.line("Static:   true,");
             g.close("})");
             g.close("}");

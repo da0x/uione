@@ -83,3 +83,8 @@ go of only by a tab that opens alone, since another's undo could name one again.
 
 0001 now reads "every app that doesn't say `storage local` runs on Firebase with a
 Go service".
+
+A local web app can still be served from Firebase Hosting, when its project names
+`firebase`, `region` and `domain` (2026-10-29). Hosting only hands out its files: the
+deploy makes no service, database or rules, and each visitor's data stays in their
+browser, so nothing here changes.

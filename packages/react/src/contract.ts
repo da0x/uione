@@ -799,6 +799,7 @@ export interface LandingFeature {
   icon?: string; // one of the icons, like database
   text: ReactNode;
   features: LandingFeature[];
+  link?: LinkProps & { label: ReactNode }; // what it opens, pressed anywhere on it
 }
 
 // A front page in one of uione's designs: waveform, studio, aurora, grid, relay,

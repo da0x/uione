@@ -12,20 +12,21 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { LandingFeature, LandingProps } from "@uione/react";
-import { Icon, grouped, heading } from "./parts.js";
+import { Icon, Opens, grouped, heading } from "./parts.js";
 import type { Group } from "./parts.js";
 
-// Offerings as a launcher: each an icon on a tile, its name centered under it.
+// Offerings as a launcher: each an icon on a tile, its name centered under it, up to
+// four to a row, and a row that isn't full centered under the rest.
 function Launcher({ features }: { features: LandingFeature[] }) {
   return (
-    <ul className="m-0 grid list-none grid-cols-2 gap-x-6 gap-y-10 p-0 sm:grid-cols-4">
+    <ul className="m-0 flex list-none flex-wrap justify-center gap-x-6 gap-y-10 p-0">
       {features.map((f, at) => (
-        <li key={at} className="flex flex-col items-center gap-4 text-center">
-          <span className="grid size-24 place-items-center rounded-[22%] border border-line bg-surface">
+        <li key={at} className={`flex w-[calc(50%-0.75rem)] flex-col items-center gap-4 text-center sm:w-[calc(25%-1.125rem)] ${f.link ? "relative [-webkit-tap-highlight-color:transparent]" : ""}`}>
+          <span className={`grid size-24 place-items-center rounded-[22%] border border-line bg-surface ${f.link ? "has-[~h3_a:focus-visible]:ring-2 has-[~h3_a:focus-visible]:ring-accent" : ""}`}>
             <Icon name={f.icon} className="size-10" />
           </span>
           <h3 className="m-0 text-[1.1rem] font-semibold text-ink" style={heading}>
-            {f.title}
+            <Opens link={f.link}>{f.title}</Opens>
           </h3>
           <Words text={f.text} className="max-w-[16rem] text-sm leading-6 text-muted" />
         </li>
@@ -95,8 +96,8 @@ function Entries({ entries }: { entries: { title: string; overline?: ReactNode; 
             {e.features && e.features.length > 0 && (
               <ul className="m-0 flex list-none flex-col gap-2 p-0">
                 {e.features.map((f, held) => (
-                  <li key={held}>
-                    <span className="font-medium text-ink">{f.title}</span> <span>{f.text}</span>
+                  <li key={held} className={f.link ? "relative" : undefined}>
+                    <span className="font-medium text-ink"><Opens link={f.link}>{f.title}</Opens></span> <span>{f.text}</span>
                   </li>
                 ))}
               </ul>

@@ -353,26 +353,44 @@ export function History({ redo = false, label, icon, keys }: { redo?: boolean; l
 
 // full screen
 
+// The page filling the screen: the browser's own full screen, or, where a browser won't
+// give a page one, as an iPhone's won't, the workspace filling the window by itself,
+// only its work and a way out.
+let filling = false;
+const fillingListeners = new Set<() => void>();
 function fullNow(): boolean {
-  return typeof document !== "undefined" && Boolean(document.fullscreenElement);
+  return typeof document !== "undefined" && (Boolean(document.fullscreenElement) || filling);
+}
+function fill(on: boolean) {
+  filling = on;
+  fillingListeners.forEach((changed) => changed());
+}
+function watchFull(changed: () => void) {
+  fillingListeners.add(changed);
+  document.addEventListener("fullscreenchange", changed);
+  return () => {
+    fillingListeners.delete(changed);
+    document.removeEventListener("fullscreenchange", changed);
+  };
+}
+export function useFull(): boolean {
+  return useSyncExternalStore(watchFull, fullNow, () => false);
+}
+export function enterFull() {
+  const asked = document.documentElement.requestFullscreen?.bind(document.documentElement);
+  if (!asked) return fill(true);
+  asked().catch(() => fill(true));
+}
+export function leaveFull() {
+  if (document.fullscreenElement) void document.exitFullscreen();
+  if (filling) fill(false);
 }
 
 export function FullScreen({ label = "Full screen", icon, keys }: { label?: string; icon?: string; keys?: string[] }) {
   const ui = useUI();
   const tool = useTool() ?? "small";
-  const { say } = useSaying();
-  const full = useSyncExternalStore(
-    (changed) => {
-      document.addEventListener("fullscreenchange", changed);
-      return () => document.removeEventListener("fullscreenchange", changed);
-    },
-    fullNow,
-    () => false,
-  );
-  const flip = useCallback(() => {
-    if (fullNow()) void document.exitFullscreen();
-    else document.documentElement.requestFullscreen?.().catch(() => say({ text: "This browser didn't let the page fill the screen.", problem: true }));
-  }, [say]);
+  const full = useFull();
+  const flip = useCallback(() => (fullNow() ? leaveFull() : enterFull()), []);
   const off = useOff();
   useKeys(keys, flip, !off);
   return (

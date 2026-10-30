@@ -145,6 +145,7 @@ namespace one::generators {
         std::set<std::string> toggles_;  // its toggles, like layers, which its whens read
         std::map<std::string, std::string> choices_;  // and those over an enum, by it, each to the choice it starts at
         bool in_group_ = false;          // writing a toolbar group's lines, each its own tool
+        bool in_bar_ = false;            // writing a workspace bar's own lines, its group at its end apart
         bool workspace_ = false;         // the screen being written is laid out as a workspace
         std::optional<std::string> row_named_;  // the row an on open line's where reads, by what it's of
         std::string collage_key_;        // what its collage buttons name its collage by
@@ -466,6 +467,19 @@ namespace one::generators {
                             screen_items(items, parts, ns, region.items, s->items);
                             in_group_ = was;
                             items.close("</Tools>");
+                        } else if (layout == "workspace" && region.title == "bar") {
+                            // A bar's group at its end: its lines at the bar's far end, before
+                            // light and dark, each as the bar's others are.
+                            bool was = std::exchange(in_bar_, true);
+                            screen_items(items, parts, ns, region.items, s->items);
+                            in_bar_ = was;
+                            for (const auto& line : region.items) {
+                                auto* g = std::get_if<language::content_block>(&line.node);
+                                if (!g || g->type != language::content_block::kind::group) continue;
+                                items.close("</Region>");
+                                items.open("<Region name=\"barEnd\">");
+                                shown_while(items, parts, ns, line, [&] { screen_items(items, parts, ns, g->items, s->items); });
+                            }
                         } else {
                             screen_items(items, parts, ns, region.items, s->items);
                         }
@@ -1154,6 +1168,7 @@ namespace one::generators {
                     continue;
                 }
                 if (auto* group = std::get_if<language::content_block>(&item.node); group && group->type == language::content_block::kind::group) {
+                    if (in_bar_) continue;  // drawn at the bar's end, by the layout
                     parts.components.insert("Group");
                     shown_while(out, parts, ns, item, [&] {
                         out.open("<Group name=" + web_detail::js_string(group->title) + (group->small ? " small" : "") + (group->across ? " across={" + std::to_string(group->across) + "}" : "") +
@@ -1475,6 +1490,9 @@ namespace one::generators {
                     }
                     if (paper->empty) line += " empty=" + web_detail::js_string(*paper->empty);
                     if (paper->outline) line += paper->outline_when ? " outline={" + condition(parts, ns, *paper->outline_when) + "} outlineDrawer" : std::string(" outline");
+                    // outline when contents: the toggle it's there by, which choosing a heading turns off where it fills the room.
+                    if (auto* named = paper->outline_when ? std::get_if<language::name_expression>(&paper->outline_when->node) : nullptr; named && named->name.parts.size() == 1)
+                        line += " outlineToggle=" + web_detail::js_string(route_ + " " + named->name.text());
                     if (paper->paste) line += " paste";
                     if (paper->progress) line += " progress";
                     if (paper->warm) line += " warm={" + condition(parts, ns, *paper->warm) + "}";
@@ -1672,24 +1690,32 @@ namespace one::generators {
                 } else if (auto* toggle = std::get_if<language::toggle_item>(&item.node); toggle && toggle->choice) {
                     // One of an enum's choices, pressed while it's the one.
                     parts.components.insert("Choose");
-                    out.line("<Choose name=" + web_detail::js_string(route_ + " " + toggle->name) + " choice=" + web_detail::js_string(*toggle->choice) + " first=" +
-                             web_detail::js_string(choices_.at(toggle->name)) + " label=" + web_detail::js_string(toggle->label ? *toggle->label : web_detail::label(*toggle->choice)) +
-                             (toggle->icon ? " icon=" + web_detail::js_string(*toggle->icon) : "") + keys_of(toggle->keys) + " />");
+                    shown_while(out, parts, ns, item, [&] {
+                        out.line("<Choose name=" + web_detail::js_string(route_ + " " + toggle->name) + " choice=" + web_detail::js_string(*toggle->choice) + " first=" +
+                                 web_detail::js_string(choices_.at(toggle->name)) + " label=" + web_detail::js_string(toggle->label ? *toggle->label : web_detail::label(*toggle->choice)) +
+                                 (toggle->icon ? " icon=" + web_detail::js_string(*toggle->icon) : "") + keys_of(toggle->keys) + " />");
+                    });
                 } else if (auto* toggle = std::get_if<language::toggle_item>(&item.node)) {
                     parts.components.insert("Toggle");
-                    out.line("<Toggle name=" + web_detail::js_string(route_ + " " + toggle->name) + " label=" + web_detail::js_string(toggle->label ? *toggle->label : web_detail::label(toggle->name)) +
-                             (toggle->icon ? " icon=" + web_detail::js_string(*toggle->icon) : "") + keys_of(toggle->keys) + " />");
+                    shown_while(out, parts, ns, item, [&] {
+                        out.line("<Toggle name=" + web_detail::js_string(route_ + " " + toggle->name) + " label=" + web_detail::js_string(toggle->label ? *toggle->label : web_detail::label(toggle->name)) +
+                                 (toggle->icon ? " icon=" + web_detail::js_string(*toggle->icon) : "") + keys_of(toggle->keys) + " />");
+                    });
                 } else if (auto* history = std::get_if<language::history_item>(&item.node)) {
                     parts.components.insert("History");
-                    out.line(std::string("<History") + (history->redo ? " redo" : "") + (history->label ? " label=" + web_detail::js_string(*history->label) : "") +
-                             (history->icon ? " icon=" + web_detail::js_string(*history->icon) : "") + keys_of(history->keys) + " />");
+                    shown_while(out, parts, ns, item, [&] {
+                        out.line(std::string("<History") + (history->redo ? " redo" : "") + (history->label ? " label=" + web_detail::js_string(*history->label) : "") +
+                                 (history->icon ? " icon=" + web_detail::js_string(*history->icon) : "") + keys_of(history->keys) + " />");
+                    });
                 } else if (std::holds_alternative<language::messages_item>(item.node)) {
                     parts.components.insert("Messages");
                     out.line("<Messages />");
                 } else if (auto* full = std::get_if<language::full_screen_item>(&item.node)) {
                     parts.components.insert("FullScreen");
-                    out.line(std::string("<FullScreen") + (full->label ? " label=" + web_detail::js_string(*full->label) : "") +
-                             (full->icon ? " icon=" + web_detail::js_string(*full->icon) : "") + keys_of(full->keys) + " />");
+                    shown_while(out, parts, ns, item, [&] {
+                        out.line(std::string("<FullScreen") + (full->label ? " label=" + web_detail::js_string(*full->label) : "") +
+                                 (full->icon ? " icon=" + web_detail::js_string(*full->icon) : "") + keys_of(full->keys) + " />");
+                    });
                 } else if (auto* component = std::get_if<language::component_item>(&item.node)) {
                     std::string tag = component_tag(component->name);
                     std::string line = "import " + tag + " from \"../components/" + component->name + "\";";
@@ -1960,6 +1986,10 @@ namespace one::generators {
                     if (b->then_open) run += ", thenOpen: " + web_detail::js_string(full_route(ns, *b->then_open));
                     line = "run: { " + run + " }";
                     if (b->when) line += ", when: " + condition_of(parts, ns, *b->when, read);
+                } else if (auto* t = std::get_if<language::toggle_item>(&o->run.front().node)) {
+                    line = t->turned ? "turn: { name: " + web_detail::js_string(route_ + " " + t->name) + ", on: " + (*t->turned ? "true" : "false") + " }"
+                                     : "choose: { name: " + web_detail::js_string(route_ + " " + t->name) + ", choice: " + web_detail::js_string(*t->choice) + " }";
+                    if (o->run.front().when) line += ", when: " + condition_of(parts, ns, *o->run.front().when, read);
                 }
                 lines += (lines.empty() ? "" : ", ") + std::string("{ ") + line + " }";
             }
@@ -2027,7 +2057,7 @@ namespace one::generators {
             // In a toolbar, a group or a line that doesn't apply now is there, but off, so
             // the toolbar keeps its shape.
             auto* group = std::get_if<language::content_block>(&item.node);
-            if (in_group_ || (group && group->type == language::content_block::kind::group)) {
+            if (!item.only && (in_group_ || (group && group->type == language::content_block::kind::group))) {
                 parts.components.insert("Applies");
                 out.open("<Applies when={" + condition(parts, ns, *item.when) + "}>");
                 draw();

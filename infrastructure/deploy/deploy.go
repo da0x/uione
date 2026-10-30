@@ -51,9 +51,9 @@ type Program interface {
 type Tools struct {
 	Program func(dir, stack, project string) (Program, error)
 	Run     func(ctx context.Context, dir string, log io.Writer, name string, args ...string) error // a command, like yarn build
-	Upload  func(ctx context.Context, project, web string, progress func(name, message string)) error
+	Upload  func(ctx context.Context, project, site, web string, progress func(name, message string)) error
 	// Records asks Hosting what the domain still needs at its DNS host.
-	Records func(ctx context.Context, project, domain string) ([]string, error)
+	Records func(ctx context.Context, project, site, domain string) ([]string, error)
 	// Rehearse starts the new backend on a copy of what the project stores, before
 	// anything is built or changed, and says why it didn't start, if it didn't. It
 	// returns ErrNoRehearsal where it can't be done, like on a machine without
@@ -174,6 +174,11 @@ func Run(ctx context.Context, o Options, tools Tools) (string, error) {
 		return "", err
 	}
 	project = text(outputs, "firebase_project_id")
+	// The site it's served from: its own, or the one Firebase named for the project.
+	site := text(outputs, "site")
+	if site == "" {
+		site = project
+	}
 	if err := step("build", func() error {
 		env, err := settings(outputs)
 		if err != nil {
@@ -193,8 +198,11 @@ func Run(ctx context.Context, o Options, tools Tools) (string, error) {
 		}
 		// The web app's packages, as its package.json names them: installed on a
 		// machine that builds only to deploy, and brought up to date where an earlier
-		// build left others, which would otherwise ship in their place.
-		if err := tools.Run(ctx, web, log, "yarn", "install", "--non-interactive"); err != nil {
+		// build left others, which would otherwise ship in their place. Every one is
+		// installed again, since a package copied from a folder, as uione's are while
+		// it's worked on, keeps its version as it changes, and yarn would keep the copy
+		// it made before.
+		if err := tools.Run(ctx, web, log, "yarn", "install", "--non-interactive", "--force"); err != nil {
 			return err
 		}
 		return tools.Run(ctx, web, log, "yarn", "build")
@@ -202,7 +210,7 @@ func Run(ctx context.Context, o Options, tools Tools) (string, error) {
 		return "", err
 	}
 	if err := step("upload", func() error {
-		return tools.Upload(ctx, project, web, func(name, message string) { say("upload", "progress", name+": "+message) })
+		return tools.Upload(ctx, project, site, web, func(name, message string) { say("upload", "progress", name+": "+message) })
 	}); err != nil {
 		return "", err
 	}
@@ -210,7 +218,7 @@ func Run(ctx context.Context, o Options, tools Tools) (string, error) {
 	// Firebase works out what a new domain needs a while after it's made, so what
 	// Pulumi was told may be nothing yet.
 	if domain := text(outputs, "domain"); needed == "" && domain != "" && tools.Records != nil {
-		asked, err := tools.Records(ctx, project, domain)
+		asked, err := tools.Records(ctx, project, site, domain)
 		if err != nil {
 			say("done", "progress", "couldn't ask Hosting what "+domain+" needs: "+err.Error())
 		}

@@ -134,6 +134,12 @@ namespace one::math {
 				if (std::isdigit(static_cast<unsigned char>(c)) || (c == '.' && at_ + 1 < s_.size() && std::isdigit(static_cast<unsigned char>(s_[at_ + 1])))) {
 					std::size_t from = at_;
 					while (at_ < s_.size() && (std::isdigit(static_cast<unsigned char>(s_[at_])) || s_[at_] == '.')) ++at_;
+					// Its thousands set apart by commas, 299,792,458, while it's a whole number: a
+					// comma with three digits after it and no fourth.
+					auto digit = [&](std::size_t i) { return i < s_.size() && std::isdigit(static_cast<unsigned char>(s_[i])); };
+					while (at_ < s_.size() && s_[at_] == ',' && s_.substr(from, at_ - from).find('.') == std::string_view::npos && digit(at_ + 1) && digit(at_ + 2) && digit(at_ + 3) && !digit(at_ + 4)) at_ += 4;
+					if (at_ < s_.size() && s_[at_] == '.' && digit(at_ + 1))
+						for (++at_; digit(at_);) ++at_;
 					// An exponent, 6.02e23, only when digits follow the e.
 					if (at_ + 1 < s_.size() && (s_[at_] == 'e' || s_[at_] == 'E')) {
 						std::size_t e = at_ + 1;

@@ -142,9 +142,9 @@ func command(ctx context.Context, dir string, log io.Writer, name string, args .
 	return nil
 }
 
-// upload puts the built app on the project's default Hosting site. Calls are billed
+// upload puts the built app on its Hosting site. Calls are billed
 // to the project, which Hosting asks of a person's own sign-in.
-func upload(ctx context.Context, project, web string, progress func(name, message string)) error {
+func upload(ctx context.Context, project, site, web string, progress func(name, message string)) error {
 	settings, err := hosting.ReadSettings(filepath.Join(web, "firebase.json"))
 	if err != nil {
 		return err
@@ -154,19 +154,19 @@ func upload(ctx context.Context, project, web string, progress func(name, messag
 		return fmt.Errorf("signing in to Google: %w; run gcloud auth application-default login", err)
 	}
 	client.Transport = billed{project: project, next: client.Transport}
-	_, err = hosting.Deploy(ctx, client, hosting.API, project, filepath.Join(web, settings.Public), settings, func(s hosting.Step) {
+	_, err = hosting.Deploy(ctx, client, hosting.API, site, filepath.Join(web, settings.Public), settings, func(s hosting.Step) {
 		progress(s.Name, s.Message)
 	})
 	return err
 }
 
-func domainRecords(ctx context.Context, project, domain string) ([]string, error) {
+func domainRecords(ctx context.Context, project, site, domain string) ([]string, error) {
 	client, err := google.DefaultClient(ctx, "https://www.googleapis.com/auth/firebase.hosting", "https://www.googleapis.com/auth/cloud-platform")
 	if err != nil {
 		return nil, err
 	}
 	client.Transport = billed{project: project, next: client.Transport}
-	return hosting.Records(ctx, client, hosting.API, project, project, domain)
+	return hosting.Records(ctx, client, hosting.API, project, site, domain)
 }
 
 type billed struct {

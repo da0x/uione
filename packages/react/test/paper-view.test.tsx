@@ -10,6 +10,8 @@ import { App, Paper, PaperButton, memorySource, screen as defineScreen, useView 
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
 import { pagesOf } from "../src/paper-view.js";
+import { kindOf } from "../src/paper/index.js";
+import { renderToStaticMarkup } from "react-dom/server";
 
 const parts = { words: "words", kind: "kind", align: "align", position: "position", face: "face" };
 
@@ -100,6 +102,110 @@ describe("a paper", () => {
     expect(source.runs[1]).toMatchObject({ command: "studio::passage::create", input: { words: " what you see", kind: "quote", position: 1.5, poster: "p1", "one:history": "joined" } });
   });
 
+  it("makes each paragraph of words pasted a block of its own, the first at the caret, as one step", async () => {
+    const source = sourceWith([
+      { id: "b1", kind: "title", words: "A harbor", position: 1, align: "left" },
+      { id: "b2", kind: "text", words: "After", position: 2, align: "left" },
+    ]);
+    const drawn = renderPaper(source);
+    await waitFor(() => expect(blocks(drawn).length).toBe(2));
+    const block = blocks(drawn)[0]!;
+    block.focus();
+    caretAt(block, 8);
+    fireEvent.paste(block, { clipboardData: { files: [], getData: () => " at dawn\n\nThe boats go out.\r\nThe gulls follow.\n" } });
+    await waitFor(() => expect(source.runs).toHaveLength(3));
+    expect(source.runs[0]).toMatchObject({ command: "studio::passage::write", input: { id: "b1", words: "A harbor at dawn" } });
+    expect(source.runs[1]).toMatchObject({ command: "studio::passage::create", input: { words: "The boats go out.", kind: "text", position: 1.5, "one:history": "joined" } });
+    expect(source.runs[2]).toMatchObject({ command: "studio::passage::create", input: { words: "The gulls follow.", kind: "text", position: 1.75, "one:history": "joined" } });
+  });
+
+  it("writes an equation apart on a phone, its equation over its words, kept only when accepted", async () => {
+    const was = window.matchMedia;
+    window.matchMedia = ((query: string) => ({ matches: true, media: query, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia;
+    try {
+      const source = sourceWith([
+        { id: "b1", kind: "text", words: "Before", position: 1, align: "left" },
+        { id: "b2", kind: "math", words: "x^2", position: 2, align: "center" },
+      ]);
+      const drawn = renderPaper(source);
+      await waitFor(() => expect(blocks(drawn).length).toBe(2));
+      act(() => blocks(drawn)[0]!.focus());
+      act(() => blocks(drawn)[1]!.focus());
+      const sheet = await drawn.findByRole("dialog", { name: "Equation" });
+      const words = sheet.querySelector("textarea")!;
+      expect(words.value).toBe("x^2");
+      fireEvent.change(words, { target: { value: "x = a/b^2" } });
+      expect(sheet.querySelector("svg[role=img]")?.getAttribute("aria-label")).toBe("x = a/b^2");
+      fireEvent.change(words, { target: { value: "x = (a" } });
+      expect(sheet.textContent).toContain("a ) to close");
+      fireEvent.click(drawn.getByRole("button", { name: "Cancel" }));
+      expect(drawn.queryByRole("dialog")).toBeNull();
+      expect(source.runs).toHaveLength(0);
+      act(() => blocks(drawn)[0]!.focus());
+      act(() => blocks(drawn)[1]!.focus());
+      fireEvent.change((await drawn.findByRole("dialog")).querySelector("textarea")!, { target: { value: "x = a/b^2" } });
+      fireEvent.click(drawn.getByRole("button", { name: "Accept" }));
+      await waitFor(() => expect(source.runs).toHaveLength(1));
+      expect(source.runs[0]).toMatchObject({ command: "studio::passage::write", input: { id: "b2", words: "x = a/b^2" } });
+    } finally {
+      window.matchMedia = was;
+    }
+  });
+
+  it("writes an equation apart with keys for all the notation writes, each put at the caret or around what's chosen", async () => {
+    const was = window.matchMedia;
+    window.matchMedia = ((query: string) => ({ matches: true, media: query, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia;
+    try {
+      const source = sourceWith([
+        { id: "b1", kind: "text", words: "Before", position: 1, align: "left" },
+        { id: "b2", kind: "math", words: "x = ", position: 2, align: "center" },
+      ]);
+      const drawn = renderPaper(source);
+      await waitFor(() => expect(blocks(drawn).length).toBe(2));
+      act(() => blocks(drawn)[0]!.focus());
+      act(() => blocks(drawn)[1]!.focus());
+      const sheet = await drawn.findByRole("dialog", { name: "Equation" });
+      const words = sheet.querySelector("textarea")!;
+      words.setSelectionRange(4, 4);
+      fireEvent.click(drawn.getByRole("tab", { name: "Powers" }));
+      fireEvent.click(drawn.getByRole("button", { name: "Square root" }));
+      expect(words.value).toBe("x = sqrt()");
+      expect(words.selectionStart).toBe(9);
+      fireEvent.click(drawn.getByRole("tab", { name: "Greek" }));
+      fireEvent.click(drawn.getByRole("button", { name: "pi" }));
+      expect(words.value).toBe("x = sqrt(pi)");
+      // Around what's chosen; a name after a letter apart from it.
+      words.setSelectionRange(9, 11);
+      fireEvent.click(drawn.getByRole("tab", { name: "Powers" }));
+      fireEvent.click(drawn.getByRole("button", { name: "Squared" }));
+      expect(words.value).toBe("x = sqrt((pi)^2)");
+      words.setSelectionRange(0, 1);
+      fireEvent.click(drawn.getByRole("tab", { name: "Greek" }));
+      fireEvent.click(drawn.getByRole("button", { name: "theta" }));
+      expect(words.value).toBe("theta = sqrt((pi)^2)");
+      expect(sheet.querySelector("svg[role=img]")?.getAttribute("aria-label")).toBe("theta = sqrt((pi)^2)");
+    } finally {
+      window.matchMedia = was;
+    }
+  });
+
+  it("sets the face of every equation key, as the notation reads it", () => {
+    const tabs = kindOf("math").apart?.keys ?? [];
+    expect(tabs.map((t) => t.name)).toEqual(["Basic", "Powers", "Greek", "Calculus", "Functions", "Layout"]);
+    const unset = tabs.flatMap((t) => t.keys.filter((k) => !renderToStaticMarkup(<>{k.face}</>).includes('role="img"')).map((k) => `${t.name}: ${k.name}`));
+    expect(unset).toEqual([]);
+  });
+
+  it("keeps the lines of words pasted into code", async () => {
+    const source = sourceWith([{ id: "b1", kind: "code", words: "", position: 1, align: "left" }]);
+    const drawn = renderPaper(source);
+    await waitFor(() => expect(blocks(drawn).length).toBe(1));
+    const block = blocks(drawn)[0]!;
+    block.focus();
+    fireEvent.paste(block, { clipboardData: { files: [], getData: () => "one\ntwo" } });
+    expect(source.runs.some((r) => r.command === "studio::passage::create")).toBe(false);
+  });
+
   it("joins a block to the one before with Backspace at its start, deleting it, as one step", async () => {
     const source = sourceWith([
       { id: "b1", kind: "text", words: "One ", position: 1, align: "left" },
@@ -152,6 +258,39 @@ describe("a paper", () => {
     fireEvent.click(drawn.getByRole("button", { name: "Equation" }));
     await waitFor(() => expect(source.runs).toHaveLength(1));
     expect(source.runs[0]).toMatchObject({ command: "studio::passage::create", input: { kind: "math", words: "", position: 1.5, poster: "p1" } });
+  });
+
+  it("inserts where the caret was before the button took it: between a block's halves from its middle, before it from its start", async () => {
+    const source = sourceWith([
+      { id: "b1", kind: "text", words: "One two", position: 1, align: "left" },
+      { id: "b2", kind: "text", words: "Three", position: 2, align: "left" },
+    ]);
+    const drawn = renderPaper(source);
+    await waitFor(() => expect(blocks(drawn).length).toBe(2));
+    const caretAt = (el: HTMLElement, at: number) => {
+      fireEvent.focus(el);
+      const range = document.createRange();
+      range.setStart(el.firstChild!, at);
+      range.collapse(true);
+      document.getSelection()!.removeAllRanges();
+      document.getSelection()!.addRange(range);
+      fireEvent(document, new Event("selectionchange"));
+      // The button takes the selection with it, as a phone's does.
+      document.getSelection()!.removeAllRanges();
+    };
+    caretAt(blocks(drawn)[0]!, 4);
+    fireEvent.click(drawn.getByRole("button", { name: "Equation" }));
+    await waitFor(() => expect(source.runs).toHaveLength(3));
+    expect(source.runs[0]).toMatchObject({ command: "studio::passage::write", input: { id: "b1", words: "One " } });
+    expect(source.runs[1]).toMatchObject({ command: "studio::passage::create", input: { kind: "math", words: "", position: 1.5, "one:history": "joined" } });
+    expect(source.runs[2]).toMatchObject({ command: "studio::passage::create", input: { kind: "text", words: "two", position: 1.75, "one:history": "joined" } });
+    caretAt(blocks(drawn).at(-1)!, 0);
+    fireEvent.click(drawn.getByRole("button", { name: "Equation" }));
+    await waitFor(() => expect(source.runs).toHaveLength(4));
+    expect(source.runs[3]!.input).toMatchObject({ kind: "math", words: "" });
+    // Before Three, after One two, as the page holds only those.
+    expect(source.runs[3]!.input["position"]).toBe(1.5);
+    expect(source.runs).toHaveLength(4);
   });
 
   it("starts a new line with Enter in code, and leaves it from an empty last line", async () => {

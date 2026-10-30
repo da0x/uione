@@ -18,7 +18,7 @@ import "@fontsource-variable/literata/wght.css";
 import "@fontsource-variable/literata/wght-italic.css";
 import "@fontsource-variable/fraunces/wght.css";
 import "@fontsource-variable/fraunces/wght-italic.css";
-import { Children, Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
+import { Children, Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CSSProperties, ReactNode } from "react";
 import type { ButtonProps, CardGroup, CardsProps, ChoiceProps, ColorPickerProps, ComponentSet, DatedTimelineProps, OptionsProps, SliderProps } from "@uione/react";
@@ -694,6 +694,115 @@ function DatedTimeline({ days, years, at, dayAt, onScrub, onStep }: DatedTimelin
   );
 }
 
+// A workspace's bar: the app's name in the middle, in the theme's heading font, as a
+// window's title is; the bar's lines at the start, and its group at the end then light
+// and dark at the end, each side as wide as the other so the name stays centered. Where
+// either side doesn't fit beside the name, as on a phone with many lines, the name is
+// centered on a row of its own above the rest.
+function WorkspaceBar({ site, end, className = "bg-surface", children }: { site?: string; end?: ReactNode; className?: string; children: ReactNode }) {
+  const bar = useRef<HTMLDivElement>(null);
+  const lines = useRef<HTMLDivElement>(null);
+  const last = useRef<HTMLSpanElement>(null);
+  const name = useRef<HTMLSpanElement>(null);
+  const [stacked, setStacked] = useState(false);
+  useLayoutEffect(() => {
+    const at = bar.current;
+    if (!at) return;
+    const measure = () => {
+      if (!lines.current || !name.current) return;
+      const room = (at.clientWidth - 24 - name.current.offsetWidth - 16) / 2;
+      setStacked(Math.max(lines.current.scrollWidth, last.current?.scrollWidth ?? 0) > room);
+    };
+    measure();
+    const watching = new ResizeObserver(measure);
+    watching.observe(at);
+    if (lines.current) watching.observe(lines.current);
+    if (last.current) watching.observe(last.current);
+    return () => watching.disconnect();
+  }, []);
+  return (
+    <div
+      ref={bar}
+      className={`grid shrink-0 items-center gap-x-2 gap-y-1 border-b border-line px-3 ${className} ${stacked ? "grid-cols-[1fr_auto] pt-2.5 pb-1" : "h-11 grid-cols-[1fr_auto_1fr]"}`}
+    >
+      <span
+        ref={name}
+        className={`justify-self-center text-lg leading-none font-semibold whitespace-nowrap ${stacked ? "col-span-2" : "col-start-2 row-start-1"}`}
+        style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}
+      >
+        {site}
+      </span>
+      <div className={`min-w-0 ${stacked ? "" : "col-start-1 row-start-1"}`}>
+        <div ref={lines} className="flex w-max items-center gap-2">
+          {children}
+        </div>
+      </div>
+      {/* What's in it measured, not the side it's stretched across, so the measure
+          doesn't change with the layout it chooses. */}
+      <span className={`flex justify-end ${stacked ? "" : "col-start-3 row-start-1"}`}>
+        <span ref={last} className="flex w-max items-center gap-2">
+          {end}
+          <ThemeToggle />
+        </span>
+      </span>
+    </div>
+  );
+}
+
+// A workspace is an app's window, so a tap in it never zooms the page, as a phone's
+// browser does to small text being typed in, and the page never pulls past its ends;
+// the window stays as it was, its toolbar where it is. Put back as it was when the
+// workspace goes.
+function Unzoomed() {
+  useEffect(() => {
+    const meta = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
+    const was = meta?.content;
+    if (meta) meta.content = "width=device-width, initial-scale=1, maximum-scale=1";
+    const root = document.documentElement.style, body = document.body.style;
+    const kept = [root.overscrollBehavior, body.overscrollBehavior, body.overflow];
+    root.overscrollBehavior = body.overscrollBehavior = "none";
+    body.overflow = "hidden";
+    return () => {
+      if (meta && was !== undefined) meta.content = was;
+      [root.overscrollBehavior, body.overscrollBehavior, body.overflow] = kept as [string, string, string];
+    };
+  }, []);
+  return null;
+}
+
+// What of the window can be seen: on a phone, above its keyboard while it's up, as far
+// down the page as the browser has moved it to show the caret. A workspace is that, so
+// its bar and toolbar stay in sight while it's written in.
+function useSeen(): CSSProperties | undefined {
+  const [seen, setSeen] = useState<CSSProperties>();
+  useEffect(() => {
+    const view = window.visualViewport;
+    if (!view) return;
+    const moved = () => setSeen(view.height < window.innerHeight - 1 || view.offsetTop > 0 ? { top: view.offsetTop, height: view.height, bottom: "auto" } : undefined);
+    moved();
+    view.addEventListener("resize", moved);
+    view.addEventListener("scroll", moved);
+    return () => {
+      view.removeEventListener("resize", moved);
+      view.removeEventListener("scroll", moved);
+    };
+  }, []);
+  return seen;
+}
+
+// Inside a phone's safe area, so its status line is never under the home indicator or
+// the browser's own bar.
+function WorkspaceWindow({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className="fixed inset-0 flex min-h-0 touch-manipulation flex-col bg-sunken pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] text-ink"
+      style={useSeen()}
+    >
+      {children}
+    </div>
+  );
+}
+
 export const radix: ComponentSet = {
   Page: ({ name, icon, home, nav, title, untitled, account, heading, crumbs, subtitle, badges, footer, display, children }) => (
     // Clipped across, so a hero's grid, drawn past the page's sides, never widens it.
@@ -705,9 +814,11 @@ export const radix: ComponentSet = {
       {/* The header stays in view, over a blur of the page as it scrolls. The page
           you're on is underlined in the accent, along the header's edge. */}
       <header className="sticky top-0 z-20 border-b border-line bg-page/80 backdrop-blur-md">
-        {/* On a phone, the navigation takes a row of its own under the name. */}
-        <div className="flex flex-wrap items-center gap-x-7 gap-y-1 px-4 pt-3 sm:px-6 sm:pt-0 lg:px-8">
-          <a {...home} className="flex shrink-0 items-center gap-2.5 py-0 text-[1.05rem] font-semibold tracking-[-0.01em] sm:py-3.5">
+        {/* On a phone, the navigation takes a row of its own under the name. As tall as
+            an app's bar, its line under it included, its name as large and in the same
+            face, so a site and its apps share one top bar. */}
+        <div className="flex flex-wrap items-center gap-x-7 px-3">
+          <a {...home} className="flex h-[calc(2.75rem-1px)] shrink-0 items-center gap-2 text-lg leading-none font-semibold" style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}>
             {icon && <img src={icon} alt="" className="h-7 w-7" />}
             {name}
             {badges
@@ -719,14 +830,14 @@ export const radix: ComponentSet = {
                 </span>
               ))}
           </a>
-          <nav className="order-last -mb-px flex w-full flex-wrap gap-x-5 text-sm sm:order-none sm:w-auto">
+          <nav className="order-last -mb-px flex w-full flex-wrap gap-x-5 text-sm sm:order-none sm:w-auto sm:self-stretch">
             {nav.map((item) => (
               <a
                 key={item.href}
                 href={item.href}
                 onClick={item.onClick}
                 aria-current={item.current ? "page" : undefined}
-                className={`border-b-2 py-3 transition-colors sm:py-4 ${item.current ? "border-accent font-medium text-ink" : "border-transparent text-muted hover:text-ink"}`}
+                className={`flex items-center border-b-2 py-3 transition-colors sm:py-0 ${item.current ? "border-accent font-medium text-ink" : "border-transparent text-muted hover:text-ink"}`}
               >
                 {item.label}
               </a>
@@ -1318,7 +1429,14 @@ export const radix: ComponentSet = {
       {cards.map((card) => {
         const total = card.tally?.reduce((n, part) => n + part.count, 0) ?? 0;
         return (
-          <article key={card.id} className="flex flex-col gap-3 rounded-box border border-line bg-surface p-4 shadow-panel">
+          // A card that opens something opens it from anywhere on it: its name's link
+          // reaches over the whole card, the filters on it still their own.
+          <article
+            key={card.id}
+            className={`relative flex flex-col gap-3 rounded-box border border-line bg-surface p-4 shadow-panel ${
+              card.link ? "transition-colors hover:border-accent/50 has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-accent" : ""
+            }`}
+          >
             {card.picture && (
               <div className="-mx-4 -mt-4 aspect-video overflow-hidden rounded-t-box bg-sunken">
                 {card.picture.source && <img src={card.picture.source} alt="" className={`h-full w-full ${card.picture.fit ? "object-contain" : "object-cover"}`} />}
@@ -1328,7 +1446,7 @@ export const radix: ComponentSet = {
               {/* A card's name, in the text's face, not the headings': still a heading to a screen reader. */}
               <h2 className="font-sans text-lg leading-snug font-semibold">
                 {card.link ? (
-                  <a {...card.link} className="text-ink hover:text-accent hover:underline">
+                  <a {...card.link} className="text-ink no-underline outline-none after:absolute after:inset-0 after:rounded-box after:content-[''] hover:no-underline">
                     {card.title}
                   </a>
                 ) : (
@@ -1375,7 +1493,7 @@ export const radix: ComponentSet = {
               </div>
             )}
             {card.filters.length > 0 && (
-              <nav aria-label="Filters" className="mt-auto flex flex-wrap gap-2 border-t border-line pt-3">
+              <nav aria-label="Filters" className="relative z-10 mt-auto flex flex-wrap gap-2 border-t border-line pt-3">
                 {card.filters.map((f) => (
                   <a
                     key={f.label}
@@ -2512,18 +2630,9 @@ export const radix: ComponentSet = {
     // Its bar and toolbar, in their place or, see through, over a picture alone.
     const over = alone ? "pointer-events-auto bg-surface/85 backdrop-blur" : "bg-surface";
     const bar = regions.bar && (
-      // The app's name in the middle, in the theme's heading font, as a window's
-      // title is; the bar's lines at the start and light and dark at the end, each
-      // side as wide as the other so the name stays centered.
-      <div className={`grid h-11 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 border-b border-line px-3 ${over}`}>
-        <div className="flex min-w-0 items-center gap-2">{regions.bar}</div>
-        <span className="text-lg leading-none font-semibold" style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}>
-          {site}
-        </span>
-        <span className="flex justify-end">
-          <ThemeToggle />
-        </span>
-      </div>
+      <WorkspaceBar site={site} end={regions.barEnd} className={over}>
+        {regions.bar}
+      </WorkspaceBar>
     );
     // When every group is a single row of small tools, a thin strip, their names said
     // by their tools' as they're pointed at.
@@ -2547,12 +2656,16 @@ export const radix: ComponentSet = {
     // is, is that strip alone at the work's edge: not scrolled, padded or set apart.
     const strip = "has-[>[data-strip]:only-child]:w-auto has-[>[data-strip]:only-child]:overflow-visible has-[>[data-strip]:only-child]:border-0 has-[>[data-strip]:only-child]:bg-transparent has-[>[data-strip]:only-child]:p-0";
     const side = regions.side && <aside className={`w-72 shrink-0 overflow-y-auto border-l border-line p-3 ${over} ${strip} ${stays ? "visible" : ""}`}>{regions.side}</aside>;
-    const status = regions.status && <div className={`flex shrink-0 items-center gap-4 overflow-hidden whitespace-nowrap border-t border-line px-3 py-1 text-xs text-muted ${over}`}>{regions.status}</div>;
+    // One line on a wide screen; on a phone it wraps, so a message is read whole.
+    const status = regions.status && (
+      <div className={`flex shrink-0 flex-wrap items-center gap-x-4 gap-y-0.5 border-t border-line px-3 py-1 text-xs text-muted sm:flex-nowrap sm:overflow-hidden sm:whitespace-nowrap ${over}`}>{regions.status}</div>
+    );
     // Only its picture, all of the window on black, the rest over it while it's awake:
     // what's between them is the picture's to point at.
     if (name === "workspace" && alone) {
       return (
         <div className="fixed inset-0 bg-black text-ink" style={alone.awake ? undefined : { cursor: "none" }}>
+          <Unzoomed />
           <main className="absolute inset-0">{regions.main}</main>
           <div className={`pointer-events-none absolute inset-0 flex flex-col ${alone.awake ? "" : "invisible"}`}>
             {bar}
@@ -2567,7 +2680,8 @@ export const radix: ComponentSet = {
       );
     }
     return name === "workspace" ? (
-      <div className="fixed inset-0 flex min-h-0 flex-col bg-sunken text-ink">
+      <WorkspaceWindow>
+        <Unzoomed />
         {bar}
         {toolbar}
         <div className="flex min-h-0 flex-1">
@@ -2576,7 +2690,7 @@ export const radix: ComponentSet = {
           {side}
         </div>
         {status}
-      </div>
+      </WorkspaceWindow>
     ) : name === "two_columns" ? (
       <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
         <div className="flex min-w-0 flex-col gap-10">{regions.main}</div>
@@ -2609,7 +2723,7 @@ export const radix: ComponentSet = {
       aria-label={name}
       data-at-end={atEnd ? "" : undefined}
       data-one-row={small && (across ?? Math.ceil(Children.toArray(children).length / 2)) >= Children.toArray(children).length ? "" : undefined}
-      className="flex flex-col items-center justify-between gap-0.5 border-r border-line px-2 last:border-r-0 [&:has(>div:empty)]:hidden">
+      className="flex shrink-0 flex-col items-center justify-between gap-0.5 border-r border-line px-2 last:border-r-0 [&:has(>div:empty)]:hidden">
       <div
         className={small ? "grid gap-0.5" : "flex items-start gap-0.5"}
         style={small ? { gridTemplateColumns: `repeat(${across ?? Math.max(1, Math.ceil(Children.toArray(children).length / 2))}, auto)` } : undefined}

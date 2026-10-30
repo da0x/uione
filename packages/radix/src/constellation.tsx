@@ -12,7 +12,7 @@ import { Children, isValidElement, useEffect, useRef } from "react";
 import type { CSSProperties, PointerEvent, ReactNode, RefObject } from "react";
 import { Link, Text } from "@uione/react";
 import type { LandingFeature, LandingProps } from "@uione/react";
-import { Icon, Over, grouped, heading, titles } from "./parts.js";
+import { Icon, Opens, Over, grouped, heading, titles } from "./parts.js";
 
 function still() {
   const asked = document.documentElement.dataset.motion;
@@ -234,14 +234,18 @@ function Card({ feature, at }: { feature: LandingFeature; at: number }) {
         {feature.icon && <Icon name={feature.icon} className="one-constellation-icon" />}
         {holds && <span className="one-constellation-number">{String(at + 1).padStart(2, "0")}</span>}
         <Over className="one-constellation-card-over">{feature.overline}</Over>
-        <h3 style={heading}>{feature.title}</h3>
+        <h3 style={heading}>
+          <Opens link={feature.link}>{feature.title}</Opens>
+        </h3>
         <div className="one-constellation-muted empty:hidden">{feature.text}</div>
       </div>
       {holds && (
         <div className="one-constellation-held">
           {feature.features.map((inner, place) => (
-            <div key={place} className="one-constellation-held-one" style={{ "--delay": `${150 + place * 120}ms` } as CSSProperties}>
-              <h4 style={heading}>{inner.title}</h4>
+            <div key={place} className="one-constellation-held-one" style={{ "--delay": `${150 + place * 120}ms`, ...(inner.link ? { position: "relative" } : {}) } as CSSProperties}>
+              <h4 style={heading}>
+                <Opens link={inner.link}>{inner.title}</Opens>
+              </h4>
               <div className="one-constellation-muted">{inner.text}</div>
             </div>
           ))}

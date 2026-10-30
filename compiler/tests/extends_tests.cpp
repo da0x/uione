@@ -186,3 +186,35 @@ TEST_CASE("a project that extends another adds commands to the roles the other d
     check_project(cloud("organizations::ownr").string(), wrong);
     CHECK(errors_of(wrong).find("there's no define role organizations::ownr to extend; name it with its namespace, like organizations::owner") != std::string::npos);
 }
+
+TEST_CASE("a project extends a release of a repository, kept once it's fetched") {
+    // The cache is a folder of the test's own, already holding the release, so nothing
+    // is fetched.
+    fs::path cache = place / "cache";
+    setenv("XDG_CACHE_HOME", cache.string().c_str(), 1);
+    fs::path kept = cache / "uione/projects/github.com/example/base/1.2.3";
+    fs::remove_all(kept);
+    fs::create_directories(kept.parent_path());
+    fs::rename(base(), kept);
+    auto cloud = folder("cloud", "import one\nproject cloud {\n" + pinned() + "\textends \"github.com/example/base\" \"1.2.3\"\n}\n");
+    language::diagnostics found;
+    std::vector<language::file> files;
+    check_project(cloud.string(), found, &files);
+    CAPTURE(errors_of(found));
+    CHECK(found.empty());
+    const auto* p = project_of(files);
+    REQUIRE(p != nullptr);
+    REQUIRE(setting_of(*p, "icon"));
+    CHECK(fs::exists(cloud / setting_of(*p, "icon")->value));
+
+    // An address and a version are only what they can be, since they're fetched.
+    auto wrong = folder("wrong", "import one\nproject wrong {\n" + pinned() + "\textends \"not a repository\" \"1.2.3\"\n}\n");
+    found.clear();
+    check_project(wrong.string(), found);
+    CHECK(errors_of(found).find("extends names a repository by its host and path") != std::string::npos);
+    auto unversioned = folder("unversioned", "import one\nproject unversioned {\n" + pinned() + "\textends \"github.com/example/base\" \"latest\"\n}\n");
+    found.clear();
+    check_project(unversioned.string(), found);
+    CHECK(errors_of(found).find("extends names a release by its version") != std::string::npos);
+    unsetenv("XDG_CACHE_HOME");
+}

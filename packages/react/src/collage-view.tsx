@@ -24,7 +24,7 @@ import type { ViewState } from "./data.js";
 import { useUI } from "./ui.js";
 import { useSaying } from "./said.js";
 import { useSite } from "./app.js";
-import { OverKind, OverLayer, OverRun, chooseFolder, choosePictures, lastGiven, styleThese, hintOf, notAPicture, setChosen, setPicked, takeInTurn, typing, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
+import { OverKind, OverLayer, OverRun, chooseFolder, choosePictures, lastGiven, leaveFull, styleThese, hintOf, notAPicture, setChosen, setPicked, takeInTurn, typing, useFull, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
 
 type Row = Record<string, unknown>;
 
@@ -653,8 +653,12 @@ function minuteNow(): string {
 // screenshot, a copy or a save. Pictures chosen from files are handed over as a paste's are.
 const asked = new Map<string, string>();
 const askListeners = new Set<() => void>();
+// Each collage's place to type, given the keyboard by the press that asks for words, as a
+// phone shows its keyboard only then.
+const typers = new Map<string, HTMLTextAreaElement>();
 function ask(name: string, does: string) {
   asked.set(name, does);
+  if (does === "edit" || does === "add") typers.get(name)?.focus({ preventScroll: true });
   askListeners.forEach((changed) => changed());
 }
 
@@ -886,11 +890,13 @@ export function Collage({
   const runner = useRunner();
   const picked = usePickedId(pick ?? "") ?? "";
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const typerRef = useRef<HTMLTextAreaElement>(null);
+  const awaitingWords = useRef(false);
   const placed = useRef<Placed>({ board: { x: 0, y: 0, w: 0, h: 0 }, scale: 0, lines: { across: [], down: [] }, view: { zoom: 1, panX: 0, panY: 0 }, margin: 32, chosen: [] });
   const [, setRead] = useState(0);
   const [, redraw] = useState(0);
   const [frame, setFrame] = useState<Box | undefined>();
-  const [full, setFull] = useState(() => typeof document !== "undefined" && Boolean(document.fullscreenElement));
+  const full = useFull();
   const [dropping, setDropping] = useState(false);
 
   // Read as its parts, whichever of the app's fields keep them.
@@ -932,11 +938,8 @@ export function Collage({
     const changed = () => setRead((n) => n + 1);
     readListeners.add(changed);
     void wordsLoaded().then(changed);
-    const screen = () => setFull(Boolean(document.fullscreenElement));
-    document.addEventListener("fullscreenchange", screen);
     return () => {
       readListeners.delete(changed);
-      document.removeEventListener("fullscreenchange", screen);
     };
   }, []);
 
@@ -1126,7 +1129,7 @@ export function Collage({
       if (words.trim()) return addWords(words);
       say({ text: "There's nothing to paste. Copy a picture or some words first." });
     } catch {
-      say({ text: "This browser didn't let the page read the clipboard. Press Ctrl+V instead.", problem: true });
+      say({ text: "This browser didn't let the page read the clipboard. Press Ctrl+V, or choose the picture from your files.", problem: true });
     }
   };
   // The screen as the browser shares it, one frame of it, added like any picture.
@@ -1339,6 +1342,7 @@ export function Collage({
       if (parent) made[parent] = subject;
       const top = layers[layers.length - 1];
       if (top && top["depth"] !== undefined) made["depth"] = num(top["depth"]) + 1;
+      awaitingWords.current = true;
       void layerFor()
         .then((inLayer) => {
           if (layerField && inLayer) made[layerField] = inLayer;
@@ -1348,8 +1352,11 @@ export function Collage({
         if (!reply?.id) return;
         if (pick) setPicked(pick, reply.id);
         w.editing = { id: reply.id, words, caret: words.length, fresh: true };
-        redraw((n) => n + 1);
-      });
+      })
+        .finally(() => {
+          awaitingWords.current = false;
+          redraw((n) => n + 1);
+        });
     }
     redraw((n) => n + 1);
   });
@@ -1820,6 +1827,8 @@ export function Collage({
     const down = (k: KeyboardEvent) => {
       const e = w.editing;
       if (!e) return;
+      // A phone's keyboard, or one composing, says what it typed by the place to type.
+      if (k.isComposing || k.key === "Unidentified" || k.key === "Process") return;
       k.preventDefault();
       k.stopPropagation();
       if (k.key === "Escape") {
@@ -1844,10 +1853,35 @@ export function Collage({
       e.words = chars.join("");
       e.caret = chars.slice(0, at).join("").length;
       paint();
+      showTyped();
     };
     window.addEventListener("keydown", down, true);
     return () => window.removeEventListener("keydown", down, true);
   });
+  // The place to type holds the words being written, all chosen while the first key
+  // replaces them, and has the keyboard while they're written.
+  const showTyped = () => {
+    const t = typerRef.current, e = w.editing;
+    if (!t || !e) return;
+    if (t.value !== e.words) t.value = e.words;
+    if (e.fresh) t.setSelectionRange(0, e.words.length);
+    else t.setSelectionRange(e.caret, e.caret);
+  };
+  useLayoutEffect(() => {
+    const t = typerRef.current;
+    if (!t) return;
+    if (name) typers.set(name, t);
+    if (w.editing) {
+      if (document.activeElement !== t) t.focus({ preventScroll: true });
+      showTyped();
+    } else if (document.activeElement === t && !asked.has(name ?? "") && !awaitingWords.current) t.blur();
+  });
+  useEffect(() => {
+    const t = typerRef.current;
+    return () => {
+      if (name && t && typers.get(name) === t) typers.delete(name);
+    };
+  }, [name]);
 
   const at = (e: { clientX: number; clientY: number }): Point => {
     const r = canvasRef.current!.getBoundingClientRect();
@@ -2045,7 +2079,7 @@ export function Collage({
 
   const press = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (full) {
-      void document.exitFullscreen();
+      leaveFull();
       return;
     }
     if (w.scale <= 0) return;
@@ -2084,6 +2118,7 @@ export function Collage({
     const typing = drawingNow();
     if (typing?.by === "typing" && !spaceHeld.current && e.button !== 1 && inside(onBoard({ x: 0, y: 0, w: W, h: H }), p)) {
       w.editing = typingAt(typing, onCollage(p));
+      typerRef.current?.focus({ preventScroll: true });
       pickRow("");
       return redraw((n) => n + 1);
     }
@@ -2204,7 +2239,7 @@ export function Collage({
       // Its layer is the current one, as new objects go in it.
       if (layerPick && layerField && str(l[layerField])) setPicked(layerPick, str(l[layerField]));
       if (e.detail >= 2 && id === hit) {
-        if (isWords(l) && write) w.editing = { id, words: str(l["words"]), caret: str(l["words"]).length, fresh: false };
+        if (isWords(l) && write) (w.editing = { id, words: str(l["words"]), caret: str(l["words"]).length, fresh: false }), typerRef.current?.focus({ preventScroll: true });
         else if (isPicture(l) && !vectors.has(str(l["picture"])) && crop) w.crop = cropBegun(l);
         redraw((n) => n + 1);
         return;
@@ -2523,6 +2558,22 @@ export function Collage({
         }}
         onPointerUp={release}
         onPointerCancel={release}
+      />
+      <textarea
+        ref={typerRef}
+        aria-label="Words being written"
+        autoComplete="off"
+        spellCheck={false}
+        tabIndex={-1}
+        style={{ position: "absolute", left: 0, top: 0, width: 1, height: 1, padding: 0, border: 0, opacity: 0, resize: "none", pointerEvents: "none", fontSize: 16 }}
+        onInput={(i) => {
+          const e = w.editing;
+          if (!e) return;
+          e.words = i.currentTarget.value;
+          e.caret = i.currentTarget.selectionStart;
+          e.fresh = false;
+          paint();
+        }}
       />
       {overAt && picked && (
         <div

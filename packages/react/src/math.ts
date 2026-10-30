@@ -109,6 +109,10 @@ class Reader {
     if (isDigit(c) || (c === "." && isDigit(s[this.at + 1]))) {
       const from = this.at;
       while (this.at < s.length && (isDigit(s[this.at]) || s[this.at] === ".")) this.at++;
+      // Its thousands set apart by commas, 299,792,458, while it's a whole number: a
+      // comma with three digits after it and no fourth.
+      while (s[this.at] === "," && !s.slice(from, this.at).includes(".") && /^\d{3}(?!\d)/.test(s.slice(this.at + 1))) this.at += 4;
+      if (s[this.at] === "." && isDigit(s[this.at + 1])) for (this.at++; isDigit(s[this.at]); ) this.at++;
       // An exponent, 6.02e23, only when digits follow the e.
       if (this.at + 1 < s.length && (s[this.at] === "e" || s[this.at] === "E")) {
         let e = this.at + 1;
@@ -438,9 +442,16 @@ class Reader {
 }
 
 // An equation read, or where and why it can't be.
+// What a phone's keyboard, or a page's editing, puts in place of what was typed, read as
+// what it stands for: its spaces that don't break as spaces, its curly quotes as
+// straight ones, and the dash a double hyphen becomes as a minus. Each is one character
+// for one, so where a problem is said stays where it was.
+const typedAs: Record<string, string> = { "\u00a0": " ", "\u2009": " ", "\u202f": " ", "\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"', "\u2013": "\u2212", "\u2014": "\u2212" };
+const typedAsAny = new RegExp(`[${Object.keys(typedAs).join("")}]`, "g");
+
 export function parseMath(written: string): { node: MathNode } | { problem: MathProblem } {
   try {
-    return { node: new Reader(written).whole() };
+    return { node: new Reader(written.replace(typedAsAny, (c) => typedAs[c] ?? c)).whole() };
   } catch (e) {
     if (e instanceof Failed) return { problem: e.problem };
     throw e;

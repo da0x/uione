@@ -92,7 +92,7 @@ TEST_CASE("a workspace has a bar, a toolbar of groups, main, a side shown while 
 
 TEST_CASE("a workspace's regions are its own, and a group goes in its toolbar") {
     CHECK(messages(screen("\t\tlayout workspace\n\t\tmain {\n\t\t\tgroup \"Poster\" {\n\t\t\t\tposter::create \"New\"\n\t\t\t}\n\t\t}\n")) ==
-          std::vector<std::string>{"24: a group is part of a workspace's toolbar, so it goes in toolbar { ... }"});
+          std::vector<std::string>{"24: a group is part of a workspace's toolbar, or at the end of its bar, so it goes in toolbar { ... }"});
     CHECK(messages(screen("\t\tlayout two_columns\n\t\tbar {\n\t\t\ttext \"Posters\"\n\t\t}\n")) ==
           std::vector<std::string>{"23: layout two_columns has no region bar; its regions are main and side"});
     CHECK(messages(screen("\t\tlayout desk\n")) == std::vector<std::string>{"22: layout is single, two_columns or workspace"});
@@ -1667,7 +1667,8 @@ TEST_CASE("on open, a screen opens the first row a condition holds for, or runs 
 )";
     CHECK(messages(source) == std::vector<std::string>{"24: a picked poster's row has no depth; add it to the list's block", "25: there's no screen at /nowhere/:poster to open",
                                                        "25: the screen is measured by screen.width and screen.height",
-                                                       "27: on open runs a command, like poster::create { width = screen.width } then open /posters/:poster, or opens a row, like open /posters/:poster for posters"});
+                                                       "27: on open runs a command, like poster::create { width = screen.width } then open /posters/:poster, opens a row, like open /posters/:poster for posters, "
+                                                       "picks one of a choice, like toggle mode::edit, or turns a toggle on or off, like toggle layers off"});
     std::string fine = source;
     for (const char* wrong : {" && poster.depth == 1", "\t\ton open open /nowhere/:poster for posters where poster.width == screen.size\n", "\t\ton open text \"Not a command\"\n"}) {
         fine.erase(fine.find(wrong), std::string(wrong).size());
@@ -1684,4 +1685,125 @@ TEST_CASE("on open, a screen opens the first row a condition holds for, or runs 
     auto spread = built(project + poster + "\n\tscreen \"Studio\" / {\n\t\tlayout workspace\n\t\ton open poster::create\n\t\tmain {\n\t\t\ttext \"Hello\"\n\t\t}\n\t}\n}\n");
     CHECK(spread["web/src/screens/main.tsx"].find(R"(<OnOpen ready={true} lines={[{ run: { name: "studio::poster::create" } }]} />)") != std::string::npos);
     CHECK(spread["desktop/src/screens/main.cpp"].find(R"(on_open(p, true, {opening{.run = command_button{.command = "studio::poster::create", .label = "Create"}}}))") != std::string::npos);
+}
+
+TEST_CASE("a mode the person switches to: only when takes a toolbar's line away, and on open picks the mode a screen starts in") {
+    const std::string source = project + R"(namespace studio at / {
+	enum mode {
+		read  "Read"
+		edit  "Edit"
+	}
+
+	entity poster {
+		title   text
+	}
+
+	command poster::create
+	command poster::rename {
+		changes title
+	}
+
+	view poster_page per poster {
+		title
+		named = count(poster where title != none)
+	}
+
+	screen "Poster" /posters/:poster {
+		layout workspace
+		on open toggle mode::edit when poster_page.named == 0
+		on open toggle mode::read
+		bar {
+			undo "Undo" icon undo key ctrl+z when mode == mode::edit
+		}
+		toolbar {
+			group "Edit" {
+				toggle mode::edit "Edit" icon edit only when mode == mode::read
+				toggle mode::read "Done" icon check only when mode == mode::edit
+			}
+			group "Write" only when mode == mode::edit {
+				poster::rename "Untitled" { title = none }
+			}
+			group "Kept" when mode == mode::edit {
+				poster::rename "Plain" { title = none }
+			}
+		}
+		main {
+			text "{poster_page.title}"
+		}
+	}
+}
+)";
+    CHECK(messages(source).empty());
+    auto files = built(source);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    // Picked on open, the first line that applies.
+    CHECK(web.find(R"({ choose: { name: "/posters/:poster mode", choice: "edit" }, when: ((posterPage.data?.["named"] ?? null) === 0) }, { choose: { name: "/posters/:poster mode", choice: "read" } })") != std::string::npos);
+    CHECK(native.find(R"(opening{.choose = "/posters/:poster mode", .choice = "read"})") != std::string::npos);
+    // Only when: gone, not off; when alone: there, but off.
+    CHECK(web.find(R"({((chosenMode === "read")) && (<>)") != std::string::npos);
+    CHECK(web.find(R"(<Applies when={((chosenMode === "edit"))}>)") != std::string::npos);
+    CHECK(web.find(R"(<Applies when={((chosenMode === "read"))}>)") == std::string::npos);
+    CHECK(native.find(R"(if ((same(value(p.chosen("/posters/:poster mode", "edit")), value("edit")))) return group(p, "Write")") != std::string::npos);
+}
+
+TEST_CASE("on open turns a toggle on or off, as its press would, and only one the screen has") {
+    const std::string source = project + R"(namespace studio at / {
+	entity poster {
+		title   text
+	}
+
+	view poster_page per poster {
+		title
+		named = count(poster where title != none)
+	}
+
+	screen "Poster" /posters/:poster {
+		layout workspace
+		on open toggle layers off when poster_page.named == 0
+		toolbar {
+			group "View" {
+				toggle layers "Layers" icon layers
+			}
+		}
+		main {
+			text "{poster_page.title}"
+		}
+		side when layers {
+			text "Layers"
+		}
+	}
+}
+)";
+    CHECK(messages(source).empty());
+    auto files = built(source);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    CHECK(web.find(R"({ turn: { name: "/posters/:poster layers", on: false }, when: ((posterPage.data?.["named"] ?? null) === 0) })") != std::string::npos);
+    CHECK(native.find(R"(opening{.turn = "/posters/:poster layers", .on = false, .when = )") != std::string::npos);
+
+    std::string missing = source;
+    missing.replace(missing.find("toggle layers off"), 17, "toggle outline on");
+    CHECK(messages(missing) == std::vector<std::string>{"20: there's no toggle outline on this screen, on or off, for on open to turn"});
+}
+
+TEST_CASE("a workspace's bar holds one group, at its end, before light and dark") {
+    CHECK(messages(screen("\t\tlayout workspace\n\t\tbar {\n\t\t\tgroup \"Mode\" {\n\t\t\t\tposter::create \"New\"\n\t\t\t}\n\t\t}\n")) ==
+          std::vector<std::string>{"24: a group in a bar sits at its end, before the switch between light and dark, as group \"Mode\" at end { ... }"});
+    CHECK(messages(screen("\t\tlayout workspace\n\t\tbar {\n\t\t\tgroup \"Mode\" at end {\n\t\t\t\tposter::create \"New\"\n\t\t\t}\n\t\t\tgroup \"More\" at end {\n\t\t\t\tposter::create \"Again\"\n\t\t\t}\n\t\t}\n")) ==
+          std::vector<std::string>{"27: a bar has one group at its end, so this one's lines go in the first"});
+    auto files = built(layered_screen("\t\tlayout workspace\n\t\tbar {\n\t\t\tundo \"Undo\" icon undo\n\t\t\tgroup \"Mode\" at end {\n\t\t\t\tredo \"Redo\" icon redo\n\t\t\t}\n\t\t}\n"));
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    CHECK(web.find("<Region name=\"barEnd\">") != std::string::npos);
+    CHECK(web.find("<Group") == std::string::npos);
+    CHECK(web.find("Undo") < web.find("barEnd"));
+    CHECK(web.find("barEnd") < web.find("Redo"));
+    CHECK(native.find("region{\"bar_end\", along(history(p, true, \"Redo\"") != std::string::npos);
 }

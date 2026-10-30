@@ -26,7 +26,8 @@ namespace one::generators {
         generated_project out;
         // A project that keeps its data on this machine is its apps alone: its commands
         // and views run inside them, with no service, rules or cloud (0015). The web
-        // app keeps it in the browser.
+        // app keeps it in the browser, and is served from Hosting when the project
+        // says where, with nothing else.
         if (language::stores_locally(files)) {
             auto local = generate_local(files);
             out.errors = std::move(local.errors);
@@ -40,6 +41,9 @@ namespace one::generators {
                     f.path = "web/" + f.path;
                     out.files.push_back(std::move(f));
                 }
+                auto deploy = generate_infrastructure(files, project_dir, out_dir);
+                out.note = deploy.skipped;
+                for (auto& f : deploy.files) out.files.push_back(std::move(f));
             }
             for (const char* native : {"desktop", "terminal"}) {
                 if (!language::listed(targets, native)) continue;

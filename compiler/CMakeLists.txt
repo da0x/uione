@@ -84,6 +84,7 @@ set(ONE_SOURCES
     driver/themes.cpp
     driver/build.cpp
     driver/run.cpp
+    driver/deploy.cpp
     driver.cpp)
 add_library(one_compiler STATIC ${ONE_SOURCES})
 target_include_directories(one_compiler PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../screens/include)
@@ -147,6 +148,7 @@ if(ONE_TESTS)
         tests/complete_tests.cpp
         tests/examples_tests.cpp
         tests/upgrade_tests.cpp
+        tests/deploy_tests.cpp
         tests/environments_tests.cpp
         tests/define_tests.cpp
         tests/targets_tests.cpp

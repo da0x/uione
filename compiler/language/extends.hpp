@@ -6,10 +6,14 @@
 // A project that extends another, like a hosted edition built on an open-source app:
 // `extends tracker` in its project block. Its files and the other's are one project,
 // checked and built together; its project block says what it is, and takes from the
-// other's whatever it doesn't say itself.
+// other's whatever it doesn't say itself. The other can be a release of a repository,
+// `extends "github.com/da0x/tracker" "0.1.0"`, fetched once at its tag and kept in
+// ~/.cache/uione/projects, so a project names no folder on anyone's computer.
 
 #include <algorithm>
+#include <cstdlib>
 #include <filesystem>
+#include <regex>
 #include <set>
 #include <string>
 #include <vector>
@@ -19,12 +23,58 @@
 
 namespace one::language {
 
+    // extends "github.com/da0x/tracker" "0.1.0": a repository's release, its address
+    // and then its version, rather than a folder.
+    inline bool names_a_release(const setting& s) { return s.is_string && !s.to.empty(); }
+
+    // A repository's address, a host and its path, like github.com/da0x/tracker, and a
+    // release's version, like 0.1.0: only these characters, so both are safe in the
+    // command that fetches them.
+    inline bool repository_address(const std::string& value) {
+        return std::regex_match(value, std::regex(R"([a-z0-9-]+(\.[a-z0-9-]+)+(/[A-Za-z0-9_.-]+)+)")) && value.find("..") == std::string::npos;
+    }
+    inline bool release_version(const std::string& value) { return std::regex_match(value, std::regex(R"(\d+\.\d+\.\d+)")); }
+
+    // Where a release is kept once it's fetched.
+    inline std::string kept_release(const setting& s) {
+        const char* cache = std::getenv("XDG_CACHE_HOME");
+        const char* home = std::getenv("HOME");
+        std::string base = cache && *cache ? cache : std::string(home ? home : ".") + "/.cache";
+        return base + "/uione/projects/" + s.value + "/" + s.to;
+    }
+
     // The folder a project extends, from the folder its project block is in: a name
     // is a project beside it, like extends tracker; a quoted path is where it says,
-    // like extends "../tracker".
+    // like extends "../tracker"; and a release is where it's kept.
     inline std::string extended_folder(const std::string& dir, const setting& s) {
+        if (names_a_release(s)) return kept_release(s);
         std::string from = dir.empty() ? "." : dir;
         return platform::resolve(from, s.is_string ? s.value : "../" + s.value);
+    }
+
+    // Fetches a release once: the repository at its tag, v0.1.0 or else 0.1.0, over
+    // https, without its history. Nothing happens when it's already kept, or when the
+    // address or version isn't one, which the checker says.
+    inline bool fetch_release(const setting& s, std::string& why) {
+        if (!names_a_release(s) || !repository_address(s.value) || !release_version(s.to)) return true;
+        std::string target = kept_release(s);
+        if (std::filesystem::is_directory(target)) return true;
+        std::string script = "set -e\n"
+                             "address='https://" + s.value + ".git'\n"
+                             "target='" + target + "'\n"
+                             "work=$(mktemp -d)\n"
+                             "trap 'rm -rf \"$work\"' EXIT\n"
+                             "git clone --quiet --depth 1 --branch 'v" + s.to + "' \"$address\" \"$work/project\" 2>/dev/null ||\n"
+                             "  git clone --quiet --depth 1 --branch '" + s.to + "' \"$address\" \"$work/project\" 2>/dev/null\n"
+                             "rm -rf \"$work/project/.git\"\n"
+                             "mkdir -p \"$(dirname \"$target\")\"\n"
+                             "mv \"$work/project\" \"$target\"\n";
+        std::string command = "sh -c '" + std::regex_replace(script, std::regex("'"), "'\\''") + "'";
+        if (std::system(command.c_str()) != 0) {
+            why = "couldn't fetch " + s.value + " " + s.to + "; it's looked for at https://" + s.value + ", tagged v" + s.to + " or " + s.to;
+            return false;
+        }
+        return true;
     }
 
     // The folder a file is in.

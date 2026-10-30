@@ -232,7 +232,9 @@ address. A setting whose
 type is another `settings`, like `redirect`, takes its fields in
 order, `redirect "/old" "https://example.com/new"`. `domain` can name a second
 domain after the first, `domain "uione.io" "www.uione.io"`: the same site answers
-there, and sends whoever opens it to the first, so one project serves both. A setting
+there, and sends whoever opens it to the first, so one project serves both. Swapped,
+`domain "www.uione.io" "uione.io"`, each only changes where it sends people: neither
+is taken off the site and checked again. A setting
 is said once,
 unless its type is a `list of`, whose lines each add one, or one line several,
 `signin google github`. A name the library
@@ -271,7 +273,11 @@ for the web app. Screens read views live, as they do from the cloud, and nothing
 leaves the machine. Nobody signs in to such an app, so what needs a person or a
 server, like `signin`, `me`, roles, a view `per user`, webhooks and Stripe, is an
 error at its line, saying why. It names its targets, like `target desktop` or
-`target web desktop`.
+`target web desktop`. Its web app can still be served for anyone to open, by naming
+`firebase`, `region` and `domain`: the deploy puts the app on Firebase Hosting and
+nothing else, no service, database or rules, and each visitor's data stays in their
+own browser. Such a project can share its Firebase project with another that has no
+backend, each served from a Hosting site of its own, named by `site "vectra-da0x"`.
 
 `target web desktop terminal` names the apps `one build` writes from the screens:
 the web site in `build/web`, and a desktop app and a terminal app drawn from the same
@@ -326,7 +332,11 @@ doesn't stand in for a screen reader or a magnifier.
 
 `extends tracker` builds the project on another one: a hosted edition, say, on an
 open-source app kept in a repository of its own. A name is a project's folder beside
-this one's, and a path in quotes is anywhere, `extends "../tracker"`. The other
+this one's, a path in quotes is anywhere, `extends "../tracker"`, and a repository
+and a release name one that's published, `extends "github.com/da0x/tracker"
+"0.1.0"`: it's fetched once, over https, at its tag, `v0.1.0` or else `0.1.0`, and
+kept in `~/.cache/uione/projects`, so the project names no folder on anyone's
+computer and builds the same everywhere. The other
 project's files are this project's too, checked and built together, and a file one of
 them names, like `markdown "license/*.md"`, is still found beside it. This project
 adds what it likes: namespaces, entities, screens, roles, and screens in a namespace
@@ -2098,7 +2108,7 @@ form step::update "Save" {
   `robot`, `settings` and `workflow`; for what a front page offers too,
   `building`, `chart`, `cloud`, `code`, `connect`, `database`, `globe`, `layers`,
   `lock`, `people`, `shield` and `spark`; and for a drawing app's toolbar, `undo`,
-  `redo`, `save`, `paste`, `copy`, `crop`, `text`, `screenshot`, `picture`,
+  `redo`, `save`, `export`, `paste`, `copy`, `crop`, `text`, `screenshot`, `picture`,
   `folder`, `gallery`, `fullscreen`, `sun`, `moon`, `check`, `close`, `raise`, `lower`,
   `rotate_left`, `rotate_right`, `flip_horizontal`, `flip_vertical`, `bold`,
   `smaller`, `larger`, `fill`, `fit`, `stretch`, `center`, `color` and `edges`. A
@@ -2557,12 +2567,20 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     first block's words before it and the last's after it made one and the blocks between
     deleted.
   - A math block shows its words while the caret's in it, and its equation, set, once
-    the caret leaves; it keeps the room of the larger, so the page doesn't move. In a
-    code block, Enter starts a new line, and Enter on an empty last line leaves it for
-    text after it.
+    the caret leaves; it keeps the room of the larger, so the page doesn't move. On a
+    phone it's written on a sheet over the page instead, its equation at the top as
+    it's typed, where the keyboard leaves it in sight, and kept with Accept or let go
+    with Cancel. Under its words are keys for all the notation writes, a tab of them
+    at a time: Basic, Powers, Greek, Calculus, Functions and Layout. Each puts its
+    words at the caret, the caret then where the next thing goes, and with words
+    chosen it's put around them, so √ makes `x+1` into `sqrt(x+1)`. In a code block, Enter starts a new line, and Enter on an empty last
+    line leaves it for text after it. Words pasted over several lines are a block a
+    paragraph, but in code, which keeps its lines.
   - `insert "Equation" icon equation { kind = kind::math }`, a button anywhere on the
-    screen, makes an empty block after the one the caret is in, given those values, by
-    the paper's `add`, and puts the caret in it.
+    screen, makes an empty block where the caret is, given those values, by the
+    paper's `add`, and puts the caret in it: after the caret's block, before it from its
+    start, or between its two halves from its middle, as one step. A code block or an
+    equation isn't cut in two; the new one goes after it.
   - `empty "Title"`: where an empty page's first words go, said faintly.
   - The block the caret is in is the screen's `pick block from document_page.blocks`,
     so the toolbar's buttons, like `block::style "Center" icon align_center { align =
@@ -2646,7 +2664,10 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   key p`; a terminal lays them in a row under the toolbar. Any region may say `when`, as
   `side` does there. With the site's bar out of sight, a workspace's `bar` has the
   app's name in the middle, in the theme's heading font, as a window's title is,
-  its own lines at the start, and the switch between light and dark at the end.
+  its own lines at the start, and the switch between light and dark at the end. A
+  bar's one `group "Mode" at end { ... }` puts its lines just before that switch,
+  drawn as the bar's others are, for what changes the whole screen, like whether a
+  page is read or written.
 - `options "Page" icon page { ... }` in a toolbar's group is a tool that opens its
   buttons in a panel under it, over everything, each a choice: what it gives drawn
   small, its words, and what it's for under them, said by `about`, as in
@@ -2680,6 +2701,11 @@ board project_page.issues by stage over project_page.stages link /:project/issue
 - In a toolbar, `when` doesn't hide: a group or a tool whose `when` doesn't hold is
   there, faint, and can't be pressed, nor its keys used, so the toolbar keeps its
   shape as what's picked changes. `group "Rotate" small when layer.picture != none`.
+  `only when` does hide, for a mode the person switches the screen to rather than
+  something picked: `group "Style" only when mode == mode::edit` is gone while the
+  page is read, and `toggle mode::edit "Edit" icon edit only when mode == mode::read`
+  is there only until it's pressed. Toggles, `undo`, `redo` and `full screen` take
+  either, like any line.
   A tool with no icon whose one given value is a color written `#rrggbb` is drawn
   as a circle of it, its words said when it's pointed at: `layer::write "White" {
   color = "#ffffff" }`. Tools side by side with the same words and icon are one, the
@@ -2714,7 +2740,10 @@ board project_page.issues by stage over project_page.stages link /:project/issue
 - `messages`, in a status line, says what was just done, or why a command was
   turned down, until the next thing is.
 - `full screen "Full screen" icon fullscreen key f11` fills the screen with the
-  window, and back. A terminal is already its whole window, so it draws nothing.
+  window, and back. A workspace filling it is only its `main`, with one button at its
+  top right, and Escape, to leave. Where a browser won't give a page the screen, as an
+  iPhone's won't, the workspace fills the window instead, the same way. A terminal is
+  already its whole window, so it draws nothing.
 - `pick layer from poster_page.layers` names a row of a view's list that the screen
   holds, picked with a click on a table or a board of that list, the one picked
   marked and its link no longer followed by the click, `pick poster from posters` for
@@ -2737,7 +2766,12 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   poster.first_layer == none` opens the first row of the view's list the condition
   holds for, the row named by what it's of, as a pick is read. `on open
   poster::create { width = screen.width } then open /posters/:poster` runs a command,
-  as its button would. They're tried in order, and only the first that applies is
+  as its button would. `on open toggle mode::edit when document_page.written == 0`
+  picks one of a choice as its toggle would, so a new document opens to be written
+  and one with words in it, after `on open toggle mode::read`, to be read. `on open
+  toggle layers off when drawing_page.drawn == 0` turns a toggle on or off as its
+  press would, so an empty drawing opens without its layers beside it. They're
+  tried in order, and only the first that applies is
   done, once a visit, once every view they read is there; "Opening…" shows until
   then. What's opened takes the screen's place, so going back doesn't open it again.
 - `screen.width` and `screen.height` are the screen the app is shown on, in its own
@@ -2761,7 +2795,8 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   first screen when the page opens on it; and an offering standing alone, with no
   others beside it, as a letter, a narrow column of words; with no motion at all. The design takes the screen's `hero`, with its
   words and links, the first link the one it's for; its sections of words alone, as
-  what the site offers; and its other sections, like one with a form, as what it
+  what the site offers, each opened pressed anywhere on it when it holds a link, like
+  `link "https://notes.example.com" "Open notes"`; and its other sections, like one with a form, as what it
   asks. Anything else, like a table, comes before the design, or, in `relay`, right
   under its board. Each is drawn in the theme's colors, and its motion stops for
   whoever asks for less. A landing page has no `layout`; its design lays it out.

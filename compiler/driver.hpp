@@ -9,6 +9,7 @@
 
 #include "driver/build.hpp"
 #include "driver/check.hpp"
+#include "driver/deploy.hpp"
 #include "driver/editor.hpp"
 #include "driver/outline.hpp"
 #include "driver/run.hpp"

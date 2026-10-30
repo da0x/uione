@@ -207,6 +207,8 @@ namespace one::language {
         std::vector<const paper_item*> papers_;          // and its papers, which its insert buttons act on
         std::vector<const cards_item*> cards_;           // and its cards, which its paste and add pictures buttons may go into
         bool in_toolbar_ = false;        // whether what's being checked is in a workspace's toolbar
+        bool in_bar_ = false;            // or in its bar, where one group sits at the end
+        bool bar_end_said_ = false;      // and that bar's group at its end has been seen
 
         std::string prefix_of(const std::string& ns) const {
             if (ns.empty()) return "";
@@ -1239,6 +1241,17 @@ namespace one::language {
                         return;
                     }
                     check_value(s, *f, s.to, true);
+                    return;
+                }
+                // extends "github.com/da0x/tracker" "0.1.0": a repository's release.
+                if (s.key == "extends" && names_a_release(s)) {
+                    if (!repository_address(s.value)) {
+                        error(s.where, "extends names a repository by its host and path, like extends \"github.com/da0x/tracker\" \"0.1.0\"");
+                    } else if (!release_version(s.to)) {
+                        error(s.where, "extends names a release by its version, like extends \"" + s.value + "\" \"0.1.0\"");
+                    } else if (!std::filesystem::is_directory(kept_release(s))) {
+                        error(s.where, "there's no release " + s.to + " of " + s.value + " to extend; it's fetched from https://" + s.value + ", tagged v" + s.to + " or " + s.to);
+                    }
                     return;
                 }
                 if (!s.to.empty()) error(s.where, s.key + " takes one value");
@@ -3440,7 +3453,7 @@ namespace one::language {
             static const std::set<std::string, std::less<>> known{
                 "edit",   "add",    "follow", "following", "settings", "workflow", "delete", "archive", "robot",   "building", "database",   "code",
                 "connect", "shield", "cloud", "chart",     "spark",    "people",   "lock",   "globe",   "layers",  "crop",     "copy",       "raise",
-                "lower",  "rotate_left", "rotate_right", "flip_horizontal", "flip_vertical", "check", "close", "paste", "save", "undo", "redo",
+                "lower",  "rotate_left", "rotate_right", "flip_horizontal", "flip_vertical", "check", "close", "paste", "save", "export", "undo", "redo",
                 "text",   "screenshot", "picture", "folder", "gallery", "fullscreen", "sun", "moon", "bold", "smaller", "larger", "fill", "fit", "stretch",
                 "center", "color", "edges", "blend", "harmonize", "clear", "square", "rounded", "pointer", "rectangle", "ellipse", "line", "italic", "magic", "align_left", "align_center", "align_right",
                 "title", "heading", "quote", "equation", "book", "letters", "quill", "typewriter", "coffee", "eye", "eye_off", "opacity", "spectrum", "zoom_in", "zoom_out", "zoom_fit", "star", "polygon", "cut", "group", "ungroup", "chevron_right", "chevron_down", "spread", "contents", "calendar", "bell", "inbox", "previous", "next", "info", "play", "timeline"};
@@ -3520,15 +3533,24 @@ namespace one::language {
                 }
                 if (item.when) verify_condition(ns, *item.when, route);
                 if (auto* block = std::get_if<content_block>(&item.node)) {
-                    if (block->type == content_block::kind::group && !in_toolbar_) {
-                        error(item.where, "a group is part of a workspace's toolbar, so it goes in toolbar { ... }");
+                    if (block->type == content_block::kind::group && in_bar_) {
+                        // A bar's one group, at its end, before light and dark.
+                        if (!block->at_end) error(item.where, "a group in a bar sits at its end, before the switch between light and dark, as group \"Mode\" at end { ... }");
+                        else if (std::exchange(bar_end_said_, true)) error(item.where, "a bar has one group at its end, so this one's lines go in the first");
+                    } else if (block->type == content_block::kind::group && !in_toolbar_) {
+                        error(item.where, "a group is part of a workspace's toolbar, or at the end of its bar, so it goes in toolbar { ... }");
                     }
                     if (block->type == content_block::kind::group && block->across != 0) {
                         if (!block->small) error(block->across_where, "rows of says how a small group's tools are laid out, so the group is small, as in group \"Align\" small rows of 3");
                         else if (block->across < 1 || block->across > 8) error(block->across_where, "a row of a small group holds from 1 to 8 tools");
                     }
-                    bool was_in_toolbar = in_toolbar_;
-                    if (block->type == content_block::kind::region) in_toolbar_ = block->title == "toolbar";
+                    bool was_in_toolbar = in_toolbar_, was_in_bar = in_bar_;
+                    if (block->type == content_block::kind::region) {
+                        in_toolbar_ = block->title == "toolbar";
+                        in_bar_ = block->title == "bar";
+                        bar_end_said_ = false;
+                    }
+                    if (block->type == content_block::kind::group) in_bar_ = false;
                     if (block->type == content_block::kind::menu) {
                         for (const auto& inside : block->items) {
                             if (!std::holds_alternative<content_link>(inside.node)) {
@@ -3548,6 +3570,7 @@ namespace one::language {
                     }
                     screen_items(ns, block->items, route);
                     in_toolbar_ = was_in_toolbar;
+                    in_bar_ = was_in_bar;
                 } else if (auto* box = std::get_if<find_item>(&item.node)) {
                     for (const auto& source : box->sources) {
                         const view_each* list = named_list(ns, source.view, source.list, route);
@@ -4168,8 +4191,14 @@ namespace one::language {
         // pick is read; or a command run, as its button would.
         void verify_on_open(const std::string& ns, const on_open_item& opening, location where, const std::string& route) {
             if (!opening.route) {
-                if (opening.run.size() != 1 || !std::holds_alternative<button_item>(opening.run.front().node)) {
-                    error(where, "on open runs a command, like poster::create { width = screen.width } then open /posters/:poster, or opens a row, like open /posters/:poster for posters");
+                auto* choosing = opening.run.size() == 1 ? std::get_if<toggle_item>(&opening.run.front().node) : nullptr;
+                if (opening.run.size() != 1 || (!std::holds_alternative<button_item>(opening.run.front().node) && !(choosing && (choosing->choice || choosing->turned)))) {
+                    error(where, "on open runs a command, like poster::create { width = screen.width } then open /posters/:poster, opens a row, like open /posters/:poster for posters, "
+                                 "picks one of a choice, like toggle mode::edit, or turns a toggle on or off, like toggle layers off");
+                    return;
+                }
+                if (choosing && choosing->turned && (!toggles_.contains(choosing->name) || choices_.contains(choosing->name))) {
+                    error(choosing->name_where, "there's no toggle " + choosing->name + " on this screen, on or off, for on open to turn");
                     return;
                 }
                 screen_items(ns, opening.run, route);

@@ -1734,11 +1734,13 @@ namespace one::language {
                     advance();
                     group.at_end = true;
                 }
-                expression_ptr when = shown_while();
+                bool only = false;
+                expression_ptr when = shown_while(&only);
                 group.items = parse_screen_block();
                 end_line();
                 screen_item item{where, std::move(group)};
                 item.when = std::move(when);
+                item.only = only;
                 return item;
             }
             // pick layer from poster_page.layers: a row the screen holds, picked with a click.
@@ -1855,6 +1857,20 @@ namespace one::language {
                     end_line();
                     return item;
                 }
+                // on open toggle layers off: an on or off toggle turned, as its press would.
+                if (at_word("toggle") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::identifier && (peek(2).text == "on" || peek(2).text == "off")) {
+                    location at = peek().where;
+                    advance();
+                    toggle_item toggle;
+                    toggle.name_where = peek().where;
+                    toggle.name = advance().text;
+                    toggle.turned = advance().text == "on";
+                    screen_item turning{at, std::move(toggle)};
+                    turning.when = shown_while();
+                    end_line();
+                    opening.run.push_back(std::move(turning));
+                    return {where, std::move(opening)};
+                }
                 opening.run.push_back(parse_screen_item());
                 return {where, std::move(opening)};
             }
@@ -1871,8 +1887,10 @@ namespace one::language {
                 if (at(token_kind::string)) toggle.label = advance().text;
                 parse_icon(toggle.icon, toggle.icon_where);
                 parse_keys(toggle.keys);
+                screen_item item{where, std::move(toggle)};
+                item.when = shown_while(&item.only);
                 end_line();
-                return {where, std::move(toggle)};
+                return item;
             }
             // undo "Undo" icon undo key ctrl+z, and redo: the page's last step.
             if ((at_word("undo") || at_word("redo")) && peek(1).kind != token_kind::scope) {
@@ -1881,8 +1899,10 @@ namespace one::language {
                 if (at(token_kind::string)) history.label = advance().text;
                 parse_icon(history.icon, history.icon_where);
                 parse_keys(history.keys);
+                screen_item item{where, std::move(history)};
+                item.when = shown_while(&item.only);
                 end_line();
-                return {where, std::move(history)};
+                return item;
             }
             if (at_word("messages") && (peek(1).kind == token_kind::newline || peek(1).kind == token_kind::right_brace)) {
                 advance();
@@ -1897,8 +1917,10 @@ namespace one::language {
                 if (at(token_kind::string)) full.label = advance().text;
                 parse_icon(full.icon, full.icon_where);
                 parse_keys(full.keys);
+                screen_item item{where, std::move(full)};
+                item.when = shown_while(&item.only);
                 end_line();
-                return {where, std::move(full)};
+                return item;
             }
             // heading { project::update "Edit project" }: beside the screen's title.
             if (at_word("heading") && peek(1).kind == token_kind::left_brace) {
@@ -3766,7 +3788,12 @@ namespace one::language {
             }
         }
 
-        expression_ptr shown_while() {
+        // when ..., or only when ... where `only` is given somewhere to say so.
+        expression_ptr shown_while(bool* only = nullptr) {
+            if (only && at_word("only") && peek(1).kind == token_kind::identifier && peek(1).text == "when") {
+                advance();
+                *only = true;
+            }
             if (!at_word("when")) return nullptr;
             advance();
             return parse_expression();
