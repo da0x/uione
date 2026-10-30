@@ -750,6 +750,37 @@ TEST_CASE("a function may match on a parameter's choices, and is given one by it
     CHECK(out[0].message == "quick isn't one of way's choices");
 }
 
+TEST_CASE("a list is read, joined and drawn from at random in a command or a function, never a view") {
+    const std::string dealt = "enum way {\n\tquick\n\tslow\n}\nentity item {\n\tname  text  key\n}\nentity pile {\n\titems  list of item\n\ttaken  list of item\n\ttitle  text\n}\n"
+                              "function cut(items list of item, at number) {\n\treturn drop(items, at) + first(items, at)\n}\n"
+                              "command pile::cut {\n\tinput at  number\n\tinput how  way\n\trequire at <= count(items) - 1  \"Cut inside it\"\n\titems = cut(items, random(1, at))\n\ttaken = taken + first(items, 2)\n}\n"
+                              "view piles {\n\teach pile {\n\t\ttitle\n\t}\n}\n";
+    CHECK(check_source(dealt).empty());
+    auto changed = [&](const std::string& from, const std::string& to) {
+        std::string source = dealt;
+        source.replace(source.find(from), from.size(), to);
+        auto out = check_source(source);
+        std::vector<std::string> messages;
+        for (const auto& d : out) messages.push_back(d.message);
+        return messages;
+    };
+    // A view shows everyone the same each time, so it never orders by a draw.
+    CHECK(changed("\t\ttitle\n\t}", "\t\torder by cut(items, 2)\n\t\ttitle\n\t}").empty());
+    std::string drawn = dealt;
+    drawn.replace(drawn.find("first(items, at)\n"), std::string("first(items, at)").size(), "first(items, random(1, at))");
+    CHECK(check_source(drawn).empty());
+    drawn.replace(drawn.find("\t\ttitle\n\t}"), std::string("\t\ttitle\n\t}").size(), "\t\torder by cut(items, 2)\n\t\ttitle\n\t}");
+    REQUIRE(check_source(drawn).size() == 1);
+    CHECK(check_source(drawn)[0].message == "cut draws at random, so it goes in a command or a function, never a view");
+    CHECK(changed("\t\ttitle\n\t}", "\t\torder by random(1, 2)\n\t\ttitle\n\t}") ==
+          std::vector<std::string>{"random is drawn as a command runs, so it goes in a command or a function, never a view"});
+    CHECK(changed("first(items, 2)", "first(title, 2)") == std::vector<std::string>{"first takes a list, or an entity, and title isn't a list"});
+    CHECK(changed("taken = taken + first(items, 2)", "taken = title") ==
+          std::vector<std::string>{"taken is a list; add to it or remove from it, like add me to taken, or give it a whole list, like [a, b]"});
+    CHECK(changed("input how  way", "input how  wey") ==
+          std::vector<std::string>{"'wey' isn't a type; use text, markdown, email, date, number, serial, boolean, user, file, a format, or an entity"});
+}
+
 TEST_CASE("a wrong name is reported once, not again in what it's compared with or given") {
     auto e = only_error("entity book {\n\tstatus  enum on_shelf | lent\n}\ncommand book::lend {\n\tstatuss = status::lent\n}\n");
     CHECK(e.message == "entity book has no field statuss; did you mean status?");

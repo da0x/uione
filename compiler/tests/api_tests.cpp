@@ -219,6 +219,68 @@ func Half(n float64) float64 {
     CHECK(found->content.find("h.Turns = Half(Steps(h.Turns, \"fast\"))") != std::string::npos);
 }
 
+TEST_CASE("a list is read, joined and drawn from at random in Go, and an enum's input is one of its choices") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace stack {
+enum way {
+	top
+	bottom
+}
+entity item {
+	name  text  key
+}
+entity pile {
+	items  list of item
+	taken  list of item
+}
+function cut(items list of item, at number) {
+	return drop(items, at) + first(items, at)
+}
+function moved(items list of item, from way) {
+	return match from {
+		top cut(items, random(1, count(items) - 1))
+		bottom items + []
+	}
+}
+command pile::cut {
+	input from  way
+	items = moved(items, from)
+	taken = taken + first(items, 2)
+}
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    for (const auto& d : generated.errors) FAIL_CHECK(language::format(d));
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "stack/stack.go"; });
+    REQUIRE(found != generated.files.end());
+    CAPTURE(found->content);
+    // Called like the command, so it says it's a function.
+    CHECK(found->content.find(R"(func CutFunction(items []string, at float64) []string {
+	return one.Joined(one.DropOf(items, int(at)), one.FirstOf(items, int(at)))
+}
+
+func Moved(items []string, from string) []string {
+	switch from {
+	case "top":
+		return CutFunction(items, one.Random(1, float64(len(items))-1))
+	case "bottom":
+		return one.Joined(items, []string{})
+	}
+	panic("no choice matched")
+}
+)") != std::string::npos);
+    CHECK(found->content.find(R"(		from, _ := c.Input("from").(string)
+		if !one.Has([]string{"top", "bottom"}, from) {
+			return c.Fail("from is one of top or bottom")
+		}
+		p.Items = Moved(p.Items, from)
+		p.Taken = one.Joined(p.Taken, one.FirstOf(p.Items, 2))
+)") != std::string::npos);
+}
+
 TEST_CASE("a field can be worked out from what another points at, and a list can start with values") {
     language::diagnostics out;
     std::vector<language::file> files;

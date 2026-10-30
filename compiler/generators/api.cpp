@@ -204,6 +204,7 @@ namespace one::generators {
         std::vector<std::pair<std::string, const language::entity_declaration*>> pointed_;
         // The inputs of the command being written, like into, by name, with their types.
         std::map<std::string, std::string> inputs_;
+        std::map<std::string, std::vector<std::string>> input_choices_;  // an input's, when its type is an enum
         // Create commands another runs, like board::create in project::create, whose
         // bodies are functions of their own so it can call them.
         std::set<std::string> run_;
@@ -341,6 +342,16 @@ namespace one::generators {
             }
             std::string name = api_detail::go_name(f.name) + api_detail::go_name(value);
             return shared && owner ? api_detail::go_name(owner->name) + name : name;
+        }
+
+        // A function's name in Go: its own, or with Function after it when a command, a
+        // view or an entity of the package is called the same, like cut and deal::cut.
+        static std::string function_go_name(const package& pkg, const std::string& name) {
+            std::string go = api_detail::go_name(name);
+            bool taken = std::ranges::any_of(pkg.entities, [&](const auto* e) { return api_detail::go_name(e->name) == go; }) ||
+                         std::ranges::any_of(pkg.views, [&](const auto& v) { return api_detail::go_name(v.first->name) == go; }) ||
+                         std::ranges::any_of(pkg.commands, [&](const auto& c) { return c.first->name.parts.size() == 2 && api_detail::go_name(c.first->name.parts[1]) == go; });
+            return taken ? go + "Function" : go;
         }
 
         static const language::function_declaration* function(const package& pkg, std::string_view name) {
@@ -915,6 +926,7 @@ namespace one::generators {
 
             // What it's sent besides its entity's fields, read in its body.
             inputs_.clear();
+            input_choices_.clear();
             std::string inputs;
             for (const auto& s : c.body) {
                 auto* input = std::get_if<language::input_statement>(&s.node);
@@ -922,6 +934,7 @@ namespace one::generators {
                 inputs += (inputs.empty() ? "" : ", ") + api_detail::go_string(input->name);
                 const std::string type = input->type.text();
                 inputs_[input->name] = type == "number" ? "float64" : type == "boolean" ? "bool" : "string";
+                if (!input->choices.empty()) input_choices_[input->name] = input->choices;
             }
             if (!inputs.empty()) head += ".Inputs(" + inputs + ")";
 
@@ -951,6 +964,7 @@ namespace one::generators {
                 for (const auto& [name, type] : inputs_) {
                     bool used = std::any_of(body.begin(), body.end(), [&](const language::statement* s) { return mentions(*s, name); });
                     if (used) out.line(local_name(name) + ", _ := c.Input(" + api_detail::go_string(name) + ").(" + type + ")");
+                    if (used) chosen(out, name);
                 }
                 body_of(out, e, body, me, at(&c), uses_time);
                 out.close("}");
@@ -964,6 +978,7 @@ namespace one::generators {
             for (const auto& [name, type] : inputs_) {
                 bool used = std::any_of(body.begin(), body.end(), [&](const language::statement* s) { return mentions(*s, name); });
                 if (used) out.line(local_name(name) + ", _ := c.Input(" + api_detail::go_string(name) + ").(" + type + ")");
+                if (used) chosen(out, name);
             }
             body_of(out, e, body, me, at(&c), uses_time);
             out.close("})");
@@ -1045,6 +1060,21 @@ namespace one::generators {
             if (!value) return std::nullopt;
             out.emplace_back(api_detail::go_string(field_name), *value);
             return out;
+        }
+
+        // An input of an enum's, refused unless it's one of its choices, so what's worked
+        // out from it never meets one it doesn't know.
+        void chosen(stream& out, const std::string& name) {
+            auto choices = input_choices_.find(name);
+            if (choices == input_choices_.end()) return;
+            std::string list, said;
+            for (std::size_t i = 0; i < choices->second.size(); ++i) {
+                list += (i ? ", " : "") + api_detail::go_string(choices->second[i]);
+                said += (i == 0 ? "" : i + 1 == choices->second.size() ? " or " : ", ") + choices->second[i];
+            }
+            out.open("if !one.Has([]string{" + list + "}, " + local_name(name) + ") {");
+            out.line("return c.Fail(" + api_detail::go_string(name + " is one of " + said) + ")");
+            out.close("}");
         }
 
         // The function a command's body is, when another command runs it: board::create's
@@ -1755,7 +1785,7 @@ namespace one::generators {
             auto* callee = call ? std::get_if<language::name_expression>(&call->callee->node) : nullptr;
             if (callee && callee->name.text() == "held") return held_before(out, e, x, *call, me);
             if (callee && callee->name.text() == "waiting") return waiting_before(out, e, x, *call, me);
-            bool counting = callee && callee->name.text() == "count";
+            bool counting = callee && callee->name.text() == "count" && !command_list(e, *call->arguments[0], me);
             if (!callee || (callee->name.text() != "exists" && !counting)) return true;
             auto* w = std::get_if<language::where_expression>(&call->arguments[0]->node);
             auto* source = std::get_if<language::name_expression>(w ? &w->source->node : &call->arguments[0]->node);
@@ -1995,6 +2025,37 @@ namespace one::generators {
             return true;
         }
 
+        // Whether an expression in a command is a list: a field that holds several, a
+        // list's first so many or what's after them, two joined, or a function's that
+        // returns one.
+        bool command_list(const language::entity_declaration& e, const language::expression& x, const std::string& me) {
+            if (std::holds_alternative<language::list_expression>(x.node)) return true;
+            if (auto* b = std::get_if<language::binary_expression>(&x.node)) {
+                return b->op == language::token_kind::plus && (command_list(e, *b->left, me) || command_list(e, *b->right, me));
+            }
+            if (auto* call = std::get_if<language::call_expression>(&x.node)) {
+                auto* callee = std::get_if<language::name_expression>(&call->callee->node);
+                std::string named = callee ? callee->name.text() : "";
+                if ((named == "first" || named == "drop") && call->arguments.size() == 2) return command_list(e, *call->arguments[0], me);
+                const language::function_declaration* called = pkg_ ? function(*pkg_, named) : nullptr;
+                return called && return_type_of(*pkg_, *called) == std::optional<std::string>("[]string");
+            }
+            if (auto* n = std::get_if<language::name_expression>(&x.node); n && n->name.parts.size() == 1) {
+                if (const language::field* f = field(e, n->name.parts[0])) return f->list;
+                return false;
+            }
+            if (auto* m = std::get_if<language::member_expression>(&x.node)) {
+                auto* object = std::get_if<language::name_expression>(&m->object->node);
+                if (object && object->name.text() == e.name) {
+                    const language::field* f = field(e, m->member);
+                    return f && f->list;
+                }
+                auto through = resolve(e, x, me);
+                return through && through->second && through->second->list;
+            }
+            return false;
+        }
+
         std::optional<std::string> expression(const language::entity_declaration& e, const language::expression& x, const std::string& me, const language::field* beside) {
             if (auto found = existing_.find(&x); found != existing_.end()) return found->second;
             if (auto* call = std::get_if<language::call_expression>(&x.node)) {
@@ -2017,7 +2078,22 @@ namespace one::generators {
                         if (!arg) return std::nullopt;
                         args += (args.empty() ? "" : ", ") + *arg;
                     }
-                    return api_detail::go_name(called->name) + "(" + args + ")";
+                    return function_go_name(*pkg_, called->name) + "(" + args + ")";
+                }
+                // random(1, 6), and a list's first so many, what's after them, and how many it holds.
+                std::string named = callee ? callee->name.text() : "";
+                std::vector<std::string> args;
+                if (named == "random" || ((named == "first" || named == "drop" || named == "count") && !call->arguments.empty() && command_list(e, *call->arguments[0], me))) {
+                    for (const auto& a : call->arguments) {
+                        auto arg = expression(e, *a, me, nullptr);
+                        if (!arg) return std::nullopt;
+                        args.push_back(*arg);
+                    }
+                    auto whole = [](const std::string& n) { return n.find_first_not_of("0123456789") == std::string::npos ? n : "int(" + n + ")"; };
+                    if (named == "random" && args.size() == 2) return "one.Random(" + args[0] + ", " + args[1] + ")";
+                    if (named == "first" && args.size() == 2) return "one.FirstOf(" + args[0] + ", " + whole(args[1]) + ")";
+                    if (named == "drop" && args.size() == 2) return "one.DropOf(" + args[0] + ", " + whole(args[1]) + ")";
+                    if (named == "count" && args.size() == 1) return "float64(len(" + args[0] + "))";
                 }
                 // was issue.stage, or was stage: the field as it was stored.
                 if (callee && callee->name.text() == "was") {
@@ -2040,6 +2116,16 @@ namespace one::generators {
                 return lit->type == language::literal_expression::kind::string ? api_detail::go_string(lit->value) : lit->value;
             }
             if (auto* m = std::get_if<language::match_expression>(&x.node)) return matched(e, *m, me, beside);
+            // [] or [a, b], given to a list.
+            if (auto* list = std::get_if<language::list_expression>(&x.node); list && (!beside || beside->list)) {
+                std::string items;
+                for (const auto& item : list->items) {
+                    auto value = expression(e, *item, me, beside);
+                    if (!value) return std::nullopt;
+                    items += (items.empty() ? "" : ", ") + *value;
+                }
+                return "[]string{" + items + "}";
+            }
             // A choice of the field it's beside: status::closed.
             if (auto* n = std::get_if<language::name_expression>(&x.node); n && beside) {
                 if (auto c = language::choice_of(n->name, *beside)) return choice(*beside, *c);
@@ -2085,6 +2171,13 @@ namespace one::generators {
                     if (!r) r = expression(e, *b->right, me, nullptr);
                     if (!r) return std::nullopt;
                     return "one.Has(" + left->first + ", " + *r + ")";
+                }
+                // hand + first(deck, 13): two lists joined.
+                if (b->op == language::token_kind::plus && (command_list(e, *b->left, me) || command_list(e, *b->right, me))) {
+                    auto l = expression(e, *b->left, me, nullptr);
+                    auto r = expression(e, *b->right, me, nullptr);
+                    if (!l || !r) return std::nullopt;
+                    return "one.Joined(" + *l + ", " + *r + ")";
                 }
                 if (auto it = ops.find(b->op); it != ops.end()) {
                     if (it->second == "==" || it->second == "!=") return compare(e, *b, me, it->second);
@@ -2652,13 +2745,18 @@ namespace one::generators {
                     bool written = n.first.is == go_node::kind::atom && n.first.text.find_first_not_of("0123456789") == std::string::npos;
                     return n.second == "float64" && !written ? go_call("int", {n.first}) : n.first;
                 };
+                bool listed = !args.empty() && args[0].second == "[]string";
                 if (name == "starts_with" && args.size() == 2) return std::pair{go_call("one.StartsWith", nodes()), std::string("bool")};
+                if (name == "drop" && args.size() == 2 && listed) return std::pair{go_call("one.DropOf", {args[0].first, whole(args[1])}), std::string("[]string")};
                 if (name == "drop" && args.size() == 2) return std::pair{go_call("one.Drop", {args[0].first, whole(args[1])}), std::string("string")};
+                if (name == "first" && args.size() == 2 && listed) return std::pair{go_call("one.FirstOf", {args[0].first, whole(args[1])}), std::string("[]string")};
+                if (name == "count" && args.size() == 1 && listed) return std::pair{go_call("float64", {go_call("len", {args[0].first})}), std::string("float64")};
+                if (name == "random" && args.size() == 2) return std::pair{go_call("one.Random", nodes()), std::string("float64")};
                 if ((name == "min" || name == "max") && args.size() == 2) return std::pair{go_call(name, nodes()), std::string("float64")};
                 if (const language::function_declaration* called = function(pkg, name)) {
                     auto returns = return_type_of(pkg, *called);
                     if (!returns) return std::nullopt;
-                    return std::pair{go_call(api_detail::go_name(name), nodes()), *returns};
+                    return std::pair{go_call(function_go_name(pkg, name), nodes()), *returns};
                 }
                 return fails("calling " + name + " in a function");
             }
@@ -2678,6 +2776,8 @@ namespace one::generators {
                 auto l = said(*b->left);
                 auto r = said(*b->right);
                 if (!l || !r) return std::nullopt;
+                // Two lists joined, the first's then the second's.
+                if (b->op == token_kind::plus && (l->second == "[]string" || r->second == "[]string")) return std::pair{go_call("one.Joined", {l->first, r->first}), std::string("[]string")};
                 if (b->op == token_kind::slash) return std::pair{go_call("one.Divide", {l->first, r->first}), std::string("float64")};
                 if (b->op == token_kind::remainder) return std::pair{go_call("one.Remainder", {l->first, r->first}), std::string("float64")};
                 if (auto it = operators.find(b->op); it != operators.end()) {
@@ -2686,6 +2786,16 @@ namespace one::generators {
                 }
             }
             if (std::holds_alternative<language::match_expression>(x.node)) return fails("a match in a function anywhere but alone after return, like return match way { … }");
+            // [] or [a, b]: a list, each one's id or a piece of text.
+            if (auto* list = std::get_if<language::list_expression>(&x.node)) {
+                std::string items;
+                for (const auto& item : list->items) {
+                    auto value = said(*item);
+                    if (!value) return std::nullopt;
+                    items += (items.empty() ? "" : ", ") + go_written(value->first, 2);
+                }
+                return std::pair{go_atom("[]string{" + items + "}"), std::string("[]string")};
+            }
             return fails("this in a function; a function can use its parameters, plain values, arithmetic, comparisons and calls");
         }
 
@@ -2824,7 +2934,7 @@ namespace one::generators {
                     continue;
                 }
                 auto from_function = in(out, at(function), where.line);
-                out.open("func " + api_detail::go_name(function->name) + "(" + list + ") " + *returns + " {");
+                out.open("func " + function_go_name(pkg, function->name) + "(" + list + ") " + *returns + " {");
                 function_statements(out, pkg, function->body, parameters->first, parameters->second, at(function));
                 out.close("}");
                 out.line();
@@ -3081,7 +3191,7 @@ namespace one::generators {
                         auto* callee = std::get_if<language::name_expression>(&call->callee->node);
                         auto* arg = call->arguments.size() == 1 ? std::get_if<language::name_expression>(&call->arguments[0]->node) : nullptr;
                         if (!reverse && callee && arg && arg->name.parts.size() == 1 && function(pkg, callee->name.text())) {
-                            order.push_back("one.By(" + api_detail::go_string(arg->name.parts[0]) + ", " + api_detail::go_name(callee->name.text()) + ")");
+                            order.push_back("one.By(" + api_detail::go_string(arg->name.parts[0]) + ", " + function_go_name(pkg, callee->name.text()) + ")");
                             continue;
                         }
                     }

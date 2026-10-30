@@ -33,6 +33,7 @@ relevant record before changing what it covers.
 | [0025](0025-a-collage-layer-may-be-a-shape.md) | A collage's layer may be a shape, drawn by a pinned copy of nanosvg |
 | [0026](0026-a-function-says-its-parameters-types.md) | A function says its parameters' types, as fields do |
 | [0027](0027-a-function-may-be-called-from-a-command-on-every-target.md) | A function may be called from a command, on every target |
+| [0028](0028-a-list-is-read-joined-and-drawn-from-at-random.md) | A list is read, joined and drawn from at random |
 
 ## Writing one
 

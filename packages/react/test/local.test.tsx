@@ -8,7 +8,7 @@
 // worked out for each row and a page per book, and undo and redo.
 
 import { vi } from "vitest";
-import { Rows, all, by, command, divided, entity, first, localPackage, localSource, memoryStore, none, nothing, remainder, row, subject, view, where } from "../src/local.js";
+import { Rows, all, by, command, counted, divided, drawWith, dropOf, entity, first, firstOf, joined, localPackage, localSource, memoryStore, none, nothing, random, remainder, row, subject, view, where } from "../src/local.js";
 import { divided as dividedOnScreen, remainder as remainderOnScreen } from "../src/index.js";
 import type { CommandReply, ViewState } from "../src/data.js";
 import type { LocalStore, Row, Value } from "../src/local.js";
@@ -429,6 +429,39 @@ describe("a value divided, or what's left over", () => {
       expect(leave(-1, 4)).toBe(3);
       expect(leave(5, 4)).toBe(1);
       expect(leave(3, 0)).toBe(0);
+    }
+  });
+});
+
+describe("a list a .one file works on", () => {
+  it("gives its first, what's after them, and two joined, each a list of its own, as on every target", () => {
+    const list = ["a", "b", "c"];
+    expect(firstOf(list, 2)).toEqual(["a", "b"]);
+    expect(firstOf(list, 9)).toEqual(list);
+    expect(firstOf(list, -1)).toEqual([]);
+    expect(dropOf(list, 1)).toEqual(["b", "c"]);
+    expect(dropOf(list, 9)).toEqual([]);
+    const both = joined(firstOf(list, 1), list);
+    both[0] = "z";
+    expect(both).toEqual(["z", "a", "b", "c"]);
+    expect(list).toEqual(["a", "b", "c"]);
+    expect(counted(list)).toBe(3);
+    expect(counted(null)).toBe(0);
+  });
+});
+
+describe("a random number", () => {
+  it("is a whole one from low to high, both included, and draws from its source", () => {
+    const seen = new Set<number>();
+    for (let i = 0; i < 2000; i++) seen.add(random(-2, 3));
+    expect([...seen].sort((a, b) => a - b)).toEqual([-2, -1, 0, 1, 2, 3]);
+    expect(random(5, 5)).toBe(5);
+    expect(random(5, 1)).toBe(5);
+    const restore = drawWith((n) => n - 1);
+    try {
+      expect(random(1, 6)).toBe(6);
+    } finally {
+      restore();
     }
   });
 });

@@ -270,6 +270,42 @@ TEST_CASE("a function is written for each target on values as rows keep them, ca
     CHECK(ts.find("e[\"x\"] = pinned_steps(e[\"w\"], \"fast\");") != std::string::npos);
 }
 
+TEST_CASE("a list is read, joined and drawn from at random on each target, and an enum's input is one of its choices") {
+    const std::string stacked = with(with(board, "\t\tw      number  = 400\n", "\t\tw      number  = 400\n\t\tseen   list of layer\n"), "\tscreen \"Boards\"", R"(	enum way {
+		top
+		bottom
+	}
+
+	function cut(items list of layer, at number) {
+		return drop(items, at) + first(items, at)
+	}
+
+	command layer::look {
+		input from  way
+		seen = cut(seen, random(1, count(seen))) + []
+	}
+
+	screen "Boards")");
+    language::diagnostics out;
+    auto files = parsed(stacked, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_local(files);
+    for (const auto& d : generated.errors) FAIL_CHECK(language::format(d));
+    REQUIRE(generated.files.size() == 1);
+    REQUIRE(generated.web.size() == 1);
+    const std::string& cpp = generated.files[0].content;
+    const std::string& ts = generated.web[0].content;
+    CAPTURE(cpp);
+    CAPTURE(ts);
+    CHECK(cpp.find("return one::local::joined(one::local::drop_of(items, at.as_double()), one::local::first_of(items, at.as_double()));") != std::string::npos);
+    CHECK(cpp.find("if (!std::ranges::contains(std::vector<std::string>{\"top\", \"bottom\"}, c.input(\"from\").as_string())) return c.fail(\"from is one of top or bottom\");") != std::string::npos);
+    CHECK(cpp.find("e.fields[\"seen\"] = one::local::joined(pinned_cut(e[\"seen\"], value(one::local::random(value(1).as_double(), value(one::local::counted(e[\"seen\"])).as_double()))), value(std::vector<value>{}));") != std::string::npos);
+    CHECK(ts.find("counted, divided, dropOf, entity, failed, firstOf, joined, keyOf, localPackage, number, random, remainder,") != std::string::npos);
+    CHECK(ts.find("return joined(dropOf(items, number(at)), firstOf(items, number(at)));") != std::string::npos);
+    CHECK(ts.find("if (![\"top\", \"bottom\"].includes(text(c.input(\"from\")))) return c.fail(\"from is one of top or bottom\");") != std::string::npos);
+    CHECK(ts.find("e[\"seen\"] = joined(pinned_cut(e[\"seen\"], (random(number(1), number((counted(e[\"seen\"])))))), []);") != std::string::npos);
+}
+
 TEST_CASE("one build writes a local project's native apps alone, with no service, rules or cloud") {
     language::diagnostics out;
     auto files = parsed(board, out);

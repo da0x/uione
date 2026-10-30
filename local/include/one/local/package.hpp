@@ -29,9 +29,11 @@
 
 #pragma once
 
+#include <cstdint>
 #include <expected>
 #include <functional>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <variant>
@@ -64,6 +66,18 @@ namespace one::local {
 	// over as a clock counts, never below none, so -1 % 4 is 3, and either by 0 is 0.
 	double divided(double x, double y);
 	double remainder(double x, double y);
+	// A list as a .one file works on it, each giving a list of its own: its first n,
+	// all of it after them, two joined, and how many it holds.
+	value first_of(const value& list, double n);
+	value drop_of(const value& list, double n);
+	value joined(const value& a, const value& b);
+	double counted(const value& list);
+	// A whole number from low to high, both included, drawn from the operating
+	// system's secure source, where no one using the app can see or steer it; with high
+	// below low, it's low. Tests draw in an order they know, giving a number from 0 up
+	// to n, not included, until what draw_with returns is let go.
+	double random(double low, double high);
+	std::shared_ptr<void> draw_with(std::function<std::int64_t(std::int64_t)> given);
 	// A field's name as a person reads it: due_at is "Due at".
 	std::string label(const std::string& name);
 	// == in a command's body: the same value, or both nothing when either is none.
