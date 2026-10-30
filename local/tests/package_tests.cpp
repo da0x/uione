@@ -418,6 +418,17 @@ TEST("a list's first, what's after them, and two joined are lists of their own, 
 	CHECK(one::local::counted(value()) == 0);
 }
 
+TEST("a list's nth counts from 1 and is nothing past its end, and has asks what it holds as == does") {
+	value list(std::vector<value>{value("a"), value("b"), value("c")});
+	CHECK(one::local::item_of(list, 2).as_string() == "b");
+	CHECK(one::local::item_of(list, 0).is_null());
+	CHECK(one::local::item_of(list, 4).is_null());
+	CHECK(one::local::item_of(value(), 1).is_null());
+	CHECK(one::local::holds(list, value("c")));
+	CHECK(!one::local::holds(list, value("d")));
+	CHECK(!one::local::holds(value(), value("a")));
+}
+
 TEST("a random number is a whole one from low to high, both included, and draws from its source") {
 	std::set<double> seen;
 	for (int i = 0; i < 2000; ++i) seen.insert(one::local::random(-2, 3));

@@ -281,6 +281,49 @@ func Moved(items []string, from string) []string {
 )") != std::string::npos);
 }
 
+TEST_CASE("a list's nth and whether it holds a value are read in Go, in a function or a command") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace stack {
+entity tile {
+	name  text  key
+}
+entity pile {
+	tiles  list of tile
+	top    text
+	held   boolean
+}
+function holds(tiles list of tile, wanted text) {
+	return tiles has wanted
+}
+function second(tiles list of tile) {
+	return item(tiles, 2)
+}
+command pile::look {
+	input wanted  text
+	top = item(tiles, count(tiles))
+	held = holds(tiles, wanted) && second(tiles) != wanted
+}
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    for (const auto& d : generated.errors) FAIL_CHECK(language::format(d));
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "stack/stack.go"; });
+    REQUIRE(found != generated.files.end());
+    CAPTURE(found->content);
+    CHECK(found->content.find(R"(func Holds(tiles []string, wanted string) bool {
+	return one.Has(tiles, wanted)
+}
+
+func Second(tiles []string) string {
+	return one.ItemOf(tiles, 2)
+}
+)") != std::string::npos);
+    CHECK(found->content.find("p.Top = one.ItemOf(p.Tiles, int(float64(len(p.Tiles))))") != std::string::npos);
+}
+
 TEST_CASE("a field can be worked out from what another points at, and a list can start with values") {
     language::diagnostics out;
     std::vector<language::file> files;

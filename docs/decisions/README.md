@@ -34,6 +34,7 @@ relevant record before changing what it covers.
 | [0026](0026-a-function-says-its-parameters-types.md) | A function says its parameters' types, as fields do |
 | [0027](0027-a-function-may-be-called-from-a-command-on-every-target.md) | A function may be called from a command, on every target |
 | [0028](0028-a-list-is-read-joined-and-drawn-from-at-random.md) | A list is read, joined and drawn from at random |
+| [0029](0029-a-list-gives-its-nth-and-says-what-it-holds-in-a-function.md) | A list gives its nth, and says what it holds, in a function |
 
 ## Writing one
 

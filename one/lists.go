@@ -24,6 +24,14 @@ func DropOf(list []string, n int) []string {
 	return append([]string{}, list[n:]...)
 }
 
+// ItemOf is a list's nth, counting from 1, or nothing when it holds fewer.
+func ItemOf(list []string, n int) string {
+	if n < 1 || n > len(list) {
+		return ""
+	}
+	return list[n-1]
+}
+
 // Joined is a, then b.
 func Joined(a, b []string) []string {
 	return append(append(make([]string, 0, len(a)+len(b)), a...), b...)

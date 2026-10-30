@@ -68,11 +68,14 @@ namespace one::local {
 	double divided(double x, double y);
 	double remainder(double x, double y);
 	// A list as a .one file works on it, each giving a list of its own: its first n,
-	// all of it after them, two joined, and how many it holds.
+	// all of it after them, two joined, and how many it holds; its nth, counting from
+	// 1, or nothing when it holds fewer; and whether it holds a value, as == compares.
 	value first_of(const value& list, double n);
 	value drop_of(const value& list, double n);
 	value joined(const value& a, const value& b);
 	double counted(const value& list);
+	value item_of(const value& list, double n);
+	bool holds(const value& list, const value& wanted);
 	// A whole number from low to high, both included, drawn from the operating
 	// system's secure source, where no one using the app can see or steer it; with high
 	// below low, it's low. Tests draw in an order they know, giving a number from 0 up

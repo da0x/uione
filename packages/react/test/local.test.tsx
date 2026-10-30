@@ -8,7 +8,7 @@
 // worked out for each row and a page per book, and undo and redo.
 
 import { vi } from "vitest";
-import { Rows, all, by, command, counted, divided, drawWith, dropOf, entity, first, firstOf, joined, localPackage, localSource, memoryStore, none, nothing, random, remainder, row, subject, view, where } from "../src/local.js";
+import { Rows, all, by, command, counted, divided, drawWith, dropOf, entity, first, firstOf, holds, itemOf, joined, localPackage, localSource, memoryStore, none, nothing, random, remainder, row, subject, view, where } from "../src/local.js";
 import { divided as dividedOnScreen, remainder as remainderOnScreen } from "../src/index.js";
 import type { CommandReply, ViewState } from "../src/data.js";
 import type { LocalStore, Row, Value } from "../src/local.js";
@@ -500,6 +500,17 @@ describe("a list a .one file works on", () => {
     expect(list).toEqual(["a", "b", "c"]);
     expect(counted(list)).toBe(3);
     expect(counted(null)).toBe(0);
+  });
+
+  it("gives its nth, counting from 1, nothing past its end, and asks what it holds as == does", () => {
+    const list = ["a", "b", "c"];
+    expect(itemOf(list, 2)).toBe("b");
+    expect(itemOf(list, 0)).toBeNull();
+    expect(itemOf(list, 4)).toBeNull();
+    expect(itemOf(null, 1)).toBeNull();
+    expect(holds(list, "c")).toBe(true);
+    expect(holds(list, "d")).toBe(false);
+    expect(holds(null, "a")).toBe(false);
   });
 });
 

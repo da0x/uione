@@ -25,6 +25,12 @@ func TestListsTakeAndLeave(t *testing.T) {
 	if got := FirstOf(list, -1); len(got) != 0 {
 		t.Errorf("FirstOf -1 is %v, not none", got)
 	}
+	if got := ItemOf(list, 2); got != "b" {
+		t.Errorf("ItemOf 2 is %q", got)
+	}
+	if got, past := ItemOf(list, 0), ItemOf(list, 4); got != "" || past != "" {
+		t.Errorf("ItemOf 0 is %q and ItemOf 4 is %q, not nothing", got, past)
+	}
 	joined := Joined(FirstOf(list, 1), list)
 	joined[0] = "z"
 	if !slices.Equal(joined, []string{"z", "a", "b", "c"}) || list[0] != "a" {

@@ -362,6 +362,36 @@ TEST_CASE("a list is read, joined and drawn from at random on each target, and a
     CHECK(ts.find("e[\"seen\"] = joined(pinned_cut(e[\"seen\"], (random(number(1), number((counted(e[\"seen\"])))))), []);") != std::string::npos);
 }
 
+TEST_CASE("a list's nth and whether it holds a value are read on each target") {
+    const std::string read = with(with(board, "\t\tw      number  = 400\n", "\t\tw      number  = 400\n\t\tseen   list of layer\n\t\theld   boolean\n"), "\tscreen \"Boards\"", R"(	function holds(items list of layer, wanted text) {
+		return items has wanted
+	}
+
+	command layer::look {
+		input wanted  text
+		held = holds(seen, wanted) && item(seen, 1) != wanted
+	}
+
+	screen "Boards")");
+    language::diagnostics out;
+    auto files = parsed(read, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_local(files);
+    for (const auto& d : generated.errors) FAIL_CHECK(language::format(d));
+    REQUIRE(generated.files.size() == 1);
+    REQUIRE(generated.web.size() == 1);
+    const std::string& cpp = generated.files[0].content;
+    const std::string& ts = generated.web[0].content;
+    CAPTURE(cpp);
+    CAPTURE(ts);
+    CHECK(cpp.find("return value(one::local::holds(items, wanted));") != std::string::npos);
+    CHECK(cpp.find("!same(one::local::item_of(e[\"seen\"], value(1).as_double()), c.input(\"wanted\"))") != std::string::npos);
+    CHECK(ts.find(" holds, ") != std::string::npos);
+    CHECK(ts.find(" itemOf, ") != std::string::npos);
+    CHECK(ts.find("return holds(items, wanted);") != std::string::npos);
+    CHECK(ts.find("!same(itemOf(e[\"seen\"], number(1)), c.input(\"wanted\"))") != std::string::npos);
+}
+
 TEST_CASE("one build writes a local project's native apps alone, with no service, rules or cloud") {
     language::diagnostics out;
     auto files = parsed(board, out);

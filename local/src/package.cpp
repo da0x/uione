@@ -117,6 +117,16 @@ namespace one::local {
 
 	double counted(const value& list) { return static_cast<double>(list.as_array().size()); }
 
+	value item_of(const value& list, double n) {
+		const auto& items = list.as_array();
+		if (n < 1 || n >= static_cast<double>(items.size()) + 1) return value();
+		return items[static_cast<std::size_t>(n) - 1];
+	}
+
+	bool holds(const value& list, const value& wanted) {
+		return std::ranges::any_of(list.as_array(), [&](const value& item) { return same(item, wanted); });
+	}
+
 	double random(double low, double high) {
 		double from = std::ceil(low), to = std::floor(high);
 		if (to <= from) return from;

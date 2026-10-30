@@ -409,6 +409,10 @@ namespace one::generators {
                     if (called_name == "count" && call->arguments.size() == 1 && listed(*call->arguments[0], s)) {
                         return {sum(helper("counted", "counted") + "(" + as_value(expression(*call->arguments[0], s)) + ")")};
                     }
+                    if (called_name == "item" && call->arguments.size() == 2 && listed(*call->arguments[0], s)) {
+                        std::string list = as_value(expression(*call->arguments[0], s)), n = number_of(as_value(expression(*call->arguments[1], s)));
+                        return {helper("itemOf", "item_of") + "(" + list + ", " + n + ")"};
+                    }
                     // A function the namespace declares, a choice given by its name as its parameter's enum keeps it.
                     if (const language::function_declaration* called = callee ? function(callee->name.text()) : nullptr) {
                         std::string args;
@@ -445,6 +449,11 @@ namespace one::generators {
                     if (b->op == token_kind::plus && (listed(*b->left, s) || listed(*b->right, s))) {
                         if (typescript()) helpers_.insert("joined");
                         return {(typescript() ? "joined(" : "one::local::joined(") + as_value(l) + ", " + as_value(r) + ")"};
+                    }
+                    // hand has card: whether a list holds a value.
+                    if (b->op == token_kind::has && listed(*b->left, s)) {
+                        if (typescript()) helpers_.insert("holds");
+                        return {(typescript() ? "holds(" : "one::local::holds(") + as_value(l) + ", " + as_value(r) + ")", true};
                     }
                     switch (b->op) {
                         case token_kind::equal: return {"same(" + as_value(l) + ", " + as_value(r) + ")", true};

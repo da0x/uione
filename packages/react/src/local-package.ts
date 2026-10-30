@@ -101,6 +101,16 @@ export function joined(a: Value | undefined, b: Value | undefined): Value[] {
   return [...(isArray(a) ? a : []), ...(isArray(b) ? b : [])];
 }
 
+// A list's nth, counting from 1, or nothing when it holds fewer.
+export function itemOf(list: Value | undefined, n: number): Value {
+  return isArray(list) && n >= 1 && n <= list.length ? list[Math.floor(n) - 1] : null;
+}
+
+// Whether a list holds a value, as == compares them.
+export function holds(list: Value | undefined, wanted: Value | undefined): boolean {
+  return isArray(list) && list.some((item) => same(item, wanted));
+}
+
 // How many a list holds.
 export function counted(list: Value | undefined): number {
   return isArray(list) ? list.length : 0;

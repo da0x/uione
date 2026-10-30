@@ -2080,10 +2080,11 @@ namespace one::generators {
                     }
                     return function_go_name(*pkg_, called->name) + "(" + args + ")";
                 }
-                // random(1, 6), and a list's first so many, what's after them, and how many it holds.
+                // random(1, 6), and a list's first so many, what's after them, how many it holds, and its nth.
                 std::string named = callee ? callee->name.text() : "";
                 std::vector<std::string> args;
-                if (named == "random" || ((named == "first" || named == "drop" || named == "count") && !call->arguments.empty() && command_list(e, *call->arguments[0], me))) {
+                if (named == "random" ||
+                    ((named == "first" || named == "drop" || named == "count" || named == "item") && !call->arguments.empty() && command_list(e, *call->arguments[0], me))) {
                     for (const auto& a : call->arguments) {
                         auto arg = expression(e, *a, me, nullptr);
                         if (!arg) return std::nullopt;
@@ -2094,6 +2095,7 @@ namespace one::generators {
                     if (named == "first" && args.size() == 2) return "one.FirstOf(" + args[0] + ", " + whole(args[1]) + ")";
                     if (named == "drop" && args.size() == 2) return "one.DropOf(" + args[0] + ", " + whole(args[1]) + ")";
                     if (named == "count" && args.size() == 1) return "float64(len(" + args[0] + "))";
+                    if (named == "item" && args.size() == 2) return "one.ItemOf(" + args[0] + ", " + whole(args[1]) + ")";
                 }
                 // was issue.stage, or was stage: the field as it was stored.
                 if (callee && callee->name.text() == "was") {
@@ -2755,6 +2757,7 @@ namespace one::generators {
                 if (name == "drop" && args.size() == 2) return std::pair{go_call("one.Drop", {args[0].first, whole(args[1])}), std::string("string")};
                 if (name == "first" && args.size() == 2 && listed) return std::pair{go_call("one.FirstOf", {args[0].first, whole(args[1])}), std::string("[]string")};
                 if (name == "count" && args.size() == 1 && listed) return std::pair{go_call("float64", {go_call("len", {args[0].first})}), std::string("float64")};
+                if (name == "item" && args.size() == 2 && listed) return std::pair{go_call("one.ItemOf", {args[0].first, whole(args[1])}), std::string("string")};
                 if (name == "random" && args.size() == 2) return std::pair{go_call("one.Random", nodes()), std::string("float64")};
                 if ((name == "min" || name == "max") && args.size() == 2) return std::pair{go_call(name, nodes()), std::string("float64")};
                 if (const language::function_declaration* called = function(pkg, name)) {
@@ -2782,6 +2785,11 @@ namespace one::generators {
                 if (!l || !r) return std::nullopt;
                 // Two lists joined, the first's then the second's.
                 if (b->op == token_kind::plus && (l->second == "[]string" || r->second == "[]string")) return std::pair{go_call("one.Joined", {l->first, r->first}), std::string("[]string")};
+                // hand has card: whether a list holds a value.
+                if (b->op == token_kind::has) {
+                    if (l->second != "[]string") return fails("has on anything but a list in a function");
+                    return std::pair{go_call("one.Has", {l->first, r->first}), std::string("bool")};
+                }
                 if (b->op == token_kind::slash) return std::pair{go_call("one.Divide", {l->first, r->first}), std::string("float64")};
                 if (b->op == token_kind::remainder) return std::pair{go_call("one.Remainder", {l->first, r->first}), std::string("float64")};
                 if (auto it = operators.find(b->op); it != operators.end()) {
