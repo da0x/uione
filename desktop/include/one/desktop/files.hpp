@@ -18,6 +18,7 @@ namespace one::desktop {
 		std::string title;     // what the dialog is titled, like "Add pictures"
 		bool pictures = false;  // only pictures shown
 		bool several = false;   // more than one may be chosen
+		bool folder = false;    // a folder chosen instead of files
 	};
 
 	// The files chosen, none when the person cancels, or why it couldn't ask, in words a

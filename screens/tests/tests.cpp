@@ -156,6 +156,65 @@ TEST("a time named by the calendar is that day, week or month's start where it's
 	CHECK(time_value("never").is_null());
 }
 
+TEST("a list ordered by a date is under a heading for each month as it's read here, in one pass, and a timeline lists its years and months with their counts, the same as the web's") {
+	auto at = [](int y, unsigned m, unsigned d, int hour) {
+		using namespace std::chrono;
+		value v;
+		v.type = value::kind::time;
+		v.time.seconds = duration_cast<seconds>((sys_days(year(y) / month(m) / day(d)) + hours(hour)).time_since_epoch()).count();
+		return v;
+	};
+	std::vector<value> rows;
+	for (auto when : {at(2026, 10, 30, 12), at(2026, 10, 12, 12), at(2026, 10, 1, 12), at(2026, 9, 20, 12), at(2026, 9, 2, 12), at(2026, 3, 8, 12), at(2025, 12, 31, 12), at(2025, 7, 4, 12)}) {
+		rows.push_back(value(fields{{"id", "c"}, {"picture_date", when}}));
+	}
+	rows.push_back(value(fields{{"id", "c"}}));
+	use_time_zone("UTC");
+	auto groups = time_groups(rows, "picture_date", time_unit::month);
+	std::vector<std::string> said;
+	for (const auto& g : groups) said.push_back(std::format("{} {} {} {}", g.key, g.title, g.first, g.count));
+	CHECK((said == std::vector<std::string>{"2026-10 October 2026 0 3", "2026-09 September 2026 3 2", "2026-03 March 2026 5 1", "2025-12 December 2025 6 1", "2025-07 July 2025 7 1", "none No date 8 1"}));
+	auto listed = [](const std::vector<dated_entry>& entries) {
+		std::vector<std::string> out;
+		for (const auto& e : entries) out.push_back(std::format("{} {}", e.title, e.count));
+		return out;
+	};
+	CHECK((listed(years_of(groups, time_unit::month)) == std::vector<std::string>{"2026 6", "October 3", "September 2", "March 1", "2025 2", "December 1", "July 1", "No date 1"}));
+	CHECK((listed(years_of(time_groups(rows, "picture_date", time_unit::year), time_unit::year)) == std::vector<std::string>{"2026 6", "2025 2", "No date 1"}));
+	auto days = time_groups(rows, "picture_date", time_unit::day);
+	CHECK(days.front().title == "October 30, 2026");
+	CHECK(listed(years_of(days, time_unit::day))[1] == "October 3");
+	// Read where it's late in the evening, the first of October is still September's.
+	use_time_zone("America/Los_Angeles");
+	CHECK(time_groups(std::vector<value>{value(fields{{"picture_date", at(2026, 10, 1, 3)}})}, "picture_date", time_unit::month).front().key == "2026-09");
+	// A day alone is that day wherever it's read.
+	CHECK(time_groups(std::vector<value>{value(fields{{"picture_date", at(2026, 10, 1, 0)}})}, "picture_date", time_unit::month).front().key == "2026-10");
+	use_time_zone("UTC");
+	CHECK(within("2026-10-12", "2026-10"));
+	CHECK(within("2026-10", "2026"));
+	CHECK(!within("2026-10", "2026-1"));
+	CHECK(!within("2025-10", "2026"));
+}
+
+TEST("a record's details say a number of bytes as KB, MB or GB, a date as its day, and a moment as its day and time of day") {
+	auto at = [](int y, unsigned m, unsigned d, int hour, int minute) {
+		using namespace std::chrono;
+		value v;
+		v.type = value::kind::time;
+		v.time.seconds = duration_cast<seconds>((sys_days(year(y) / month(m) / day(d)) + hours(hour) + minutes(minute)).time_since_epoch()).count();
+		return v;
+	};
+	use_time_zone("UTC");
+	view_state piece{status::ready, value(fields{{"name", "Harbor"}, {"bytes", 1536 * 1024}, {"small", 512}, {"taken", at(2025, 3, 4, 14, 32)}, {"due", at(2025, 3, 9, 0, 0)}}), ""};
+	std::vector<std::string> said;
+	for (const auto& line : details_of(piece, {{"name", "Name"}, {"bytes", "Size", true}, {"small", "Small", true}, {"taken", "Taken"}, {"due", "Due"}}, {}, std::nullopt)) {
+		said.push_back(line.label + ": " + line.value);
+	}
+	CHECK((said == std::vector<std::string>{"Name: Harbor", "Size: 1.5 MB", "Small: 512 B", "Taken: Mar 4, 2025, 14:32", "Due: Mar 9, 2025"}));
+	CHECK(read_value(3.0 * 1024 * 1024 * 1024, "bytes") == "3 GB");
+	CHECK(read_value(2048, "rate") == "2 KB/s");
+}
+
 TEST("a value reads as the web shows it: a date alone as that day, wherever it's read") {
 	value due;
 	due.type = value::kind::time;
@@ -392,6 +451,88 @@ TEST("a canvas places its cards where they say, lays out those that don't by col
 	place_card(p, spec, "atlas-3", 999, 999, 150, 150);
 	CHECK(canvas_of(p, spec).cards[2].y == 240);
 	CHECK(p.error("tracker::issue::place") == "you can't move that one");
+}
+
+TEST("a mosaic's cards each go in their tile by their place alone, two blocks of four for every eight, the second the first mirrored") {
+	auto at = [](std::size_t n) {
+		auto t = mosaic_tile(n);
+		return std::to_string(t.column) + " " + std::to_string(t.row) + " " + std::to_string(t.columns) + " " + std::to_string(t.rows);
+	};
+	// The first block: a tall tile at the left, a wide one at the top right, two under it.
+	CHECK(at(0) == "0 0 1 2");
+	CHECK(at(1) == "1 0 2 1");
+	CHECK(at(2) == "1 1 1 1");
+	CHECK(at(3) == "2 1 1 1");
+	// The second, under it, mirrored: the tall one at the right.
+	CHECK(at(4) == "2 2 1 2");
+	CHECK(at(5) == "0 2 2 1");
+	CHECK(at(6) == "0 3 1 1");
+	CHECK(at(7) == "1 3 1 1");
+	// And again for the next eight, under those.
+	CHECK(at(8) == "0 4 1 2");
+	CHECK(at(13) == "0 6 2 1");
+	// The last block ends with the cards.
+	CHECK(mosaic_rows(0) == 0);
+	CHECK(mosaic_rows(1) == 2);
+	CHECK(mosaic_rows(4) == 2);
+	CHECK(mosaic_rows(5) == 4);
+	CHECK(mosaic_rows(11) == 6);
+}
+
+TEST("a record's page steps to the one before or after it in its list's own order, and not past either end") {
+	site s{.name = "studio"};
+	s.screens.push_back({"Posters", "/posters"});
+	s.screens.push_back({"", "/posters/:poster"});
+	memory_source data;
+	data.set("studio::archive", "", value(fields{{"posters", list{value(fields{{"id", "p1"}}), value(fields{{"id", "p2"}}), value(fields{{"id", "p3"}})}}}));
+	navigator nav(s, data);
+	nav.open("/posters/p2");
+	auto& p = nav.current();
+	auto archive = p.view("studio::archive");
+	for (int i = 0; i < 3 && archive.peek().status != status::ready; ++i) {}
+	CHECK(stepped_to(p, {.view = archive, .list = "posters", .route = "/posters/:poster", .next = true}) == "/posters/p3");
+	CHECK(stepped_to(p, {.view = archive, .list = "posters", .route = "/posters/:poster"}) == "/posters/p1");
+	nav.replace("/posters/p3");
+	CHECK(stepped_to(nav.current(), {.view = nav.current().view("studio::archive"), .list = "posters", .route = "/posters/:poster", .next = true}).empty());
+	nav.replace("/posters/p1");
+	CHECK(stepped_to(nav.current(), {.view = nav.current().view("studio::archive"), .list = "posters", .route = "/posters/:poster"}).empty());
+	// One the list doesn't hold steps nowhere.
+	nav.replace("/posters/p9");
+	CHECK(stepped_to(nav.current(), {.view = nav.current().view("studio::archive"), .list = "posters", .route = "/posters/:poster", .next = true}).empty());
+}
+
+TEST("a page is found as it was left when it's gone back to or opened again: scrolled as it was, with what was opened from it, or stepped to from that") {
+	site s{.name = "studio"};
+	s.screens.push_back({"Posters", "/posters"});
+	s.screens.push_back({"", "/posters/:poster"});
+	memory_source data;
+	navigator nav(s, data);
+	nav.open("/posters");
+	nav.current().where_left().scroll.set(420);
+	nav.open("/posters/p2");
+	nav.replace("/posters/p3");
+	CHECK(nav.back());
+	CHECK(nav.current().where_left().opened == "/posters/p3");
+	CHECK(nav.current().where_left().scroll.peek() == 420);
+	// Opened again, as a link back to it does, it's the same.
+	nav.open("/posters/p3");
+	nav.open("/posters");
+	CHECK(nav.depth() == 3);
+	CHECK(nav.current().where_left().opened == "/posters/p3");
+	CHECK(nav.current().where_left().scroll.peek() == 420);
+	// Each address its own.
+	nav.open("/posters/p1");
+	CHECK(nav.current().where_left().opened.empty());
+	CHECK(nav.current().where_left().scroll.peek() == 0);
+}
+
+TEST("a page reads from and runs on its source, which keeps no file ahead of a command unless it keeps files itself") {
+	memory_source data;
+	auto s = tracker();
+	navigator nav(s, data);
+	nav.open("/projects/atlas");
+	CHECK(&nav.current().source() == &data);
+	CHECK(!data.keep(std::filesystem::temp_directory_path() / "anything.png").has_value());
 }
 
 TEST("a form's files are uploaded as it's sent and added to what's attached, and one that isn't there turns it down") {

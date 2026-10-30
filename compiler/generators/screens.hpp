@@ -517,6 +517,25 @@ namespace one::generators::screens {
             return above;
         }
 
+        // The first list, in the order the project declares them, whose rows open the
+        // screen at `route`, of a view read whole: what a record's screen steps through
+        // when it wasn't opened from a list.
+        std::optional<std::pair<std::string, std::string>> first_opening(const std::string& route) const {
+            for (const auto& [their_ns, s, _] : every_screen) {
+                std::vector<language::opening_list> lists;
+                language::lists_opening(s->items, lists);
+                for (const auto& l : lists) {
+                    if (full_route(their_ns, l.link) != route) continue;
+                    auto scope = views.find(their_ns);
+                    if (scope == views.end()) continue;
+                    auto view = scope->second.find(l.view.text());
+                    if (view == scope->second.end() || view->second->per) continue;
+                    return std::pair{join(their_ns, l.view.text()), l.list};
+                }
+            }
+            return std::nullopt;
+        }
+
         // What a command is sent besides its entity's fields, like the address typed to
         // delete a project: never stored, so a form starts it empty.
         std::set<std::string> inputs_of(const std::string& command) const {

@@ -1312,7 +1312,7 @@ namespace one::screens {
 	std::string read_value(double v, const std::string& unit) {
 		if (unit == "percent") return std::format("{}%", static_cast<long long>(std::llround(v)));
 		if (unit == "bytes" || unit == "rate") {
-			static const char* names[] = {"B", "KiB", "MiB", "GiB", "TiB", "PiB"};
+			static const char* names[] = {"B", "KB", "MB", "GB", "TB", "PB"};
 			std::size_t at = 0;
 			double n = std::max(0.0, v);
 			while (n >= 1024 && at + 1 < std::size(names)) n /= 1024, ++at;
@@ -1769,6 +1769,135 @@ namespace one::screens {
 		}, true);
 	}
 
+	mosaic_place mosaic_tile(std::size_t n) {
+		static constexpr mosaic_place first[] = {{0, 0, 1, 2}, {1, 0, 2, 1}, {1, 1, 1, 1}, {2, 1, 1, 1}};
+		static constexpr mosaic_place second[] = {{2, 0, 1, 2}, {0, 0, 2, 1}, {0, 1, 1, 1}, {1, 1, 1, 1}};
+		std::size_t tile = n % 8;
+		mosaic_place at = tile < 4 ? first[tile] : second[tile - 4];
+		at.row += static_cast<int>(n / 8) * 4 + (tile < 4 ? 0 : 2);
+		return at;
+	}
+
+	int mosaic_rows(std::size_t count) { return static_cast<int>((count + 3) / 4) * 2; }
+
+	std::vector<time_group> time_groups(const std::vector<value>& rows, const std::string& field, time_unit by) {
+		using namespace std::chrono;
+		static constexpr const char* months[] = {"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
+		std::vector<time_group> out;
+		// The zone's offset, looked up again only once a time is past the span it holds for.
+		const std::chrono::time_zone* zone = time_zone();
+		sys_info offset{};
+		// What the last heading is of, as a number, so a row under it is only counted.
+		long last = -1;
+		for (std::size_t i = 0; i < rows.size(); ++i) {
+			const value& when = field_of(rows[i], field);
+			long of = 0;
+			year_month_day ymd{};
+			if (when.is_time()) {
+				// A day alone is that day wherever it's read, as a calendar places it.
+				auto at = time_point_cast<system_clock::duration>(when.as_time());
+				if (!(at >= offset.begin && at < offset.end)) offset = zone->get_info(at);
+				ymd = floor<days>(at) == at ? year_month_day(floor<days>(at)) : year_month_day(floor<days>(at + offset.offset));
+				of = 1 + static_cast<int>(ymd.year()) * 10000L + (by == time_unit::year ? 0 : static_cast<unsigned>(ymd.month()) * 100L) + (by == time_unit::day ? static_cast<unsigned>(ymd.day()) : 0);
+			}
+			if (!out.empty() && of == last) {
+				++out.back().count;
+				continue;
+			}
+			last = of;
+			std::string key = "none", title = "No date";
+			if (of != 0) {
+				int y = static_cast<int>(ymd.year());
+				unsigned m = static_cast<unsigned>(ymd.month()), d = static_cast<unsigned>(ymd.day());
+				if (by == time_unit::year) key = std::format("{:04}", y), title = std::to_string(y);
+				else if (by == time_unit::month) key = std::format("{:04}-{:02}", y, m), title = std::format("{} {}", months[m - 1], y);
+				else key = std::format("{:04}-{:02}-{:02}", y, m, d), title = std::format("{} {}, {}", months[m - 1], d, y);
+			}
+			out.push_back({key, title, i, 1});
+		}
+		return out;
+	}
+
+	bool within(const std::string& key, const std::string& entry) { return key.starts_with(entry) && (key.size() == entry.size() || key[entry.size()] == '-'); }
+
+	std::vector<dated_entry> years_of(const std::vector<time_group>& groups, time_unit by) {
+		static constexpr const char* months[] = {"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
+		std::vector<dated_entry> out;
+		std::size_t year_at = 0;
+		for (const auto& g : groups) {
+			std::string year = g.key == "none" ? "none" : g.key.substr(0, 4);
+			if (out.empty() || out[year_at].key != year) {
+				year_at = out.size();
+				out.push_back({year, year == "none" ? g.title : year, 0, true});
+			}
+			out[year_at].count += g.count;
+			if (by == time_unit::year || year == "none") continue;
+			std::string month = g.key.substr(0, 7);
+			if (out.back().key != month) out.push_back({month, months[std::stoi(month.substr(5)) - 1], 0, false});
+			out.back().count += g.count;
+		}
+		return out;
+	}
+
+	namespace {
+		// The row of the step's list it goes to, by the record the page's address names.
+		const value* row_stepped_to(page_base& p, const step_spec& spec) {
+			const view_state& v = *spec.view;
+			std::size_t at = spec.route.rfind("/:");
+			if (v.status != status::ready || at == std::string::npos) return nullptr;
+			std::string last = spec.route.substr(at + 2);
+			if (last.ends_with('*') || last.ends_with('?')) last.pop_back();
+			// A row is the one shown when it holds what the parameter names, as its link does,
+			// or is that one itself.
+			auto named = [&](const value& row) {
+				const value& own = row[last];
+				return own.is_string() && !own.text.empty() ? own.text : row["id"].as_string();
+			};
+			const auto& rows = rows_of(v, spec.list);
+			std::string shown = p.param(last);
+			for (std::size_t i = 0; i < rows.size(); ++i) {
+				if (named(rows[i]) != shown) continue;
+				if (spec.next ? i + 1 == rows.size() : i == 0) return nullptr;
+				return &rows[spec.next ? i + 1 : i - 1];
+			}
+			return nullptr;
+		}
+	}  // namespace
+
+	std::string picture_stepped_to(page_base& p, const step_spec& spec, const std::string& to) {
+		if (to.empty()) return "";
+		if (std::string shown = spec.opened ? picture_shown_for(p, to) : ""; !shown.empty()) return shown;
+		if (spec.picture.empty()) return "";
+		const value* row = row_stepped_to(p, spec);
+		return row && row_link(spec.route, *row, p.params()) == to ? (*row)[spec.picture].as_string() : "";
+	}
+
+	std::string stepped_to(page_base& p, const step_spec& spec) {
+		if (const place* from = spec.opened ? p.opened_from() : nullptr) {
+			for (const auto& [list, addresses] : from->lists) {
+				auto at = std::ranges::find(*addresses, p.address());
+				if (at == addresses->end()) continue;
+				if (spec.next ? at + 1 == addresses->end() : at == addresses->begin()) return "";
+				return *(spec.next ? at + 1 : at - 1);
+			}
+		}
+		const value* row = row_stepped_to(p, spec);
+		return row ? row_link(spec.route, *row, p.params()) : "";
+	}
+
+	std::string picture_shown_for(page_base& p, const std::string& to) {
+		const place* from = p.opened_from();
+		if (!from || to.empty()) return "";
+		for (const auto& [list, addresses] : from->lists) {
+			auto pictures = from->pictures.find(list);
+			if (pictures == from->pictures.end() || std::ranges::find(*addresses, p.address()) == addresses->end()) continue;
+			auto at = std::ranges::find(*addresses, to);
+			if (at == addresses->end() || pictures->second->size() != addresses->size()) continue;
+			return (*pictures->second)[static_cast<std::size_t>(at - addresses->begin())];
+		}
+		return "";
+	}
+
 	std::vector<card_model> cards_of(page_base& p, const cards_spec& spec) {
 		std::vector<card_model> out;
 		std::string title = spec.columns.empty() ? "" : spec.columns.front().field;
@@ -1963,8 +2092,11 @@ namespace one::screens {
 	                                    const std::optional<tint_spec>& tint) {
 		std::vector<detail_line> out;
 		for (const auto& f : fields) {
-			// What holds nothing isn't said, as the web leaves it out.
-			std::string says = cell_text(choices, v.data, f.field);
+			// What holds nothing isn't said, as the web leaves it out. A moment is said
+			// with its time of day, as a record's own details are read closely.
+			const value& held = field_of(v.data, f.field);
+			std::string says = f.bytes && (held.is_integer() || held.is_double()) ? read_value(held.as_double(), "bytes") : cell_text(choices, v.data, f.field);
+			if (held.is_time() && (held.time.seconds % 86400 != 0 || held.time.nanos != 0)) says = said_with_time(held);
 			if (says.empty()) continue;
 			out.push_back({f.field, f.label, says, tint && tint->field == f.field ? tone_of(v.data, tint) : 3});
 		}

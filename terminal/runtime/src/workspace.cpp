@@ -163,6 +163,7 @@ namespace one::terminal::runtime {
 	double screen_height() { return 1080; }
 
 	terminal::view picture_of(page&, const std::string&, bool, float) { return {}; }
+	terminal::view picture_alone(page&, const std::string&, const std::string&) { return {}; }
 
 	terminal::view collage_button(page& p, collage_ask ask) {
 		// What needs pictures drawn, a screen of its own, or a file chooser, isn't here.

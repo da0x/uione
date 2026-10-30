@@ -28,9 +28,9 @@ export function seriesOf(value: unknown): number[] {
   return value.filter((n): n is number => typeof n === "number" && Number.isFinite(n));
 }
 
-const binary = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"];
+const binary = ["B", "KB", "MB", "GB", "TB", "PB"];
 
-// A value as it reads: 42%, 1.5 GiB, 3.2 MiB/s, or 12.5.
+// A value as it reads: 42%, 1.5 GB, 3.2 MB/s, or 12.5, each K 1,024 of what's under it.
 export function readValue(value: number, unit: ChartUnit): string {
   if (unit === "percent") return `${Math.round(value)}%`;
   if (unit === "bytes" || unit === "rate") {

@@ -765,6 +765,7 @@ TEST_CASE("pictures dropped, pasted or taken from the screen are made by a colla
 			group "Insert" {
 				paste "Paste" icon paste key ctrl+shift+v
 				screenshot "Screenshot" icon screenshot
+				add folder
 			}
 		}
 		main {
@@ -803,8 +804,519 @@ TEST_CASE("pictures dropped, pasted or taken from the screen are made by a colla
     CHECK(native.find(R"(.paste = true, .update = "studio::layer::update"})") != std::string::npos);
     std::string unsized = collage_screen("\t\tlayout workspace\n" + fine);
     unsized.erase(unsized.find("\tcommand layer::update\n"), std::string("\tcommand layer::update\n").size());
-    CHECK(messages(unsized) == std::vector<std::string>{"51: a picture's own size, when it isn't kept yet, is filled in by layer::update, which isn't declared in namespace studio"});
+    CHECK(messages(unsized) == std::vector<std::string>{"52: a picture's own size, when it isn't kept yet, is filled in by layer::update, which isn't declared in namespace studio"});
     CHECK(native.find(R"(collage_button(p, {.key = "/posters/:poster collage", .does = "screenshot", .label = "Screenshot", .icon = "screenshot"}))") != std::string::npos);
+    CHECK(native.find(R"(collage_button(p, {.key = "/posters/:poster collage", .does = "add folder", .label = "Folder", .icon = ""}))") != std::string::npos);
+    CHECK(web.find(R"(<CollageButton collage="/posters/:poster collage" does="add folder" label="Folder" />)") != std::string::npos);
+    // Only where pictures go.
+    std::string nowhere = collage_screen("\t\tlayout workspace\n" + fine);
+    nowhere.replace(nowhere.find("\t\t\t\tpaste\n\t\t\t}"), std::string("\t\t\t\tpaste\n").size(), "");
+    CHECK(std::ranges::count(messages(nowhere), std::string("49: this screen has no collage, paper or cards that say paste for this button to use")) == 1);
+}
+
+TEST_CASE("cards take pictures dropped, pasted or chosen, each a record made by their add, its file in their picture and its other parts in the fields named like them") {
+    const std::string clippings = R"(namespace studio at / {
+	entity poster {
+		title  text
+	}
+
+	entity clipping {
+		poster          poster  required
+		name            text
+		image           file
+		picture_width   number  = 0
+		picture_height  number  = 0
+		picture_bytes   number  = 0
+		picture_date    date
+		picture_camera  text
+	}
+
+	command clipping::create
+	command poster::create
+
+	view poster_page per poster {
+		title
+		clippings = each clipping in poster {
+			name  image
+		}
+	}
+
+	screen "Clippings" /posters/:poster {
+		layout workspace
+		toolbar {
+			group "Insert" {
+				paste "Paste" icon paste key ctrl+shift+v
+				add pictures "Pictures" icon picture
+				add folder "Folder" icon folder key ctrl+shift+o
+			}
+		}
+		main {
+			cards poster_page.clippings {
+				picture image fit
+				name
+				add clipping::create
+				paste
+			}
+		}
+	}
+}
+)";
+    CHECK(messages(project + clippings).empty());
+    auto files = built(project + clippings);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    // The screen's paste and add pictures buttons go to the cards, as it has no collage or paper.
+    CHECK(web.find(R"(<PaperButton paper="/posters/:poster cards clippings" label="Paste" icon="paste" keys={["ctrl+shift+v"]} pastes />)") != std::string::npos);
+    CHECK(web.find(R"(<PaperButton paper="/posters/:poster cards clippings" label="Pictures" icon="picture" chooses />)") != std::string::npos);
+    CHECK(web.find(R"(paste={{ command: "studio::clipping::create", fields: { name: "name", picture: "image", picture_bytes: "picture_bytes", picture_camera: "picture_camera", picture_date: "picture_date", picture_height: "picture_height", picture_width: "picture_width" }, given: { poster: posterId } }} name="/posters/:poster cards clippings" />)") != std::string::npos);
+    CHECK(native.find(R"(paper_button(p, {.key = "/posters/:poster cards clippings", .label = "Pictures", .icon = "picture", .chooses = true}))") != std::string::npos);
+    // And a folder of them.
+    CHECK(web.find(R"(<PaperButton paper="/posters/:poster cards clippings" label="Folder" icon="folder" keys={["ctrl+shift+o"]} chooses folder />)") != std::string::npos);
+    CHECK(native.find(R"(paper_button(p, {.key = "/posters/:poster cards clippings", .label = "Folder", .icon = "folder", .keys = std::vector<std::string>{"ctrl+shift+o"}, .chooses = true, .folder = true}))") != std::string::npos);
+    CHECK(native.find(R"(.add = "studio::clipping::create", .fields = {{"name", "name"}, {"picture", "image"}, {"picture_bytes", "picture_bytes"}, {"picture_camera", "picture_camera"}, {"picture_date", "picture_date"}, {"picture_height", "picture_height"}, {"picture_width", "picture_width"}}, .given = {{"poster", poster_id}}, .key = "/posters/:poster cards clippings", .paste = true})") != std::string::npos);
+    // A part only where the entity keeps it, of the part's type; and add and paste go together, with a picture to keep.
+    std::string wrong = project + clippings;
+    wrong.replace(wrong.find("picture_bytes   number  = 0"), std::string("picture_bytes   number  = 0").size(), "picture_bytes   text");
+    wrong.replace(wrong.find("picture_camera  text"), std::string("picture_camera  text").size(), "picture_camera  number");
+    wrong.replace(wrong.find("\t\t\t\tpicture image fit\n"), std::string("\t\t\t\tpicture image fit\n").size(), "");
+    CHECK(messages(wrong) == std::vector<std::string>{"47: a pasted picture is kept in the field the cards' picture line names, like picture image",
+                                                     "47: clipping.picture_bytes keeps how many bytes a pasted picture is, so it's a number",
+                                                     "47: clipping.picture_camera keeps the camera a pasted picture was taken with, so it's text"});
+    std::string alone = project + clippings;
+    alone.replace(alone.find("\t\t\t\tpaste\n\t\t\t}"), std::string("\t\t\t\tpaste\n").size(), "");
+    alone.replace(alone.find("add clipping::create"), std::string("add clipping::create").size(), "add poster::create");
+    CHECK(messages(alone) == std::vector<std::string>{"38: this screen has no collage, paper or cards that say paste for this button to use",
+                                                     "39: this screen has no collage, paper or cards that say paste for this button to use",
+                                                     "40: this screen has no collage, paper or cards that say paste for this button to use",
+                                                     "47: these cards are clippings, so add names clipping::create",
+                                                     "47: cards make records of pictures dropped or pasted on them, so add goes with paste"});
+}
+
+TEST_CASE("cards set as a mosaic of their pictures say so to both runtimes, and say which picture each fills its tile with") {
+    const std::string pieces = R"(namespace studio at / {
+	entity poster {
+		title  text
+	}
+
+	entity clipping {
+		poster  poster  required
+		name    text
+		image   file
+	}
+
+	view poster_page per poster {
+		title
+		clippings = each clipping in poster {
+			name  image
+		}
+	}
+
+	screen "Clipping" /posters/:poster/clippings/:clipping {
+	}
+
+	screen "Clippings" /posters/:poster {
+		cards poster_page.clippings mosaic link /posters/:poster/clippings/:clipping {
+			picture image
+			name
+		}
+	}
+}
+)";
+    CHECK(messages(project + pieces).empty());
+    auto files = built(project + pieces);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    CHECK(web.find(R"(<Cards view={posterPage} list="clippings" columns={{ name: "Name" }} picture="image" mosaic link="/posters/:poster/clippings/:clipping")") != std::string::npos);
+    CHECK(native.find(R"(.picture = "image", .mosaic = true)") != std::string::npos);
+    // A mosaic is its pictures, each filling its tile.
+    std::string bare = project + pieces;
+    bare.replace(bare.find("\t\t\tpicture image\n"), std::string("\t\t\tpicture image\n").size(), "");
+    CHECK(messages(bare) == std::vector<std::string>{"30: a mosaic is its cards' pictures, so its cards say which file each shows, like picture image"});
+    std::string fitted = project + pieces;
+    fitted.replace(fitted.find("picture image\n"), std::string("picture image").size(), "picture image fit");
+    CHECK(messages(fitted) == std::vector<std::string>{"31: a mosaic's pictures each fill their tile, so its picture line says fill, or nothing"});
+}
+
+TEST_CASE("cards under a heading for each month of a date, and the timeline of their years and months beside them, say so to both runtimes, and say why when they can't be") {
+    const std::string pieces = R"(namespace studio at / {
+	entity poster {
+		title  text
+	}
+
+	entity clipping {
+		poster        poster  required
+		name          text
+		image         file
+		picture_date  date
+	}
+
+	view poster_page per poster {
+		title
+		clippings = each clipping in poster {
+			order by picture_date descending
+			name  image  picture_date
+		}
+	}
+
+	screen "Clipping" /posters/:poster/clippings/:clipping {
+	}
+
+	screen "Clippings" /posters/:poster {
+		cards poster_page.clippings mosaic by picture_date month link /posters/:poster/clippings/:clipping {
+			picture image
+			name
+		}
+		timeline poster_page.clippings by picture_date
+	}
+}
+)";
+    CHECK(messages(project + pieces).empty());
+    auto files = built(project + pieces);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    CHECK(web.find(R"(mosaic by={{ field: "picture_date", unit: "month" }} link="/posters/:poster/clippings/:clipping")") != std::string::npos);
+    CHECK(web.find(R"(name="/posters/:poster cards clippings" />)") != std::string::npos);
+    CHECK(web.find(R"(<DatedTimeline view={posterPage} list="clippings" by="picture_date" unit="month" cards="/posters/:poster cards clippings" />)") != std::string::npos);
+    CHECK(native.find(R"(.mosaic = true, .by = "picture_date", .unit = time_unit::month, .key = "/posters/:poster cards clippings"})") != std::string::npos);
+    CHECK(native.find(R"(dated_timeline(p, {.view = poster_page, .list = "clippings", .by = "picture_date", .unit = time_unit::month, .cards = "/posters/:poster cards clippings"}))") != std::string::npos);
+    // By year or day as well.
+    std::string daily = project + pieces;
+    daily.replace(daily.find("picture_date month"), std::string("picture_date month").size(), "picture_date day");
+    CHECK(messages(daily).empty());
+    CHECK(built(daily)["desktop/src/screens/main.cpp"].find(".unit = time_unit::day") != std::string::npos);
+    // Under headings by a date the list is ordered by first, so each month's are together.
+    std::string unordered = project + pieces;
+    unordered.replace(unordered.find("order by picture_date descending"), std::string("order by picture_date descending").size(), "order by name");
+    CHECK(messages(unordered) == std::vector<std::string>{"32: cards under headings by picture_date keep each month together, so their list is ordered by it first, like order by picture_date descending"});
+    std::string named = project + pieces;
+    named.replace(named.find("mosaic by picture_date"), std::string("mosaic by picture_date").size(), "mosaic by name");
+    named.replace(named.find("order by picture_date"), std::string("order by picture_date").size(), "order by name");
+    CHECK(messages(named)[0] == "32: cards are under headings by a date, and clipping.name isn't one");
+    // A timeline by a date goes with cards under headings by it.
+    std::string lone = project + pieces;
+    lone.replace(lone.find(" by picture_date month"), std::string(" by picture_date month").size(), "");
+    CHECK(messages(lone) == std::vector<std::string>{"36: a timeline by picture_date goes with the cards it scrolls, so this screen has cards poster_page.clippings by picture_date month"});
+    // Year, month or day.
+    std::string week = project + pieces;
+    week.replace(week.find("picture_date month"), std::string("picture_date month").size(), "picture_date week");
+    diagnostics said;
+    (void)parse("main.one", week, said);
+    CHECK(!said.empty());
+    if (!said.empty()) CHECK(said.front().message == "expected year, month or day, as in by picture_date month, found 'week'");
+}
+
+TEST_CASE("a record's screen steps to the one before or after it in a list's own order, in its place, and says why when it can't") {
+    const std::string pieces = R"(namespace studio at / {
+	entity poster {
+		title  text
+	}
+
+	entity clipping {
+		poster  poster  required
+		name    text
+		image   file
+	}
+
+	view archive {
+		posters = each poster {
+			order by title
+			title
+		}
+	}
+
+	view poster_page per poster {
+		title
+		clippings = each clipping in poster {
+			name  image
+		}
+	}
+
+	screen "Posters" /posters {
+		cards archive.posters link /posters/:poster {
+			title
+		}
+	}
+
+	screen "{poster_page.title}" /posters/:poster {
+		link previous in archive.posters "Previous" icon previous key left
+		link next in archive.posters "Next" icon next key right
+		link /posters "Posters" key escape
+	}
+}
+)";
+    CHECK(messages(project + pieces).empty());
+    auto files = built(project + pieces);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    CHECK(web.find(R"(<StepLink view={archive} list="posters" to="/posters/:poster" icon="previous" keys={["left"]}>Previous</StepLink>)") != std::string::npos);
+    CHECK(web.find(R"(<StepLink view={archive} list="posters" to="/posters/:poster" next icon="next" keys={["right"]}>Next</StepLink>)") != std::string::npos);
+    CHECK(native.find(R"(step(p, {.view = archive, .list = "posters", .route = "/posters/:poster"}, "Previous", "previous", std::vector<std::string>{"left"}))") != std::string::npos);
+    CHECK(native.find(R"(step(p, {.view = archive, .list = "posters", .route = "/posters/:poster", .next = true}, "Next", "next", std::vector<std::string>{"right"}))") != std::string::npos);
+    // A view of each poster's own, not one of them all.
+    std::string per = project + pieces;
+    per.replace(per.find("link next in archive.posters"), std::string("link next in archive.posters").size(), "link next in poster_page.clippings");
+    CHECK(messages(per) == std::vector<std::string>{"41: view poster_page is one per poster, so its list changes with each record; step through a view of them all"});
+    std::string missing = project + pieces;
+    missing.replace(missing.find("link next in archive.posters"), std::string("link next in archive.posters").size(), "link next in catalog.posters");
+    CHECK(messages(missing) == std::vector<std::string>{"41: there's no view catalog in namespace studio"});
+    std::string unlisted = project + pieces;
+    unlisted.replace(unlisted.find("link next in archive.posters"), std::string("link next in archive.posters").size(), "link next in archive.prints");
+    CHECK(messages(unlisted) == std::vector<std::string>{"41: view archive has no list called prints"});
+    // The list is of what the screen's address names.
+    std::string other = project + pieces;
+    other.replace(other.find("\t\tposters = each poster {"), std::string("\t\tposters = each poster {").size(), "\t\tposters = each clipping {");
+    other.replace(other.find("\t\t\torder by title\n\t\t\ttitle\n"), std::string("\t\t\torder by title\n\t\t\ttitle\n").size(), "\t\t\torder by name\n\t\t\tname\n");
+    other.replace(other.find("\t\t\ttitle\n\t\t}\n\t}\n\n\tscreen \"{poster_page"), std::string("\t\t\ttitle\n").size(), "\t\t\tname\n");
+    CHECK(messages(other) == std::vector<std::string>{"40: archive.posters lists clippings, and this screen's address names a poster, so it can't step through them",
+                                                     "41: archive.posters lists clippings, and this screen's address names a poster, so it can't step through them"});
+    // And its address names one.
+    std::string nameless = project + pieces;
+    nameless.replace(nameless.find("\t\tlink next in archive.posters"), 0, "\t}\n\n\tscreen \"Every poster\" /every {\n");
+    CHECK(messages(nameless) == std::vector<std::string>{"44: a link next steps from one record to another, so its screen's address names one, like /things/:thing"});
+}
+
+TEST_CASE("a record's screen steps through the list it was opened from when its link names none, or else the first whose rows open it, and says why when none does") {
+    const std::string pieces = R"(namespace studio at / {
+	entity poster {
+		title  text
+		year   number
+	}
+
+	view archive {
+		posters = each poster {
+			order by title
+			title  year
+		}
+	}
+
+	view by_year {
+		posters = each poster {
+			order by year descending
+			title  year
+		}
+	}
+
+	screen "Posters" /posters {
+		cards archive.posters link /posters/:poster {
+			title
+		}
+	}
+
+	screen "Years" /years {
+		table by_year.posters link /posters/:poster {
+			title
+			year
+		}
+	}
+
+	screen "{poster.title}" /posters/:poster {
+		link previous "Previous" icon previous key left
+		link next "Next" icon next key right
+	}
+}
+)";
+    CHECK(messages(project + pieces).empty());
+    auto files = built(project + pieces);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    // Through the list it was opened from, the archive's when it wasn't.
+    CHECK(web.find(R"(<StepLink view={archive} list="posters" to="/posters/:poster" opened icon="previous" keys={["left"]}>Previous</StepLink>)") != std::string::npos);
+    CHECK(web.find(R"(<StepLink view={archive} list="posters" to="/posters/:poster" next opened icon="next" keys={["right"]}>Next</StepLink>)") != std::string::npos);
+    CHECK(native.find(R"(step(p, {.view = archive, .list = "posters", .route = "/posters/:poster", .next = true, .opened = true}, "Next", "next", std::vector<std::string>{"right"}))") != std::string::npos);
+    // No list's rows open it.
+    std::string unopened = project + pieces;
+    unopened.replace(unopened.find(" link /posters/:poster {\n\t\t\ttitle\n\t\t}"), std::string(" link /posters/:poster").size(), "");
+    unopened.replace(unopened.find(" link /posters/:poster {\n\t\t\ttitle\n\t\t\tyear"), std::string(" link /posters/:poster").size(), "");
+    CHECK(messages(unopened) == std::vector<std::string>{"42: a link previous with no list steps through the one its record was opened from, and no list's rows open /posters/:poster; say which it steps through, like link previous in library.things",
+                                                        "43: a link next with no list steps through the one its record was opened from, and no list's rows open /posters/:poster; say which it steps through, like link next in library.things"});
+    // Only a table of each poster's own opens it: through the list it was opened from, and nothing else.
+    std::string own = project + pieces;
+    own.replace(own.find(" link /posters/:poster {\n\t\t\ttitle\n\t\t}"), std::string(" link /posters/:poster").size(), "");
+    own.replace(own.find("\tview by_year {"), std::string("\tview by_year {").size(), "\tview by_year per poster {");
+    own.replace(own.find("\tscreen \"Years\" /years {"), std::string("\tscreen \"Years\" /years {").size(), "\tscreen \"Years\" /years/:poster {");
+    CHECK(messages(own).empty());
+    CHECK(built(own)["desktop/src/screens/main.cpp"].find(R"(step(p, {.view = {}, .list = "", .route = "/posters/:poster", .next = true, .opened = true})") != std::string::npos);
+}
+
+TEST_CASE("a side a toggle opens is a drawer over a picture alone, and details say a number of bytes as KB, MB or GB") {
+    const std::string pieces = R"(namespace studio at / {
+	entity piece {
+		name   text
+		image  file
+		bytes  number = 0
+		taken  date
+	}
+
+	view piece_page per piece {
+		name  image  bytes  taken
+	}
+
+	screen "{piece_page.name}" /pieces/:piece {
+		layout workspace
+		toolbar {
+			group "View" small at end {
+				toggle about "About" icon info key i
+			}
+		}
+		main {
+			picture piece_page.image fit alone
+		}
+		side when about {
+			details piece_page {
+				name  taken "Taken"  bytes "Size" as bytes
+			}
+		}
+	}
+}
+)";
+    CHECK(messages(project + pieces).empty());
+    auto files = built(project + pieces);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    CHECK(web.find(R"(<Region name="side" drawer>)") != std::string::npos);
+    CHECK(web.find(R"(<Details view={piecePage} fields={[["name", "Name"], ["taken", "Taken"], ["bytes", "Size"]]} bytes={["bytes"]} />)") != std::string::npos);
+    CHECK(native.find(R"(details(p, piece_page, {{"name", "Name"}, {"taken", "Taken"}, {"bytes", "Size", true}}))") != std::string::npos);
+    CHECK(native.find(R"(return view(); }(), true})") != std::string::npos);
+    // Only a number is said as bytes.
+    std::string named = project + pieces;
+    named.replace(named.find("name  taken \"Taken\""), std::string("name").size(), "name as bytes");
+    CHECK(messages(named) == std::vector<std::string>{"32: name isn't a number, so it isn't said as bytes"});
+}
+
+TEST_CASE("a step steps by itself every so many seconds while a toggle of its screen's is on, as a slideshow does") {
+    const std::string pieces = R"(namespace studio at / {
+	entity piece {
+		name   text
+		image  file
+	}
+
+	view archive {
+		pieces = each piece {
+			order by name
+			name  image
+		}
+	}
+
+	view piece_page per piece {
+		name  image
+	}
+
+	screen "Pieces" /pieces {
+		cards archive.pieces link /pieces/:piece {
+			picture image
+			name
+		}
+	}
+
+	screen "{piece_page.name}" /pieces/:piece {
+		layout workspace
+		toolbar {
+			group "Piece" {
+				link next "Next" icon next key right every 4 seconds while slideshow
+				toggle slideshow "Slideshow" icon play key s
+			}
+		}
+		main {
+			picture piece_page.image fit alone
+		}
+	}
+}
+)";
+    CHECK(messages(project + pieces).empty());
+    auto files = built(project + pieces);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    CHECK(web.find(R"(<StepLink view={archive} list="pieces" to="/pieces/:piece" next opened every={4} whileOn="/pieces/:piece slideshow" picture="image" icon="next" keys={["right"]}>Next</StepLink>)") != std::string::npos);
+    CHECK(native.find(R"(step(p, {.view = archive, .list = "pieces", .route = "/pieces/:piece", .next = true, .opened = true, .every = 4, .while_on = "/pieces/:piece slideshow", .picture = "image"}, "Next", "next", std::vector<std::string>{"right"}))") != std::string::npos);
+    // Its toggle is the screen's own, and it waits some time.
+    std::string missing = project + pieces;
+    missing.replace(missing.find("while slideshow"), std::string("while slideshow").size(), "while playing");
+    missing.replace(missing.find("every 4 seconds"), std::string("every 4 seconds").size(), "every 0 seconds");
+    CHECK(messages(missing) == std::vector<std::string>{"36: a link next steps every so many seconds, more than none, like every 4 seconds",
+                                                        "36: there's no toggle playing on this screen for it to step while; add one, like toggle playing \"Slideshow\" icon play key s"});
+    std::string minutes = project + pieces;
+    minutes.replace(minutes.find("every 4 seconds"), std::string("every 4 seconds").size(), "every 4 minutes");
+    diagnostics said;
+    (void)parse("main.one", minutes, said);
+    REQUIRE(said.size() == 1);
+    CHECK(said.front().where.line == 36);
+    CHECK(said.front().message == "it steps every so many seconds, like every 4 seconds, not minutes");
+}
+
+TEST_CASE("a picture alone is all of a workspace's screen, its bars over it, zoomed by the screen's zoom buttons") {
+    const std::string pieces = R"(namespace studio at / {
+	entity clipping {
+		name   text
+		image  file
+	}
+
+	view archive {
+		clippings = each clipping {
+			order by name
+			name
+		}
+	}
+
+	view clipping_page per clipping {
+		name  image
+	}
+
+	screen "{clipping_page.name}" /clippings/:clipping {
+		layout workspace
+		toolbar {
+			link next in archive.clippings "Next" icon next key right
+			zoom in "Larger" icon zoom_in
+			zoom to fit "Fit" icon zoom_fit
+		}
+		main {
+			picture clipping_page.image fit alone
+		}
+		status {
+			text "{clipping_page.name}"
+		}
+	}
+}
+)";
+    CHECK(messages(project + pieces).empty());
+    auto files = built(project + pieces);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    CHECK(native.find(R"(region{"main", items(picture_alone(p, at(clipping_page, "image").as_string(), "/clippings/:clipping collage"))})") != std::string::npos);
+    CHECK(native.find(R"(collage_button(p, {.key = "/clippings/:clipping collage", .does = "zoom in", .label = "Larger", .icon = "zoom_in"}))") != std::string::npos);
+    CHECK(web.find(R"(<Layout name="workspace" alone>)") != std::string::npos);
+    CHECK(web.find(R"(<Picture source={(clippingPage.data?.["image"] ?? null)} fit alone zoom="/clippings/:clipping collage" />)") != std::string::npos);
+    CHECK(web.find(R"(<CollageButton collage="/clippings/:clipping collage" does="zoom to fit" label="Fit" icon="zoom_fit" />)") != std::string::npos);
+    auto changed = [&](const std::string& from, const std::string& to) {
+        std::string source = project + pieces;
+        source.replace(source.find(from), from.size(), to);
+        return messages(source);
+    };
+    // Shown whole, the only line of main, on a workspace's screen.
+    CHECK(changed("image fit alone", "image fill alone") == std::vector<std::string>{"33: a picture alone is shown whole, fitted in, so it says fit alone"});
+    CHECK(changed("\t\t\tpicture clipping_page.image fit alone\n", "\t\t\tpicture clipping_page.image fit alone\n\t\t\ttext \"{clipping_page.name}\"\n") ==
+          std::vector<std::string>{"33: a picture alone is all of its screen, so it's the only line in main, as in main { picture clipping_page.image fit alone }"});
+    CHECK(changed("\t\tlayout workspace\n", "\t\tlayout two_columns\n") ==
+          std::vector<std::string>{"27: layout two_columns has no region toolbar; its regions are main and side", "35: layout two_columns has no region status; its regions are main and side",
+                                   "33: a picture alone is all of a workspace's screen, its bars drawn over it, so its screen says layout workspace"});
+    // Without it, there's nothing for a zoom button to zoom.
+    CHECK(changed("image fit alone", "image fit") == std::vector<std::string>{"29: this screen has no collage, nor a picture alone, for this button to zoom",
+                                                                            "30: this screen has no collage, nor a picture alone, for this button to zoom"});
 }
 
 TEST_CASE("a collage reads each part from the field named like it, or from the one it says, and hands its runtimes which") {

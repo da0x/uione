@@ -6,7 +6,8 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import type { ComponentSet, DialogProps } from "./contract.js";
+import type { Card, ComponentSet, DialogProps } from "./contract.js";
+import { mosaicTile } from "./contract.js";
 import { Surface } from "./surface.js";
 
 // Read by screen readers, not shown.
@@ -60,8 +61,49 @@ function PlainDialog({ open, title, onClose, children }: DialogProps) {
   );
 }
 
+// A mosaic's card in its tile, by the grid's columns and rows.
+const placed = (n: number): CSSProperties => {
+  const at = mosaicTile(n);
+  return { gridColumn: `${at.column + 1} / span ${at.columns}`, gridRow: `${at.row + 1} / span ${at.rows}` };
+};
+
 // What a tally's part means, said: not started, under way, done or failed.
 const tallyWords: Record<string, string> = { none: "not started", partial: "under way", done: "done", failed: "failed" };
+
+// Cards in turn, a mosaic's tiles from its first; under a heading, their titles a level below it.
+function plainCards(status: string, cards: Card[], mosaic: boolean | undefined, under = false) {
+  const Title = under ? "h3" : "h2";
+  return (
+    <div aria-busy={status === "loading"} style={mosaic ? { display: "grid", gridTemplateColumns: "repeat(3, 1fr)" } : undefined}>
+      {cards.map((card, n) => (
+        <article key={card.id} style={mosaic ? placed(n) : undefined}>
+          {card.picture?.source && <img src={card.picture.source} alt="" />}
+          <Title>{card.link ? <a {...card.link}>{card.title}</a> : card.title}</Title>
+          {card.tags && card.tags.length > 0 && <p>{card.tags.join(", ")}</p>}
+          {card.details.map((detail, i) => (
+            <p key={i}>{detail}</p>
+          ))}
+          {card.tally && (
+            <p>
+              {card.tally.reduce((n, part) => n + part.count, 0)}{" "}
+              {card.noun ? (card.tally.reduce((n, part) => n + part.count, 0) === 1 ? card.noun.replace(/s$/, "") : card.noun) : "in all"}
+              {card.tally.map((part) => `, ${part.label} ${part.count}${part.state ? ` ${tallyWords[part.state]}` : ""}`).join("")}
+            </p>
+          )}
+          {card.filters.length > 0 && (
+            <ul>
+              {card.filters.map((f) => (
+                <li key={f.label}>
+                  <a {...f.link}>{f.label}</a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </article>
+      ))}
+    </div>
+  );
+}
 
 export const plain: ComponentSet = {
   Page: ({ name, icon, home, nav, title, untitled, account, heading, crumbs, subtitle, badges, footer, children }) => (
@@ -186,10 +228,11 @@ export const plain: ComponentSet = {
     </span>
   ),
 
-  Layout: ({ name, regions, site }) => (
+  // Only its picture, its other regions hidden while they're not awake.
+  Layout: ({ name, regions, site, alone }) => (
     <>
       {Object.entries(regions).map(([region, content]) => (
-        <div key={region} data-region={region}>
+        <div key={region} data-region={region} hidden={alone && !alone.awake && region !== "main" && !alone.drawers?.includes(region)}>
           {name === "workspace" && region === "bar" && site && <strong>{site} </strong>}
           {content}
         </div>
@@ -550,35 +593,29 @@ export const plain: ComponentSet = {
     </section>
   ),
   FilePicture: ({ source, fit }) => <div style={{ height: 320 }}>{source && <img src={source} alt="" style={{ width: "100%", height: "100%", objectFit: fit ? "contain" : "cover" }} />}</div>,
-  Cards: ({ status, cards }) => (
-    <div aria-busy={status === "loading"}>
-      {cards.map((card) => (
-        <article key={card.id}>
-          {card.picture?.source && <img src={card.picture.source} alt="" />}
-          <h2>{card.link ? <a {...card.link}>{card.title}</a> : card.title}</h2>
-          {card.tags && card.tags.length > 0 && <p>{card.tags.join(", ")}</p>}
-          {card.details.map((detail, i) => (
-            <p key={i}>{detail}</p>
-          ))}
-          {card.tally && (
-            <p>
-              {card.tally.reduce((n, part) => n + part.count, 0)}{" "}
-              {card.noun ? (card.tally.reduce((n, part) => n + part.count, 0) === 1 ? card.noun.replace(/s$/, "") : card.noun) : "in all"}
-              {card.tally.map((part) => `, ${part.label} ${part.count}${part.state ? ` ${tallyWords[part.state]}` : ""}`).join("")}
-            </p>
-          )}
-          {card.filters.length > 0 && (
-            <ul>
-              {card.filters.map((f) => (
-                <li key={f.label}>
-                  <a {...f.link}>{f.label}</a>
-                </li>
-              ))}
-            </ul>
-          )}
-        </article>
+  Cards: ({ status, cards, mosaic, groups }) =>
+    groups ? (
+      <div aria-busy={status === "loading"}>
+        {groups.map((group) => (
+          <section key={group.id} aria-labelledby={group.id}>
+            <h2 id={group.id}>{group.title}</h2>
+            {plainCards(status, cards.slice(group.first, group.first + group.count), mosaic, true)}
+          </section>
+        ))}
+      </div>
+    ) : (
+      plainCards(status, cards, mosaic)
+    ),
+  DatedTimeline: ({ entries }) => (
+    <ul>
+      {entries.map((entry) => (
+        <li key={entry.key}>
+          <button type="button" aria-current={entry.current || undefined} onClick={entry.onChoose}>
+            {entry.title} {entry.count}
+          </button>
+        </li>
       ))}
-    </div>
+    </ul>
   ),
 
   Track: ({ label, steps }) => (

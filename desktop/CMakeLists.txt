@@ -32,6 +32,7 @@ set(protocols
 	unstable/xdg-decoration/xdg-decoration-unstable-v1.xml
 	unstable/tablet/tablet-unstable-v2.xml
 	staging/cursor-shape/cursor-shape-v1.xml
+	unstable/pointer-gestures/pointer-gestures-unstable-v1.xml
 	unstable/text-input/text-input-unstable-v3.xml)
 set(protocol_sources)
 foreach(protocol ${protocols})
@@ -88,6 +89,7 @@ add_library(one_desktop
 	src/choices.cpp
 	src/clipboard.cpp
 	src/dragging.cpp
+	src/exif.cpp
 	src/surface.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/../screens/src/editing.cpp
 	src/field.cpp

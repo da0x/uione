@@ -70,6 +70,9 @@ function library() {
     .copy("title", "title")
     .copy("author", "author")
     .count("times_lent", where("library::loan", "book", subject))
+    .tally("listed", "loans")
+    .tally("latest", "loans", [["number", ">=", "times_lent"]])
+    .total("numbers", "loans", "number")
     .list("loans", where("library::loan", "book", subject))
     .order("-number")
     .fields(["number", "member", "returned_at"]);
@@ -167,7 +170,7 @@ describe("a local package", () => {
     expect(desk[0]!["book.title"]).toBe("Emma");
   });
 
-  it("copies the book onto its page, counts and lists its loans, and has no page for no book", async () => {
+  it("copies the book onto its page, counts and lists its loans, counts and adds up the loans it lists, and has no page for no book", async () => {
     const a = await app();
     await a.ok("library::book::create", book("Dune", "SCI-0001"));
     for (let i = 0; i < 3; i++) {
@@ -177,6 +180,8 @@ describe("a local package", () => {
     const page = a.shown("library::book_page", "SCI-0001")!;
     expect(page["title"]).toBe("Dune");
     expect(page["times_lent"]).toBe(3);
+    // Of those it lists: all of them, those numbered from how many there are, and their numbers added up.
+    expect([page["listed"], page["latest"], page["numbers"]]).toEqual([3, 1, 6]);
     const loans = page["loans"] as Row[];
     expect(loans.map((l) => l["number"])).toEqual([3, 2, 1]);
     expect(loans[0]!["returned_at"]).toBeTruthy();
@@ -368,6 +373,48 @@ describe("a local app's files", () => {
     // Undoing could bring it back while the page is open; read again, it's gone.
     await localSource({ name: "x", packages: [notes], store }).opened;
     expect(store.files.size).toBe(0);
+  });
+
+  it("draws a picture's smaller copy once, keeps it beside the picture, and lets it go with it", async () => {
+    const store = memoryStore();
+    const notes = localPackage("x", [entity("x::note", [{ name: "picture" }])], [command("x::note::create").creates("x::note"), command("x::note::delete").deletes("x::note")], []);
+    const source = localSource({ name: "x", packages: [notes], store });
+    const decoded: unknown[] = [];
+    const was = { bitmap: globalThis.createImageBitmap, canvas: globalThis.OffscreenCanvas, address: URL.createObjectURL };
+    globalThis.createImageBitmap = (async (_: Blob, options?: { resizeWidth: number; resizeHeight: number }) => {
+      decoded.push(options);
+      return { width: options?.resizeWidth ?? 4032, height: options?.resizeHeight ?? 3024, close() {} };
+    }) as unknown as typeof createImageBitmap;
+    globalThis.OffscreenCanvas = class {
+      constructor(
+        readonly width: number,
+        readonly height: number,
+      ) {}
+      getContext() {
+        return { drawImage() {} };
+      }
+      async convertToBlob() {
+        return new Blob([`${this.width}x${this.height}`], { type: "image/png" });
+      }
+    } as unknown as typeof OffscreenCanvas;
+    URL.createObjectURL = (blob: Blob) => `blob:${blob.size}`;
+    try {
+      const path = await source.files.upload(new File(["a large photo"], "harbor.jpg", { type: "image/jpeg" }), () => {});
+      const made = (await source.run("x::note::create", { picture: path })) as CommandReply;
+      expect(await source.files.small!(path, 640)).toBe("blob:7");
+      // Both times turned the way up its camera says it was held.
+      expect(decoded).toEqual([{ imageOrientation: "from-image" }, { imageOrientation: "from-image", resizeWidth: 640, resizeHeight: 480, resizeQuality: "high" }]);
+      expect((await store.file(`${path} small 640`))!.size).toBe("640x480".length);
+      // Read again, it's the one kept, not drawn again.
+      await localSource({ name: "x", packages: [notes], store }).files.small!(path, 640);
+      expect(decoded.length).toBe(2);
+      expect(store.files.size).toBe(2);
+      await source.run("x::note::delete", { id: made.id });
+      await localSource({ name: "x", packages: [notes], store }).opened;
+      expect(store.files.size).toBe(0);
+    } finally {
+      (globalThis.createImageBitmap = was.bitmap), (globalThis.OffscreenCanvas = was.canvas), (URL.createObjectURL = was.address);
+    }
   });
 });
 

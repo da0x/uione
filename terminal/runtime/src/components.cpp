@@ -161,6 +161,14 @@ namespace one::terminal::runtime {
 		return std::move(part).key("#" + name + "-" + std::to_string(times)).brought_to_top();
 	}
 
+	terminal::view step(page& p, step_spec spec, std::string words, std::string, std::vector<std::string> keys) {
+		std::string to = stepped_to(p, spec);
+		// At either end, it's only its words, dim.
+		if (to.empty()) return quiet(std::move(words));
+		for (const auto& k : keys) p.on_key(k, [&p, to] { p.open_instead(to); });
+		return terminal::link(std::move(words), [&p, to] { p.open_instead(to); });
+	}
+
 	terminal::view link(page& p, std::string words, std::string to, std::string, std::vector<std::string> keys) {
 		for (const auto& k : keys) p.on_key(k, [&p, address = address_of(p, to)] { p.open(address); });
 		if (leaves(to)) return terminal::link(std::move(words), [to] { open_in_browser(to); });

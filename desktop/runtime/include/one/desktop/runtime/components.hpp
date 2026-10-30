@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -65,6 +66,9 @@ namespace one::desktop::runtime {
 
 	// A link to another screen, to a part of this one, like #projects, or out of the app.
 	desktop::view link(page& p, std::string words, std::string to, std::string icon = "", std::vector<std::string> keys = {});
+	// link next in library.things "Next": a button to the record after this one, or
+	// before it, in the record's place; faint, and not pressed, at either end.
+	desktop::view step(page& p, step_spec spec, std::string words, std::string icon = "", std::vector<std::string> keys = {});
 	// A part of the page a link names, like #projects, brought to the top when it's followed.
 	desktop::view anchored(page& p, std::string name, desktop::view part);
 	desktop::view hero(std::string title, std::vector<desktop::view> inside);
@@ -187,6 +191,46 @@ namespace one::desktop::runtime {
 	// Where a picture's bytes, like one pasted, are kept until they're sent: this person's
 	// own runtime folder, readable by them alone.
 	std::filesystem::path kept_for_now(const std::vector<std::uint8_t>& bytes);
+	// What a picture is called: its file's name without its extension, or Pasted image
+	// for one that came as bytes and was kept for now.
+	std::string picture_name(const std::filesystem::path& file);
+	// Pictures on the clipboard, as files or a picture's bytes kept for now.
+	std::vector<std::filesystem::path> clipboard_pictures();
+	// What a screen's paste or add pictures button handed what it names by `key`: the
+	// pictures chosen, or, for a paste, the clipboard's, said when there are none.
+	std::vector<std::filesystem::path> pictures_handed(page& p, const std::string& key);
+	// A view pictures are dropped on, as files or a browser's picture, outlined while
+	// they're over it; and those dropped on it since it was last built.
+	desktop::view pictures_target(page& p, desktop::view shown, const std::string& key);
+	std::vector<std::filesystem::path> pictures_dropped(page& p, const std::string& key);
+	// A picture handed to something that takes them, as it comes in: measured, and kept
+	// where the source keeps files, away from the window's thread, so a large one, or
+	// many, never hold it up. Its place among those handed with it, and whether one
+	// before it came in, so what it makes joins theirs as one step to undo.
+	struct coming_picture {
+		std::filesystem::path file = {};
+		std::string kept = {};  // what its file is kept as, or nothing when it's kept with its command
+		std::string svg = {};   // its text, when it's an SVG
+		int width = 0, height = 0;
+		std::optional<long long> bytes = {};
+		std::string date = {};    // when it was taken, as its camera says, or else when its file last changed
+		std::string camera = {};  // the camera's make and model, as it says them
+		std::size_t index = 0, count = 1;
+		bool joined = false;
+	};
+	// Pictures handed to what `key` names, each measured and kept in turn in the
+	// background, the workspace saying how far it's got while there are several, and,
+	// once they're in, what couldn't be taken; and those come in since it was last
+	// built, in order. Given what's `held` already, as the files its records name, a
+	// picture kept as one of them, or as one before it, isn't come in again, and once
+	// they're in the workspace says how many were added and how many were already in.
+	void pictures_coming(page& p, const std::string& key, std::vector<std::filesystem::path> files, std::optional<std::set<std::string>> held = std::nullopt);
+	std::vector<coming_picture> pictures_come(page& p, const std::string& key);
+	// What's said once they're in, when some were already: "Added 31 pictures, 9 were
+	// already in." The same as the web's.
+	std::string pictures_already_said(std::size_t added, std::size_t already);
+	// Runs a command making something of a picture come in, its file in `field`.
+	void run_with_picture(page& p, const std::string& command, value made, const std::string& field, const coming_picture& picture, std::function<void(const answer&)> after);
 	desktop::view paper_button(page& p, paper_ask ask);
 	desktop::view paper_size(page& p, paper_ask ask);
 	// crop "Crop", edit words "Edit", add words "Text": asks the screen's collage.
@@ -198,10 +242,53 @@ namespace one::desktop::runtime {
 	double screen_width();
 	double screen_height();
 	// A file's picture, `height` tall, all of it fitted in, or filling its place, on the
-	// sunken color while there's none, as a card's is drawn.
-	desktop::view picture_of(page& p, const std::string& kept, bool fit, float height);
+	// sunken color while there's none, as a card's is drawn: read away from the window's
+	// thread, and a copy no longer on its longer side than `longest` where that's given,
+	// as for a card, where the whole of a large one would be wasted.
+	desktop::view picture_of(page& p, const std::string& kept, bool fit, float height, int longest = 0);
+	// A file's picture alone, the whole of the screen, as a photo's own screen is: all of
+	// it fitted in on black, edge to edge, the workspace's bars drawn over it. Zoomed by
+	// the screen's zoom buttons, by Ctrl and =, - or 0, by the wheel with Ctrl held or a
+	// pinch about where they point, and to 100% and back by a double click; dragged, or
+	// scrolled, to move about it once it's larger than fits.
+	desktop::view picture_alone(page& p, const std::string& kept, const std::string& key);
+	// Whether a screen that's only its picture shows its bars and the pointer: for two
+	// seconds after the pointer moves or a key is pressed, then not until either is
+	// again. wake() is told of the pointer's moves, and rest() is the two seconds over,
+	// as a test says without waiting.
+	bool awake();
+	void wake();
+	void rest();
+	// A key pressed, before anything hears it, which wakes them unless it's one held
+	// for another, like Ctrl; and one that, as it turned out, only stepped to the next
+	// picture, which leaves them as they were.
+	void key_down(const key_event& e);
+	void stepped();
+	// A screen is about to be built, which says again whether it's one; one that comes
+	// from another screen wakes them.
+	void screen_begun();
+	// A file's picture as the window draws it, the same way: nothing until it's read,
+	// and an empty one when there's no such file or it isn't a picture.
+	std::optional<desktop::picture> picture_soon(page& p, const std::string& kept, int longest = 0);
+	// The whole of the picture of the record at `address`, which a step on the page goes
+	// to, read away from the window's thread, after the page's own, while the page's open.
+	void read_ahead(page& p, const std::string& address, const std::string& kept);
+	// A step from the page to `to`: the whole pictures read for the records it steps away
+	// from let go, so only the one shown and those beside it are kept.
+	void stepping(page& p, const std::string& to);
+	// Whether the whole of a file's picture is read, to be drawn as soon as it's asked for.
+	bool read_whole(page& p, const std::string& kept);
+	// Where a step last went, which a picture alone shows the last picture on until its
+	// own is read.
+	std::string& last_stepped_to();
+	// A key pressed or a click made, before anything hears it: a slideshow playing stops,
+	// and its own toggle, if that's what it was, doesn't start it again.
+	void input_heard();
+	bool stopped_just_now(const std::string& toggle);
 	desktop::view pipeline_board(page& p, pipeline_spec spec);
 	desktop::view cards(page& p, cards_spec spec);
+	// The years and months of cards under headings by a date, as dated_timeline_spec says.
+	desktop::view dated_timeline(page& p, dated_timeline_spec spec);
 	// How far something is in its stage, like 2 of 5: a thin bar in the accent and its count.
 	desktop::view progress_bar(double step, double steps, float width);
 	// chart agent_page.stats.cpu "CPU" percent: a run of numbers over time, large.

@@ -11,6 +11,7 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "driver/build.hpp"
@@ -159,8 +160,16 @@ TEST_CASE("one run starts the first app a project targets, or the one --target n
     CHECK(desktop.target == "desktop");
     REQUIRE(desktop.before.size() == 2);
     CHECK(desktop.before[0].command == std::vector<std::string>{"cmake", "-S", out + "/desktop", "-B", out + "/desktop/out"});
-    CHECK(desktop.before[1].command == std::vector<std::string>{"cmake", "--build", out + "/desktop/out"});
+    std::vector<std::string> build{"cmake", "--build", out + "/desktop/out"};
+    if (unsigned cores = std::thread::hardware_concurrency()) build.insert(build.end(), {"--parallel", std::to_string(cores)});
+    CHECK(desktop.before[1].command == build);
     CHECK(desktop.app.command == std::vector<std::string>{out + "/desktop/out/shop"});
+    // Built optimized, unless the person asks for another build.
+    for (const auto& f : built.files) {
+        if (f.path != "desktop/CMakeLists.txt") continue;
+        CHECK(f.content.find("if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)\n\tset(CMAKE_BUILD_TYPE Release CACHE STRING \"how the app is built\" FORCE)\nendif()") != std::string::npos);
+        CHECK(f.content.find("set(CMAKE_BUILD_TYPE") < f.content.find("add_subdirectory("));
+    }
 
     auto web = driver::plan_run(built, out, "web", true);
     REQUIRE(web.before.size() == 1);

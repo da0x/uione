@@ -5,11 +5,13 @@
 // images in tests/golden. ONE_DESKTOP_GOLDEN=write draws them again; each is then looked at
 // before it's committed.
 
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <format>
+#include <ranges>
 #include <fstream>
 #include <span>
 #include <thread>
@@ -24,6 +26,7 @@
 #include "one/desktop/ui.hpp"
 #include "app_internal.hpp"
 #include "offscreen.hpp"
+#include "photos.hpp"
 #include "fonts.hpp"
 #include "ui_internal.hpp"
 
@@ -155,6 +158,35 @@ TEST("a picture written as a PNG reads back the same, and what isn't one says so
 	CHECK(!one::desktop::picture::read("/nowhere/at/all.png").has_value());
 }
 
+TEST("a picture's size is read from its file without reading the picture, an SVG's from its own, and what isn't one has none") {
+	auto folder = std::filesystem::temp_directory_path() / "one-desktop-sizes";
+	std::filesystem::create_directories(folder);
+	CHECK(one::desktop::picture::of(30, 20, std::vector<std::uint8_t>(30 * 20 * 4, 90)).write_png(folder / "wide.png").has_value());
+	std::ofstream(folder / "drawing.svg") << R"(<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80"><rect width="120" height="80"/></svg>)";
+	std::ofstream(folder / "words.txt") << "hello";
+	CHECK(one::desktop::picture::size_of(folder / "wide.png") == std::pair(30, 20));
+	CHECK(one::desktop::picture::size_of(folder / "drawing.svg") == std::pair(120, 80));
+	CHECK(!one::desktop::picture::size_of(folder / "words.txt"));
+	CHECK(!one::desktop::picture::size_of(folder / "gone.png"));
+	std::filesystem::remove_all(folder);
+}
+
+TEST("a picture made smaller keeps its shape, each pixel the average of those it covers, and one small already is itself") {
+	// Black and white columns, two pixels each, made half as wide: each pixel gray.
+	std::vector<std::uint8_t> stripes;
+	for (int y = 0; y < 4; ++y) {
+		for (int x = 0; x < 8; ++x) {
+			std::uint8_t v = x % 2 == 0 ? 0 : 255;
+			stripes.insert(stripes.end(), {v, v, v, 255});
+		}
+	}
+	auto made = one::desktop::picture::of(8, 4, stripes).smaller(4);
+	CHECK(made.width() == 4 && made.height() == 2);
+	CHECK(std::ranges::all_of(made.rgba() | std::views::stride(4), [](std::uint8_t v) { return v >= 126 && v <= 129; }));
+	auto small = four_colors();
+	CHECK(small.smaller(64).rgba() == small.rgba());
+}
+
 TEST("a picture is drawn stretched to its area, cropped to a part, and partly showing") {
 	auto drawn = one::desktop::offscreen::draw({300, 100}, 1, one::desktop::color::hex(0xffffff), [](one::desktop::canvas& c) {
 		c.picture(four_colors(), {0, 0, 100, 100});
@@ -242,6 +274,27 @@ TEST("a drawing hears a press it takes, the moves while it's held, and the relea
 	CHECK(!one::desktop::held().shift);  // no keyboard here
 	CHECK(found->focusable());  // it takes the keyboard when pressed
 	CHECK(!one::desktop::drawing([](one::desktop::canvas&, one::desktop::rect) {}).take()->focusable());
+}
+
+TEST("a drawing hears two fingers pinched over it, by how many times larger, and may hide the pointer there") {
+	std::vector<float> pinched;
+	auto root = one::desktop::column(one::desktop::drawing([](one::desktop::canvas&, one::desktop::rect) {},
+	                                                       {.on_pinch =
+	                                                            [&](one::desktop::point at, float by) {
+		                                                            pinched.push_back(by);
+		                                                            return at.x < 100;
+	                                                            },
+	                                                        .cursor = [](one::desktop::point) { return one::desktop::cursor::hidden; }})
+	                                    .grow())
+	                .take();
+	root->place({0, 0, 200, 100});
+	one::desktop::element* found = root->hit({40, 50});
+	CHECK(found->pinch({40, 50}, 1.5f));
+	CHECK(!found->pinch({150, 50}, 0.5f));  // one it doesn't take
+	CHECK((pinched == std::vector<float>{1.5f, 0.5f}));
+	CHECK(found->cursor() == one::desktop::cursor::hidden);
+	// One that doesn't hear them leaves them to what it's in.
+	CHECK(!one::desktop::drawing([](one::desktop::canvas&, one::desktop::rect) {}).take()->pinch({0, 0}, 2));
 }
 
 TEST("a color picker tells the color chosen as it's let go, from its shades and its hues") {
@@ -609,6 +662,105 @@ TEST("the chosen row and the scroll stay where they were when the view is built 
 	CHECK(opened == "issue-9");  // gone, so the nearest that's left
 }
 
+TEST("three fingers swiped across a touchpad are told to what's under the pointer, how far they've gone, and when they're lifted") {
+	one::desktop::detail::theme_in_use() = &tested_theme();
+	one::desktop::app::state app;
+	one::desktop::window::state w;
+	w.owner = &app;
+	w.size = {400, 200};
+	std::vector<std::tuple<float, float, bool>> told;
+	w.build = [&] {
+		return one::desktop::drawing([](one::desktop::canvas&, one::desktop::rect) {}, {.on_swipe = [&](one::desktop::point, float dx, float dy, bool ended) {
+			told.emplace_back(dx, dy, ended);
+			return true;
+		}}).grow();
+	};
+	w.needs_building = true;
+	one::desktop::bring_up_to_date(w);
+	one::desktop::deliver_swipe(w, {200, 100}, -40, 2, false);
+	one::desktop::deliver_swipe(w, {200, 100}, -120, 3, true);
+	CHECK(told.size() == 2);
+	CHECK((told[0] == std::tuple{-40.f, 2.f, false}));
+	CHECK((told[1] == std::tuple{-120.f, 3.f, true}));
+}
+
+TEST("a key the window's lines take is theirs before it moves the keyboard to what's beside, and one they don't take still moves it") {
+	one::desktop::detail::theme_in_use() = &tested_theme();
+	one::desktop::app::state app;
+	one::desktop::window outer(std::make_unique<one::desktop::window::state>());
+	auto& w = outer.internals();
+	w.outside = &outer;
+	w.owner = &app;
+	w.size = {400, 100};
+	w.build = [] { return one::desktop::row(one::desktop::button("First", [] {}).autofocus(), one::desktop::button("Second", [] {})).spacing(8); };
+	int stepped = 0;
+	outer.on_key = [&](const one::desktop::key_event& e) {
+		if (!e.is(one::desktop::keys::right)) return false;
+		++stepped;
+		return true;
+	};
+	w.needs_building = true;
+	one::desktop::bring_up_to_date(w);
+	auto& first = *w.root->children[0];
+	auto& second = *w.root->children[1];
+	CHECK(first.focused);
+	// Right is the window's: it's run, and the keyboard stays where it was.
+	one::desktop::deliver_key(w, key(one::desktop::keys::right));
+	CHECK(stepped == 1);
+	CHECK(first.focused);
+	CHECK(!second.focused);
+	// l isn't, so it moves the keyboard on, as the arrows otherwise do.
+	one::desktop::deliver_key(w, {.symbol = 'l', .text = "l"});
+	CHECK(stepped == 1);
+	CHECK(second.focused);
+}
+
+TEST("a page shown again is scrolled where it was left once what it holds reaches that far, what it was left from given the keyboard and brought into view") {
+	one::desktop::detail::theme_in_use() = &tested_theme();
+	one::desktop::state<float> left(300);
+	one::desktop::state<int> rows(3);
+	int pressed = -1;
+	one::desktop::app::state app;
+	one::desktop::window::state w;
+	w.owner = &app;
+	w.size = {300, 200};
+	w.build = [&] {
+		std::vector<one::desktop::view> shown;
+		for (int i = 0; i < rows.get(); ++i) {
+			auto row = one::desktop::pressable(one::desktop::text("Piece " + std::to_string(i)).height(40), [&pressed, i] { pressed = i; });
+			// The piece it was left from.
+			shown.push_back(i == 9 ? std::move(row).autofocus().brought_into_view() : std::move(row));
+		}
+		return one::desktop::scroll(one::desktop::column(std::move(shown)), left);
+	};
+	w.needs_building = true;
+	one::desktop::bring_up_to_date(w);
+	// While it's too short to scroll that far, as while what it holds comes in, it's
+	// at the top, and where it was left is kept.
+	CHECK(w.root->children[0]->frame.y == 0);
+	CHECK(left.peek() == 300);
+	rows.set(40);
+	one::desktop::bring_up_to_date(w);
+	CHECK(w.root->children[0]->frame.y == -300);
+	auto& piece = *w.root->children[0]->children[9];
+	CHECK(piece.focused);
+	CHECK(piece.shows_focus());
+	CHECK(piece.handle_key(key(one::desktop::keys::enter)));
+	CHECK(pressed == 9);
+	// Scrolled on, it's kept there.
+	CHECK(w.root->wheel({10, 10}, 0, 100));
+	CHECK(left.peek() == 400);
+	// And shown afresh with one left from further down, that one's brought into view.
+	w.root.reset();
+	left.set(0);
+	w.needs_building = true;
+	one::desktop::bring_up_to_date(w);
+	auto& again = *w.root->children[0]->children[9];
+	CHECK(again.frame.y >= 0);
+	CHECK(again.frame.bottom() <= 200);
+	CHECK(left.peek() > 0);
+}
+
 TEST("a view: rows, a list, buttons, an avatar and a divider, at scale 1") {
 	matches_golden("view-1", {520, 260}, 1, [](one::desktop::canvas& c) {
 		one::desktop::detail::theme_in_use() = &tested_theme();
@@ -785,6 +937,169 @@ TEST("a toolbar: large tool buttons with their words, small ones, one on and one
 		root->paint(c);
 		c.finish();
 	});
+}
+
+namespace {
+
+	// A picture `width` × `height` whose every pixel says where it is: red its column,
+	// green its row, so a pixel turned shows where it came from.
+	std::vector<std::uint8_t> placed_pixels(int width, int height, int step = 40) {
+		std::vector<std::uint8_t> rgba;
+		for (int y = 0; y < height; ++y) {
+			for (int x = 0; x < width; ++x) rgba.insert(rgba.end(), {static_cast<std::uint8_t>(x * step), static_cast<std::uint8_t>(y * step), 0, 255});
+		}
+		return rgba;
+	}
+
+	std::pair<int, int> came_from(const one::desktop::picture& p, int x, int y) {
+		const auto& rgba = p.rgba();
+		std::size_t at = (static_cast<std::size_t>(y) * p.width() + x) * 4;
+		return {rgba[at] / 40, rgba[at + 1] / 40};
+	}
+
+}  // namespace
+
+TEST("a photo's EXIF is read from a JPEG, a PNG, a WebP or a TIFF without decoding it: when it was taken, with what, and which way up") {
+	photos::said said{.orientation = 6, .make = "FUJIFILM", .model = "X-T5", .taken = "2026:10:12 08:30:15", .offset = "+02:00"};
+	auto block = photos::exif(said);
+	auto jpeg = photos::jpeg(16, 8, placed_pixels(16, 8, 15), block);
+	for (const auto& bytes : {jpeg, photos::png(4, 3, placed_pixels(4, 3), block), photos::webp(block, true), photos::webp(block, false), block}) {
+		auto facts = one::desktop::facts_of(bytes);
+		CHECK(facts.orientation == 6);
+		CHECK(facts.make == "FUJIFILM" && facts.model == "X-T5");
+		CHECK(facts.camera() == "FUJIFILM X-T5");
+		CHECK(facts.taken == "2026:10:12 08:30:15" && facts.offset == "+02:00");
+		CHECK(facts.when() && std::format("{:%FT%T}Z", *facts.when()) == "2026-10-12T06:30:15Z");
+	}
+	// Its numbers most significant byte first, as Motorola's order says.
+	said.little = false;
+	CHECK(one::desktop::facts_of(photos::exif(said)).camera() == "FUJIFILM X-T5");
+	CHECK(one::desktop::facts_of(photos::exif(said)).orientation == 6);
+	// From its file, reading only the start of it.
+	auto file = std::filesystem::temp_directory_path() / "uione-exif.jpg";
+	std::ofstream(file, std::ios::binary).write(reinterpret_cast<const char*>(jpeg.data()), static_cast<std::streamsize>(jpeg.size()));
+	CHECK(one::desktop::facts_of(file).camera() == "FUJIFILM X-T5");
+	// Measured and drawn the way up it was held: 8 × 16, its stored left side its top.
+	auto size = one::desktop::picture::size_of(file);
+	CHECK(size && size->first == 8 && size->second == 16);
+	auto read = one::desktop::picture::read(file);
+	CHECK(read && read->width() == 8 && read->height() == 16);
+	if (read) {
+		const auto& rgba = read->rgba();
+		CHECK(rgba[0] < 60 && rgba[1] > 20);  // stored at its bottom left: column 0, row 7
+		std::size_t last = (static_cast<std::size_t>(15) * 8 + 7) * 4;
+		CHECK(rgba[last] > 180 && rgba[last + 1] < 60);  // stored at its top right
+	}
+	std::filesystem::remove(file);
+	// None, in a picture that says nothing, or one that isn't a picture.
+	auto plain = one::desktop::facts_of(photos::jpeg(4, 4, placed_pixels(4, 4), {}));
+	CHECK(plain.orientation == 1 && plain.camera().empty() && !plain.when());
+	CHECK(one::desktop::facts_of(std::vector<std::uint8_t>{'h', 'e', 'l', 'l', 'o'}).orientation == 1);
+	CHECK(one::desktop::facts_of(std::filesystem::temp_directory_path() / "uione-no-such-photo.jpg").orientation == 1);
+}
+
+TEST("a photo is drawn the way up its camera says, each of EXIF's eight, mirrored and turned") {
+	// Where the pixel drawn at the top left, top right and bottom left comes from in the
+	// 3 × 2 it's stored as, for each.
+	struct way {
+		int orientation, width, height;
+		std::pair<int, int> top_left, top_right, bottom_left;
+	};
+	for (const way& w : {way{1, 3, 2, {0, 0}, {2, 0}, {0, 1}}, way{2, 3, 2, {2, 0}, {0, 0}, {2, 1}}, way{3, 3, 2, {2, 1}, {0, 1}, {2, 0}}, way{4, 3, 2, {0, 1}, {2, 1}, {0, 0}},
+	                     way{5, 2, 3, {0, 0}, {0, 1}, {2, 0}}, way{6, 2, 3, {0, 1}, {0, 0}, {2, 1}}, way{7, 2, 3, {2, 1}, {2, 0}, {0, 1}}, way{8, 2, 3, {2, 0}, {2, 1}, {0, 0}}}) {
+		auto shown = one::desktop::picture::decode(photos::png(3, 2, placed_pixels(3, 2), photos::exif({.orientation = w.orientation})));
+		CHECK(shown.has_value());
+		if (!shown) continue;
+		CHECK_SAYING(shown->width() == w.width && shown->height() == w.height, std::format("orientation {}", w.orientation));
+		CHECK_SAYING(came_from(*shown, 0, 0) == w.top_left, std::format("orientation {}", w.orientation));
+		CHECK_SAYING(came_from(*shown, shown->width() - 1, 0) == w.top_right, std::format("orientation {}", w.orientation));
+		CHECK_SAYING(came_from(*shown, 0, shown->height() - 1) == w.bottom_left, std::format("orientation {}", w.orientation));
+	}
+	// One EXIF doesn't count is left as it's stored.
+	auto odd = one::desktop::picture::decode(photos::png(3, 2, placed_pixels(3, 2), photos::exif({.orientation = 9})));
+	CHECK(odd && odd->width() == 3);
+}
+
+TEST("an EXIF block cut short, or made wrong anywhere, is read as far as it's sound, never past what's there, and never for long") {
+	photos::said said{.orientation = 8, .make = "Canon", .model = "Canon EOS R5", .taken = "2026:01:02 03:04:05", .offset = "-05:30"};
+	CHECK(one::desktop::facts_of(photos::exif(said)).camera() == "Canon EOS R5");
+	CHECK(std::format("{:%FT%T}Z", *one::desktop::facts_of(photos::exif(said)).when()) == "2026-01-02T08:34:05Z");
+	auto jpeg = photos::jpeg(8, 8, placed_pixels(8, 8), photos::exif(said));
+	auto png = photos::png(3, 2, placed_pixels(3, 2), photos::exif(said));
+	auto webp = photos::webp(photos::exif(said), true);
+	auto started = std::chrono::steady_clock::now();
+	// Cut short at every length.
+	for (const auto* whole : {&jpeg, &png, &webp}) {
+		for (std::size_t n = 0; n <= whole->size(); ++n) {
+			auto facts = one::desktop::facts_of(std::span(whole->data(), n));
+			CHECK(facts.orientation >= 1 && facts.orientation <= 8);
+			CHECK(facts.make.size() <= 256 && facts.model.size() <= 256);
+		}
+	}
+	// A byte made wrong, again and again, anywhere, as a damaged file would be.
+	std::uint32_t seed = 12345;
+	auto next = [&] { return seed = seed * 1664525u + 1013904223u; };
+	for (const auto* whole : {&jpeg, &png, &webp}) {
+		for (int i = 0; i < 4000; ++i) {
+			auto damaged = *whole;
+			for (int k = 0; k < 1 + static_cast<int>(next() % 4); ++k) damaged[next() % damaged.size()] = static_cast<std::uint8_t>(next() >> 24);
+			auto facts = one::desktop::facts_of(damaged);
+			CHECK(facts.orientation >= 1 && facts.orientation <= 8);
+			(void)facts.when();
+			(void)facts.camera();
+		}
+	}
+	// What a hostile one says: a directory of 65535 entries, offsets past its end, a
+	// text as long as can be said, segments and chunks that say they're empty or larger
+	// than anything, and a directory that points to itself.
+	auto block = photos::exif(said);
+	auto broken = [&](std::size_t at, std::vector<std::uint8_t> with) {
+		auto b = block;
+		for (std::size_t i = 0; i < with.size(); ++i) b[at + i] = with[i];
+		return one::desktop::facts_of(b);
+	};
+	CHECK(broken(8, {0xff, 0xff}).orientation >= 1);
+	CHECK(broken(4, {0xff, 0xff, 0xff, 0x7f}).camera().empty());
+	CHECK(broken(4, {8, 0, 0, 0}).camera() == "Canon EOS R5");
+	CHECK(broken(10 + 4, {0xff, 0xff, 0xff, 0xff}).make.empty());
+	CHECK(broken(10 + 8, {0xff, 0xff, 0xff, 0xff}).make.empty());
+	auto self = block;
+	for (std::size_t i = 10; i + 12 <= self.size(); i += 12) {
+		if (self[i] == 0x69 && self[i + 1] == 0x87) self[i + 8] = 8, self[i + 9] = self[i + 10] = self[i + 11] = 0;
+	}
+	CHECK(one::desktop::facts_of(self).orientation == 8);
+	std::vector<std::uint8_t> empty_segment{0xff, 0xd8, 0xff, 0xe0, 0x00, 0x00};
+	CHECK(one::desktop::facts_of(empty_segment).orientation == 1);
+	std::vector<std::uint8_t> padded(4096, 0xff);
+	padded[1] = 0xd8;
+	CHECK(one::desktop::facts_of(padded).orientation == 1);
+	auto huge = png;
+	huge[33] = huge[34] = huge[35] = huge[36] = 0xff;
+	CHECK(one::desktop::facts_of(huge).orientation == 8);  // read as far as the file goes
+	huge[8] = huge[9] = huge[10] = huge[11] = 0xff;
+	CHECK(one::desktop::facts_of(huge).orientation == 1);  // a chunk before it says it's larger than the file
+	auto riff = webp;
+	riff[34] = riff[35] = riff[36] = riff[37] = 0xff;
+	CHECK(one::desktop::facts_of(riff).orientation >= 1);
+	// A date that isn't one, or a camera's empty one, isn't when it was taken.
+	for (std::string taken : {"0000:00:00 00:00:00", "2026:13:01 00:00:00", "2026:02:30 10:00:00", "2026-10-12 08:30:15", "    :  :     :  :  ", "2026:10:12"}) {
+		CHECK_SAYING(!(one::desktop::photo_facts{.taken = taken}.when()), taken);
+	}
+	CHECK(std::chrono::steady_clock::now() - started < std::chrono::seconds(10));
+}
+
+TEST("a camera is its make and model, the make said once when the model starts with it") {
+	using one::desktop::photo_facts;
+	CHECK((photo_facts{.make = "Canon", .model = "Canon EOS R5"}.camera() == "Canon EOS R5"));
+	CHECK((photo_facts{.make = "NIKON CORPORATION", .model = "NIKON Z 6"}.camera() == "NIKON Z 6"));
+	CHECK((photo_facts{.make = "Apple", .model = "iPhone 15 Pro"}.camera() == "Apple iPhone 15 Pro"));
+	CHECK((photo_facts{.make = "samsung", .model = "SAMSUNG SM-S918B"}.camera() == "SAMSUNG SM-S918B"));
+	CHECK((photo_facts{.make = "Leica"}.camera() == "Leica"));
+	CHECK((photo_facts{.model = "X100VI"}.camera() == "X100VI"));
+	// Without an offset, it's when it was where this runs.
+	photo_facts here{.taken = "2026:07:01 12:00:00"};
+	auto local = std::chrono::local_days(std::chrono::year(2026) / 7 / 1) + std::chrono::hours(12);
+	CHECK(here.when() && *here.when() == std::chrono::floor<std::chrono::seconds>(std::chrono::current_zone()->to_sys(local, std::chrono::choose::earliest)));
 }
 
 int main() { return check::run(); }

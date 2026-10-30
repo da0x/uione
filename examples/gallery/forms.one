@@ -14,6 +14,8 @@ namespace gallery at / {
 			look "Show its pieces as"
 		}
 		subtitle "A form asking for a field of every kind, open, so each control is seen at once."
+		link previous in rooms "Previous room" icon previous
+		link next in rooms "Next room" icon next
 		form piece::create "Hang it" {
 			title
 			description

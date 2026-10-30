@@ -9,11 +9,14 @@
 #include <cstdlib>
 #include <filesystem>
 #include <format>
+#include <set>
 #include <fstream>
 #include <thread>
 
 #include "check.hpp"
+#include "app_internal.hpp"
 #include "offscreen.hpp"
+#include "photos.hpp"
 #include "one/desktop/runtime/components.hpp"
 #include "one/desktop/runtime/markdown.hpp"
 #include "ui_internal.hpp"
@@ -919,6 +922,465 @@ TEST("cards: each with what it holds counted, and links opening it filtered") {
 	matches_golden("cards", {900, 520}, [&] { return drawn(nav); });
 }
 
+TEST("a card's title is set in the theme's text face, strong, not in its headings' face, which the page's title keeps") {
+	memory_source data;
+	data.set("projects::project_page", "atlas", value(fields{{"boards", list{value(fields{{"id", "atlas-main"}, {"title", "Main"}}), value(fields{{"id", "atlas-ops"}, {"title", "Operations"}})}}}));
+	auto drawn_in = [&](const std::string& heading_family, bool titled) {
+		one::desktop::theme look = tested_theme();
+		look.heading_family = heading_family;
+		site s{.name = "tracker", .id = "org.uione.runtime-tests"};
+		s.look = look;
+		s.screens.push_back({titled ? "Atlas" : "tracker", "/:project", "", [](page& p) {
+			                     return items(cards(p, {.view = p.view("projects::project_page", p.param("project")), .list = "boards", .columns = {{"title", "Title"}}}));
+		                     }});
+		navigator nav(s, data);
+		nav.open("/atlas");
+		std::unique_ptr<one::desktop::element> root;
+		return one::desktop::offscreen::draw({900, 400}, 1, look.page, [&](one::desktop::canvas& c) {
+			one::desktop::detail::theme_in_use() = &look;
+			root = drawn(nav).take();
+			root->place({0, 0, 900, 400});
+			root->paint(c);
+		});
+	};
+	// The cards alone are drawn the same whatever face headings are in.
+	CHECK(one::desktop::offscreen::differences(drawn_in("", false), drawn_in("Noto Serif", false), 3) == 0);
+	// The page's title over them is a heading, and changes with it.
+	CHECK(one::desktop::offscreen::differences(drawn_in("", true), drawn_in("Noto Serif", true), 3) > 0);
+	one::desktop::detail::theme_in_use() = &tested_theme();
+}
+
+TEST("cards as a mosaic: every eight two blocks of a tall tile, a wide one and two small, the second mirrored, each picture filling its tile around its middle, its title over its foot") {
+	auto folder = std::filesystem::temp_directory_path() / "uione-mosaic";
+	std::filesystem::remove_all(folder);
+	std::filesystem::create_directories(folder);
+	// Each picture its color on the left and a lighter one on the right, some wide and
+	// some tall, so where it's cropped shows.
+	auto picture = [&](const std::string& name, int w, int h, std::uint32_t rgb) {
+		std::vector<std::uint8_t> pixels(static_cast<std::size_t>(w) * h * 4);
+		for (int y = 0; y < h; ++y) {
+			for (int x = 0; x < w; ++x) {
+				std::uint8_t* at = &pixels[(static_cast<std::size_t>(y) * w + x) * 4];
+				int lift = x < w / 2 ? 0 : 70;
+				at[0] = static_cast<std::uint8_t>(std::min(255, static_cast<int>((rgb >> 16) & 0xff) + lift));
+				at[1] = static_cast<std::uint8_t>(std::min(255, static_cast<int>((rgb >> 8) & 0xff) + lift));
+				at[2] = static_cast<std::uint8_t>(std::min(255, static_cast<int>(rgb & 0xff) + lift));
+				at[3] = 255;
+			}
+		}
+		CHECK(one::desktop::picture::of(w, h, std::move(pixels)).write_png(folder / name).has_value());
+	};
+	const std::uint32_t colors[] = {0x2457d6, 0x1a7f37, 0xc2312d, 0x9a6700, 0x6e40c9, 0x0f766e, 0xb4357a, 0x3f4a5a, 0x2d6a9f, 0x8a5a2b, 0x4f7c2a};
+	struct kept_there : memory_source {
+		std::filesystem::path in;
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return in / kept; }
+	} data;
+	data.in = folder;
+	list clippings;
+	for (int i = 0; i < 11; ++i) {
+		std::string name = std::format("clipping-{}.png", i + 1);
+		picture(name, i % 2 == 0 ? 160 : 90, i % 2 == 0 ? 90 : 160, colors[i]);
+		clippings.push_back(value(fields{{"id", std::format("c{}", i + 1)}, {"name", std::format("Clipping {}", i + 1)}, {"image", name}}));
+	}
+	data.set("studio::clippings_page", "", value(fields{{"clippings", clippings}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Clippings", "/", "", [](page& p) {
+		                     return items(cards(p, {.view = p.view("studio::clippings_page"), .list = "clippings", .columns = {{"name", "Name"}}, .link = "/clippings/:clipping", .picture = "image", .mosaic = true}));
+	                     }});
+	s.screens.push_back({"Clipping", "/clippings/:clipping", "", [](page&) { return items(); }});
+	navigator nav(s, data);
+	nav.open("/");
+	matches_golden("cards-mosaic", {900, 1820}, [&] { return drawn(nav); });
+	// Wider, it's the same tiles, larger, as tall as they are wide.
+	auto root = drawn(nav).take();
+	root->place({0, 0, 900, 1500});
+	// The mosaic: what takes the keyboard and grows as it widens, with nothing made inside
+	// it until it's drawn.
+	std::function<one::desktop::element*(one::desktop::element&)> find = [&](one::desktop::element& e) -> one::desktop::element* {
+		if (e.focusable() && e.children.empty() && e.measure(1200).height > e.measure(600).height) return &e;
+		for (auto& child : e.children) {
+			if (auto* in = find(*child)) return in;
+		}
+		return nullptr;
+	};
+	one::desktop::element* mosaic = find(*root);
+	CHECK(mosaic != nullptr);
+	if (mosaic) {
+		CHECK(mosaic->measure(1200).height > mosaic->measure(600).height);
+		mosaic->place({0, 0, 1200, mosaic->measure(1200).height});
+		float side = (1200 - 32) / 3.f;
+		auto opened = [&](float x, float y) {
+			nav.open("/");
+			auto again = drawn(nav).take();
+			again->place({0, 0, 1200, 1500});
+			auto* m = find(*again);
+			m->place({0, 0, 1200, m->measure(1200).height});
+			CHECK(m->click({x, y}));
+			return nav.current().address();
+		};
+		// The first card's tile is tall at the left, the second's wide at the top right,
+		// and the eleventh's the third of the second eight.
+		CHECK(opened(10, side * 1.5f) == "/clippings/c1");
+		CHECK(opened(side + 26, 10) == "/clippings/c2");
+		auto eleventh = mosaic_tile(10);
+		CHECK(opened(eleventh.column * (side + 16) + 10, eleventh.row * (side + 16) + 10) == "/clippings/c11");
+	}
+	std::filesystem::remove_all(folder);
+}
+
+TEST("cards take pictures chosen or dropped, each a record made by their add, its file in their picture and its own size, name, bytes and date in the fields that keep them") {
+	auto folder = std::filesystem::temp_directory_path() / "uione-cards-pictures";
+	std::filesystem::remove_all(folder);
+	std::filesystem::create_directories(folder);
+	auto file = folder / "harbor.png";
+	one::desktop::offscreen::write_png(file, {6, 4, std::vector<std::uint8_t>(6 * 4 * 4, 200)});
+	using namespace std::chrono;
+	std::filesystem::last_write_time(file, clock_cast<file_clock>(sys_days{2026y / 10 / 12} + 8h + 30min + 15s));
+	memory_source data;
+	data.set("studio::room_page", "r1", value(fields{{"pieces", list{}}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Pieces", "/:room", "", [](page& p) {
+		                     return items(cards(p, {.view = p.view("studio::room_page", p.param("room")),
+		                                            .list = "pieces",
+		                                            .columns = {{"name", "Name"}},
+		                                            .picture = "image",
+		                                            .add = "studio::piece::create",
+		                                            .fields = {{"picture", "image"}, {"picture_width", "picture_width"}, {"picture_height", "picture_height"}, {"name", "name"}, {"picture_bytes", "picture_bytes"}, {"picture_date", "picture_date"}},
+		                                            .given = {{"room", p.param("room")}},
+		                                            .key = "/:room cards pieces",
+		                                            .paste = true}));
+	                     }});
+	navigator nav(s, data);
+	nav.open("/r1");
+	built(nav);
+	// Two chosen at once by an add pictures button, as the desktop's file chooser hands them over.
+	nav.current().kept<std::vector<std::string>>("pictures chosen /:room cards pieces").set({file.string(), (folder / "missing.png").string()});
+	built(nav);
+	CHECK(data.runs().size() == 1);
+	const value& made = data.runs().front().fields;
+	CHECK(data.runs().front().command == "studio::piece::create");
+	CHECK(made["room"].as_string() == "r1");
+	CHECK(made["image"].as_string() == "uploads/harbor.png");
+	CHECK(made["picture_width"].as_integer() == 6 && made["picture_height"].as_integer() == 4);
+	CHECK(made["name"].as_string() == "harbor");
+	CHECK(made["picture_bytes"].as_integer() == static_cast<long long>(std::filesystem::file_size(file)));
+	CHECK(made["picture_date"].as_string() == "2026-10-12T08:30:15Z");
+	CHECK(nav.current().told().peek() == "missing.png isn't a picture this can read.");
+	// The later of several is joined to the first, one step to undo.
+	nav.current().kept<std::vector<std::string>>("pictures chosen /:room cards pieces").set({file.string(), file.string()});
+	built(nav);
+	CHECK(data.runs().size() == 3);
+	CHECK(data.runs()[1].fields["one:history"].is_null() && data.runs()[2].fields["one:history"].as_string() == "joined");
+	std::filesystem::remove_all(folder);
+}
+
+namespace {
+
+	// Cards that take pictures, kept as a folder keeps them, by what's in them.
+	struct kept_by_content : memory_source {
+		std::optional<std::expected<std::string, std::string>> keep(const std::filesystem::path& file) override {
+			std::ifstream in(file, std::ios::binary);
+			std::string bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+			return "files/" + std::to_string(std::hash<std::string>{}(bytes));
+		}
+	};
+	site taking_cards() {
+		site s{.name = "studio", .id = "org.uione.runtime-tests"};
+		s.look = tested_theme();
+		s.screens.push_back({"Pieces", "/:room", "", [](page& p) {
+			                     return items(cards(p, {.view = p.view("studio::room_page", p.param("room")),
+			                                            .list = "pieces",
+			                                            .columns = {{"name", "Name"}},
+			                                            .picture = "image",
+			                                            .add = "studio::piece::create",
+			                                            .fields = {{"picture", "image"}, {"name", "name"}},
+			                                            .given = {{"room", p.param("room")}},
+			                                            .key = "/:room cards pieces",
+			                                            .paste = true}));
+		                     }});
+		return s;
+	}
+
+}  // namespace
+
+TEST("cards keep each picture once: one whose file is a card's already, or one before it in the same batch, isn't made again, and they say how many were") {
+	auto folder = std::filesystem::temp_directory_path() / "uione-cards-once";
+	std::filesystem::remove_all(folder);
+	std::filesystem::create_directories(folder);
+	auto picture = [&](const std::string& name, std::uint8_t shade) {
+		one::desktop::offscreen::write_png(folder / name, {6, 4, std::vector<std::uint8_t>(6 * 4 * 4, shade)});
+		return (folder / name).string();
+	};
+	kept_by_content data;
+	auto harbor = picture("harbor.png", 200), dusk = picture("dusk.png", 90), pier = picture("pier.png", 30);
+	std::filesystem::copy_file(dusk, folder / "dusk copy.png");
+	data.set("studio::room_page", "r1", value(fields{{"pieces", list{value(fields{{"id", "n0"}, {"name", "harbor"}, {"image", **data.keep(harbor)}})}}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Pieces", "/:room", "", [](page& p) {
+		                     return items(cards(p, {.view = p.view("studio::room_page", p.param("room")),
+		                                            .list = "pieces",
+		                                            .columns = {{"name", "Name"}},
+		                                            .picture = "image",
+		                                            .add = "studio::piece::create",
+		                                            .fields = {{"picture", "image"}, {"name", "name"}},
+		                                            .given = {{"room", p.param("room")}},
+		                                            .key = "/:room cards pieces",
+		                                            .paste = true}));
+	                     }});
+	navigator nav(s, data);
+	nav.open("/r1");
+	built(nav);
+	// Harbor's in already, and the second dusk is the first again, by what's in it, whatever it's called.
+	nav.current().kept<std::vector<std::string>>("pictures chosen /:room cards pieces").set({harbor, dusk, (folder / "dusk copy.png").string(), pier});
+	built(nav);
+	std::vector<std::string> made;
+	for (const auto& run : data.runs()) made.push_back(run.fields["name"].as_string());
+	CHECK((made == std::vector<std::string>{"dusk", "pier"}));
+	CHECK(nav.current().told().peek() == "Added 2 pictures, 2 were already in.");
+	// One alone that's in already.
+	nav.current().kept<std::vector<std::string>>("pictures chosen /:room cards pieces").set({harbor});
+	built(nav);
+	CHECK(data.runs().size() == 2);
+	CHECK(nav.current().told().peek() == "That picture was already in.");
+	CHECK(pictures_already_said(0, 9) == "All 9 pictures were already in.");
+	CHECK(pictures_already_said(1, 1) == "Added 1 picture, 1 was already in.");
+	std::filesystem::remove_all(folder);
+}
+
+TEST("a folder handed to cards brings in every picture in it and in its folders, by what's in it, past hidden ones, what isn't a picture, and links out of it") {
+	auto folder = std::filesystem::temp_directory_path() / "uione-cards-folder";
+	std::filesystem::remove_all(folder);
+	auto summer = folder / "Summer";
+	std::filesystem::create_directories(summer / "beach" / "evening");
+	std::filesystem::create_directories(summer / ".thumbnails");
+	std::filesystem::create_directories(folder / "elsewhere");
+	std::uint8_t shade = 10;
+	auto picture = [&](const std::filesystem::path& at) { one::desktop::offscreen::write_png(at, {6, 4, std::vector<std::uint8_t>(6 * 4 * 4, shade += 20)}); };
+	picture(summer / "harbor.png");
+	picture(summer / "beach" / "dunes.png");
+	picture(summer / "beach" / "evening" / "dusk");  // a picture, whatever it's called
+	picture(summer / ".thumbnails" / "harbor.png");
+	picture(summer / ".hidden.png");
+	picture(folder / "elsewhere" / "far.png");
+	std::ofstream(summer / "notes.png") << "not a picture";
+	std::ofstream(summer / "list.txt") << "harbor, dunes";
+	std::filesystem::create_symlink(folder / "elsewhere" / "far.png", summer / "far.png");
+	std::filesystem::create_directory_symlink(folder / "elsewhere", summer / "elsewhere");
+	std::filesystem::create_symlink(summer / "harbor.png", summer / "beach" / "harbor again.png");
+	kept_by_content data;
+	data.set("studio::room_page", "r1", value(fields{{"pieces", list{}}}));
+	auto s = taking_cards();
+	navigator nav(s, data);
+	nav.open("/r1");
+	built(nav);
+	nav.current().kept<std::vector<std::string>>("pictures chosen /:room cards pieces").set({summer.string()});
+	built(nav);
+	std::multiset<std::string> made;
+	for (const auto& run : data.runs()) made.insert(run.fields["name"].as_string());
+	// The link to harbor inside it is harbor again, so it's in once.
+	CHECK((made == std::multiset<std::string>{"harbor", "dunes", "dusk"}));
+	CHECK(nav.current().told().peek() == "Added 3 pictures, 1 was already in.");
+	// None at all.
+	std::filesystem::create_directories(folder / "Empty");
+	std::ofstream(folder / "Empty" / "list.txt") << "nothing";
+	nav.current().kept<std::vector<std::string>>("pictures chosen /:room cards pieces").set({(folder / "Empty").string()});
+	built(nav);
+	CHECK(nav.current().told().peek() == "There are no pictures in Empty.");
+	std::filesystem::remove_all(folder);
+}
+
+TEST("a folder of thousands of pictures is gone through away from the window, which keeps being built, a picture at a time, saying how far it's got") {
+	auto folder = std::filesystem::temp_directory_path() / "uione-cards-many";
+	std::filesystem::remove_all(folder);
+	constexpr int count = 3000;
+	for (int i = 0; i < count; ++i) {
+		auto at = folder / std::format("roll-{}", i / 500);
+		if (i % 500 == 0) std::filesystem::create_directories(at);
+		std::vector<std::uint8_t> pixels(4 * 4 * 4, 0);
+		pixels[0] = static_cast<std::uint8_t>(i), pixels[1] = static_cast<std::uint8_t>(i >> 8);
+		one::desktop::offscreen::write_png(at / std::format("p{}.png", i), {4, 4, std::move(pixels)});
+	}
+	kept_by_content data;
+	data.set("studio::room_page", "r1", value(fields{{"pieces", list{}}}));
+	auto s = taking_cards();
+	navigator nav(s, data);
+	nav.open("/r1");
+	built(nav);
+	one::desktop::runtime::hold_posted(true);
+	nav.current().kept<std::vector<std::string>>("pictures chosen /:room cards pieces").set({folder.string()});
+	built(nav);
+	int frames = 0;
+	std::size_t most_waiting = 0;
+	std::string said_while;
+	for (; data.runs().size() < count && frames < 200000; ++frames) {
+		if (one::desktop::runtime::run_posted(1) == 0) std::this_thread::sleep_for(std::chrono::microseconds(200));
+		if (std::string now = nav.current().told().peek(); now.starts_with("Adding")) said_while = now;
+		most_waiting = std::max(most_waiting, nav.current().kept<std::vector<coming_picture>>("pictures come /:room cards pieces").peek().size());
+		built(nav);
+	}
+	for (int i = 0; i < 2000 && one::desktop::runtime::run_posted() == 0; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	built(nav);
+	one::desktop::runtime::hold_posted(false);
+	CHECK(data.runs().size() == count);
+	CHECK(frames > count);
+	// What's waiting for the window is a picture or two, never the folder.
+	CHECK_SAYING(most_waiting < 50, std::to_string(most_waiting));
+	CHECK(said_while.starts_with("Adding pictures from uione-cards-many, "));
+	CHECK(nav.current().told().peek() == std::format("Added {} pictures.", count));
+	std::filesystem::remove_all(folder);
+}
+
+TEST("cards take a photo's date and camera as it says them, and its size the way up it was held, and the small copy they draw is that way up too") {
+	auto folder = std::filesystem::temp_directory_path() / "uione-cards-photos";
+	std::filesystem::remove_all(folder);
+	std::filesystem::create_directories(folder);
+	// 40 × 20, red on its left, held turned a quarter clockwise, so it's 20 × 40, red at its top.
+	std::vector<std::uint8_t> pixels;
+	for (int y = 0; y < 20; ++y) {
+		for (int x = 0; x < 40; ++x) pixels.insert(pixels.end(), {static_cast<std::uint8_t>(x < 20 ? 255 : 0), 0, static_cast<std::uint8_t>(x < 20 ? 0 : 255), 255});
+	}
+	auto bytes = photos::jpeg(40, 20, pixels, photos::exif({.orientation = 6, .make = "FUJIFILM", .model = "X-T5", .taken = "2026:10:12 08:30:15", .offset = "+02:00"}));
+	auto file = folder / "harbor.jpg";
+	std::ofstream(file, std::ios::binary).write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+	memory_source data;
+	data.set("studio::room_page", "r1", value(fields{{"pieces", list{}}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Pieces", "/:room", "", [](page& p) {
+		                     return items(cards(p, {.view = p.view("studio::room_page", p.param("room")),
+		                                            .list = "pieces",
+		                                            .columns = {{"name", "Name"}},
+		                                            .picture = "image",
+		                                            .add = "studio::piece::create",
+		                                            .fields = {{"picture", "image"}, {"picture_width", "picture_width"}, {"picture_height", "picture_height"}, {"picture_date", "picture_date"}, {"picture_camera", "picture_camera"}},
+		                                            .given = {{"room", p.param("room")}},
+		                                            .key = "/:room cards pieces",
+		                                            .paste = true}));
+	                     }});
+	navigator nav(s, data);
+	nav.open("/r1");
+	built(nav);
+	nav.current().kept<std::vector<std::string>>("pictures chosen /:room cards pieces").set({file.string()});
+	built(nav);
+	CHECK(data.runs().size() == 1);
+	if (data.runs().empty()) return;
+	const value& made = data.runs().front().fields;
+	CHECK(made["picture_width"].as_integer() == 20 && made["picture_height"].as_integer() == 40);
+	CHECK(made["picture_date"].as_string() == "2026-10-12T06:30:15Z");
+	CHECK(made["picture_camera"].as_string() == "FUJIFILM X-T5");
+	// Without a field for it, it isn't kept.
+	CHECK(!made.fields.contains("picture_bytes"));
+	// A card's small copy of a large one, named by its hash, is made upright, and kept by
+	// a name of its own, so one made before pictures were turned isn't drawn on its side.
+	std::vector<std::uint8_t> large;
+	for (int y = 0; y < 700; ++y) {
+		for (int x = 0; x < 1400; ++x) large.insert(large.end(), {static_cast<std::uint8_t>(x < 700 ? 255 : 0), 0, static_cast<std::uint8_t>(x < 700 ? 0 : 255), 255});
+	}
+	auto taken = photos::jpeg(1400, 700, large, photos::exif({.orientation = 6}));
+	std::string hash(64, 'b');
+	std::filesystem::create_directories(folder / "files");
+	std::ofstream(folder / "files" / hash, std::ios::binary).write(reinterpret_cast<const char*>(taken.data()), static_cast<std::streamsize>(taken.size()));
+	struct kept_there : memory_source {
+		std::filesystem::path in;
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return in / kept; }
+	} there;
+	there.in = folder;
+	there.set("studio::room_page", "r1", value(fields{{"pieces", list{value(fields{{"id", "c1"}, {"name", "Harbor"}, {"image", "files/" + hash}})}}}));
+	site shown{.name = "studio", .id = "org.uione.runtime-tests"};
+	shown.look = tested_theme();
+	shown.screens.push_back({"Pieces", "/:room", "", [](page& p) {
+		                         return items(cards(p, {.view = p.view("studio::room_page", p.param("room")), .list = "pieces", .columns = {{"name", "Name"}}, .picture = "image"}));
+	                         }});
+	navigator cards_nav(shown, there);
+	cards_nav.open("/r1");
+	(void)drawn(cards_nav);
+	auto small = one::desktop::picture::read(folder / "files" / "small" / (hash + "-640-upright.png"));
+	CHECK(small.has_value());
+	if (small) {
+		CHECK(small->width() == 320 && small->height() == 640);
+		CHECK(small->rgba()[0] > 180 && small->rgba()[2] < 80);  // red, its stored left, at its top
+	}
+	CHECK(!std::filesystem::exists(folder / "files" / "small" / (hash + "-640.png")));
+	std::filesystem::remove_all(folder);
+}
+
+TEST("pictures coming into cards are measured and kept away from the window, which is built again and again while they come in, saying how far they've got") {
+	auto folder = std::filesystem::temp_directory_path() / "uione-cards-coming";
+	std::filesystem::remove_all(folder);
+	std::filesystem::create_directories(folder);
+	// As large as a camera's.
+	auto file = folder / "harbor.png";
+	one::desktop::offscreen::write_png(file, {4032, 3024, std::vector<std::uint8_t>(std::size_t{4032} * 3024 * 4, 200)});
+	memory_source data;
+	data.set("studio::room_page", "r1", value(fields{{"pieces", list{}}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Pieces", "/:room", "", [](page& p) {
+		                     return items(cards(p, {.view = p.view("studio::room_page", p.param("room")),
+		                                            .list = "pieces",
+		                                            .columns = {{"name", "Name"}},
+		                                            .picture = "image",
+		                                            .add = "studio::piece::create",
+		                                            .fields = {{"picture", "image"}, {"picture_width", "picture_width"}, {"picture_height", "picture_height"}},
+		                                            .key = "/:room cards pieces",
+		                                            .paste = true}));
+	                     }});
+	navigator nav(s, data);
+	nav.open("/r1");
+	built(nav);
+	one::desktop::runtime::hold_posted(true);
+	nav.current().kept<std::vector<std::string>>("pictures chosen /:room cards pieces").set(std::vector<std::string>(8, file.string()));
+	built(nav);
+	// Nothing measured or made while the window was built: it's all away.
+	CHECK(data.runs().empty());
+	int frames = 0;
+	std::vector<std::string> said;
+	for (; data.runs().size() < 8 && frames < 5000; ++frames) {
+		if (one::desktop::runtime::run_posted(1) == 0) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		if (std::string now = nav.current().told().peek(); !now.empty() && (said.empty() || said.back() != now)) said.push_back(now);
+		built(nav);
+	}
+	for (int i = 0; i < 200 && one::desktop::runtime::run_posted() == 0; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	built(nav);
+	CHECK(frames > 8);
+	CHECK(data.runs().size() == 8);
+	if (data.runs().size() == 8) CHECK(data.runs().back().fields["picture_width"].as_integer() == 4032 && data.runs().back().fields["picture_height"].as_integer() == 3024);
+	CHECK(!said.empty() && said.front() == "Adding 1 of 8 pictures…" && said.back() == "Adding 8 of 8 pictures…");
+	// And once they're in, it's no longer said.
+	CHECK(nav.current().told().peek().empty());
+	one::desktop::runtime::hold_posted(false);
+	std::filesystem::remove_all(folder);
+}
+
+TEST("a card's picture is drawn from a smaller copy, made once and kept beside the file it's of when that's named by its hash") {
+	auto folder = std::filesystem::temp_directory_path() / "uione-cards-small";
+	std::filesystem::remove_all(folder);
+	std::filesystem::create_directories(folder / "files");
+	std::string hash(64, 'a');
+	one::desktop::offscreen::write_png(folder / "files" / hash, {2000, 1000, std::vector<std::uint8_t>(std::size_t{2000} * 1000 * 4, 120)});
+	struct kept_there : memory_source {
+		std::filesystem::path in;
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return in / kept; }
+	} data;
+	data.in = folder;
+	data.set("studio::room_page", "r1", value(fields{{"pieces", list{value(fields{{"id", "c1"}, {"name", "Harbor"}, {"image", "files/" + hash}})}}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Pieces", "/:room", "", [](page& p) {
+		                     return items(cards(p, {.view = p.view("studio::room_page", p.param("room")), .list = "pieces", .columns = {{"name", "Name"}}, .picture = "image"}));
+	                     }});
+	navigator nav(s, data);
+	nav.open("/r1");
+	(void)drawn(nav);
+	auto small = one::desktop::picture::read(folder / "files" / "small" / (hash + "-640.png"));
+	CHECK(small.has_value());
+	if (small) CHECK(small->width() == 640 && small->height() == 320);
+	std::filesystem::remove_all(folder);
+}
+
 namespace {
 
 	site with_issue() {
@@ -1343,6 +1805,40 @@ TEST("a workspace: its bar, the app's name in its middle and light and dark at i
 	CHECK(key(nav, one::desktop::key_event{.symbol = 'z', .text = "", .control = true}));
 	CHECK(nav.current().told().peek() == "Undid place.");
 	matches_golden("workspace", {900, 420}, [&] { return drawn(nav); });
+}
+
+TEST("a toolbar is a thin strip while every group it shows is a single row of small tools, and full with any other") {
+	memory_source data;
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	static bool large = false;
+	s.screens.push_back({"Studio", "/", "", [](page& p) {
+		                     std::vector<one::desktop::view> groups;
+		                     groups.push_back(group(p, "View", true, true, [&] {
+			                     return tools(toggle(p, "/ a", "A", "eye", std::vector<std::string>{}), toggle(p, "/ b", "B", "fit", std::vector<std::string>{}));
+		                     }, 2));
+		                     if (large) groups.push_back(group(p, "Poster", false, false, [&] { return tools(command(p, {.command = "studio::poster::create", .label = "New", .icon = "add"})); }));
+		                     return workspace(p, region{"toolbar", along(std::move(groups))}, region{"main", items(text({words("Work")}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	// The height of the View group as it's drawn, its name under its tools or not.
+	auto view_height = [&] {
+		auto root = built(nav);
+		float found = 0;
+		std::function<void(one::desktop::element&)> look = [&](one::desktop::element& e) {
+			if (e.key == "group one row") found = e.frame.height;
+			for (auto& c : e.children) look(*c);
+		};
+		look(*root);
+		return found;
+	};
+	float thin = view_height();
+	large = true;
+	float full = view_height();
+	large = false;
+	CHECK(thin > 0);
+	CHECK(thin + 8 < full);
 }
 
 TEST("a toolbar's choices of one enum are pressed one at a time, the first until another's chosen by a press or its key") {
@@ -2847,4 +3343,975 @@ TEST("work handed back from another thread is dropped when no app is running to 
 
 TEST("an address isn't handed over when no copy of the app is running to take it") {
 	CHECK(!one::desktop::runtime::hand_over("org.uione.tests.nobody-running", "/"));
+}
+
+namespace {
+
+	// An archive of posters, each with a screen of its own that steps to the one before or
+	// after it, and back to them all.
+	site archive_of(int count, memory_source& data, cards_spec shown) {
+		list posters;
+		for (int i = 0; i < count; ++i) posters.push_back(value(fields{{"id", std::format("p{}", i)}, {"title", std::format("Poster {}", i)}, {"image", ""}}));
+		data.set("studio::archive", "", value(fields{{"posters", posters}}));
+		site s{.name = "studio", .id = "org.uione.runtime-tests"};
+		s.look = tested_theme();
+		s.screens.push_back({"Posters", "/posters", "", [shown](page& p) {
+			                     cards_spec spec = shown;
+			                     spec.view = p.view("studio::archive");
+			                     return items(cards(p, std::move(spec)));
+		                     }});
+		s.screens.push_back({"Poster", "/posters/:poster", "", [](page& p) {
+			                     auto archive = p.view("studio::archive");
+			                     return items(step(p, {.view = archive, .list = "posters", .route = "/posters/:poster"}, "Previous", "previous", {"left"}),
+			                                  step(p, {.view = archive, .list = "posters", .route = "/posters/:poster", .next = true}, "Next", "next", {"right"}),
+			                                  link(p, "Posters", "/posters", "", {"escape"}));
+		                     }});
+		return s;
+	}
+
+	const one::desktop::key_event right_key{.symbol = one::desktop::keys::right, .text = ""};
+	const one::desktop::key_event left_key{.symbol = one::desktop::keys::left, .text = ""};
+	const one::desktop::key_event escape_key{.symbol = one::desktop::keys::escape, .text = ""};
+
+	// A window's view as it's kept up to date, with nowhere to draw it.
+	struct kept_window {
+		one::desktop::app::state app;
+		one::desktop::window::state w;
+		explicit kept_window(navigator& nav) {
+			w.owner = &app;
+			w.size = {900, 600};
+			w.look = tested_theme();
+			w.build = [&nav] { return drawn(nav); };
+		}
+		void update() {
+			one::desktop::detail::theme_in_use() = &tested_theme();
+			w.needs_building = true;
+			one::desktop::bring_up_to_date(w);
+		}
+		one::desktop::element* focused() { return one::desktop::detail::focused_in(*w.root); }
+		// What's at a place in it, clicked, as a press let go there is.
+		void click(one::desktop::point at) {
+			for (auto* e = w.root->hit(at); e; e = e->parent) {
+				if (e->click(at)) return;
+			}
+		}
+	};
+
+}  // namespace
+
+TEST("a record's screen steps to the one before or after it in its list, by its keys, in its place, and not past either end") {
+	memory_source data;
+	auto s = archive_of(4, data, {.view = {}, .list = "posters", .columns = {{"title", "Title"}}, .link = "/posters/:poster"});
+	navigator nav(s, data);
+	nav.open("/posters");
+	nav.open("/posters/p0");
+	// At the first, there's none before it: its button can't be pressed, nor its key.
+	std::size_t at_first = focusable_in(*built(nav)).size();
+	CHECK(!key(nav, left_key));
+	CHECK(nav.current().address() == "/posters/p0");
+	CHECK(key(nav, right_key));
+	CHECK(nav.current().address() == "/posters/p1");
+	CHECK(focusable_in(*built(nav)).size() == at_first + 1);
+	CHECK(nav.depth() == 2);
+	for (int i = 0; i < 2; ++i) {
+		CHECK(key(nav, right_key));
+		built(nav);
+	}
+	CHECK(nav.current().address() == "/posters/p3");
+	// Nor after the last: it doesn't go around.
+	CHECK(!key(nav, right_key));
+	CHECK(nav.current().address() == "/posters/p3");
+	CHECK(focusable_in(*built(nav)).size() == at_first);
+	CHECK(key(nav, left_key));
+	CHECK(nav.current().address() == "/posters/p2");
+	// And going back goes to the list, where it was opened from.
+	CHECK(nav.back());
+	CHECK(nav.current().address() == "/posters");
+	CHECK(nav.current().where_left().opened == "/posters/p2");
+}
+
+TEST("going back to cards, or opening them again, finds them scrolled where they were left, the card opened or stepped to last chosen, in view and with the keyboard") {
+	const one::desktop::key_event enter{.symbol = one::desktop::keys::enter, .text = ""};
+	for (std::string shape : {"list", "pictures", "mosaic"}) {
+		memory_source data;
+		cards_spec shown{.view = {}, .list = "posters", .columns = {{"title", "Title"}}, .link = "/posters/:poster"};
+		if (shape != "list") shown.picture = "image";
+		shown.mosaic = shape == "mosaic";
+		auto s = archive_of(40, data, shown);
+		navigator nav(s, data);
+		nav.open("/posters");
+		kept_window window(nav);
+		window.update();
+		one::desktop::deliver_wheel(window.w, {450, 350}, 0, 900);
+		float left = nav.current().where_left().scroll.peek();
+		CHECK(left > 0);
+		window.update();
+		// A card in the middle of what's shown opened, then stepped on from and back to.
+		window.click({450, 350});
+		std::string last = nav.current().address();
+		CHECK(last.starts_with("/posters/p"));
+		int number = std::stoi(last.substr(std::string("/posters/p").size()));
+		window.update();
+		for (const auto& k : {right_key, right_key, left_key, left_key}) {
+			CHECK(key(nav, k));
+			window.update();
+		}
+		CHECK(nav.current().address() == last);
+		// By the window's own back.
+		CHECK(nav.back());
+		window.update();
+		// Where it was, or as little further as brings the card wholly into view.
+		CHECK_SAYING(std::abs(nav.current().where_left().scroll.peek() - left) < 20, shape);
+		auto* chosen = window.focused();
+		CHECK(chosen);
+		if (!chosen) continue;
+		CHECK(chosen->shows_focus());
+		if (shape == "pictures") CHECK((chosen->frame.y >= 0 && chosen->frame.bottom() <= 600));
+		chosen->handle_key(enter);
+		CHECK(nav.current().address() == last);
+		// And by a link to the list, as Escape is on the record's screen.
+		window.update();
+		CHECK(key(nav, escape_key));
+		CHECK(nav.depth() == 3);
+		window.update();
+		CHECK_SAYING(std::abs(nav.current().where_left().scroll.peek() - left) < 20, shape);
+		chosen = window.focused();
+		CHECK(chosen);
+		if (!chosen) continue;
+		chosen->handle_key(enter);
+		CHECK(nav.current().address() == last);
+		// Stepped on past what was in view, it's brought into view.
+		window.update();
+		for (int i = 0; i < 12; ++i) {
+			CHECK(key(nav, right_key));
+			window.update();
+		}
+		CHECK(nav.back());
+		window.update();
+		CHECK(nav.current().where_left().opened == std::format("/posters/p{}", number + 12));
+		chosen = window.focused();
+		CHECK(chosen);
+		if (chosen && shape == "pictures") CHECK((chosen->frame.y >= 0 && chosen->frame.bottom() <= 600));
+		if (chosen) chosen->handle_key(enter);
+		CHECK(nav.current().address() == std::format("/posters/p{}", number + 12));
+	}
+}
+
+TEST("holding the arrow through records with large pictures keeps the window's loop free, and reads the picture shown, not each one passed") {
+	auto folder = std::filesystem::temp_directory_path() / "uione-cards-stepping";
+	std::filesystem::remove_all(folder);
+	std::filesystem::create_directories(folder / "files");
+	// Large enough to take far longer to read than a step, each its own file.
+	one::desktop::offscreen::write_png(folder / "files" / "p0.png", {1600, 1200, std::vector<std::uint8_t>(std::size_t{1600} * 1200 * 4, 90)});
+	for (int i = 1; i < 6; ++i) std::filesystem::copy_file(folder / "files" / "p0.png", folder / "files" / std::format("p{}.png", i));
+	struct kept_there : memory_source {
+		std::filesystem::path in;
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return in / kept; }
+	} data;
+	data.in = folder;
+	list posters;
+	for (int i = 0; i < 6; ++i) posters.push_back(value(fields{{"id", std::format("p{}", i)}, {"image", std::format("files/p{}.png", i)}}));
+	data.set("studio::archive", "", value(fields{{"posters", posters}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Poster", "/posters/:poster", "", [](page& p) {
+		                     auto archive = p.view("studio::archive");
+		                     return items(step(p, {.view = archive, .list = "posters", .route = "/posters/:poster", .next = true}, "Next", "next", {"right"}),
+		                                  picture_of(p, std::format("files/{}.png", p.param("poster")), false, 400));
+	                     }});
+	// How long one takes to read, on this machine.
+	auto started = std::chrono::steady_clock::now();
+	CHECK(one::desktop::picture::read(folder / "files" / "p0.png").has_value());
+	auto one_read = std::chrono::steady_clock::now() - started;
+	navigator nav(s, data);
+	one::desktop::runtime::hold_posted(true);
+	nav.open("/posters/p0");
+	built(nav);
+	auto longest = std::chrono::steady_clock::duration::zero();
+	for (int i = 0; i < 5; ++i) {
+		auto from = std::chrono::steady_clock::now();
+		CHECK(key(nav, right_key));
+		built(nav);
+		longest = std::max(longest, std::chrono::steady_clock::now() - from);
+	}
+	CHECK(nav.current().address() == "/posters/p5");
+	// Each step and the window built after it took far less than reading a picture.
+	CHECK(longest * 4 < one_read);
+	auto shown = [&](int i) { return picture_soon(nav.current(), std::format("files/p{}.png", i)); };
+	for (auto until = std::chrono::steady_clock::now() + 20 * one_read + std::chrono::seconds(5); !shown(5) && std::chrono::steady_clock::now() < until;) {
+		if (one::desktop::runtime::run_posted() == 0) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		built(nav);
+	}
+	CHECK(shown(5).has_value());
+	if (shown(5)) CHECK(shown(5)->width() == 1600);
+	// Those passed while another was read were let go, not read.
+	CHECK(!shown(2).has_value());
+	CHECK(!shown(3).has_value());
+	one::desktop::runtime::hold_posted(false);
+	std::filesystem::remove_all(folder);
+}
+
+namespace {
+
+	// A picture 1800 × 1000, red on its left, blue on its right, a green band across its
+	// top: fitted in a window 900 × 600, it's 900 × 500, black above and under it.
+	std::filesystem::path banded_picture(const std::filesystem::path& folder) {
+		std::vector<std::uint8_t> pixels(std::size_t{1800} * 1000 * 4, 255);
+		for (int y = 0; y < 1000; ++y) {
+			for (int x = 0; x < 1800; ++x) {
+				std::uint8_t* at = &pixels[(std::size_t(y) * 1800 + std::size_t(x)) * 4];
+				bool green = y < 100;
+				at[0] = !green && x < 900 ? 255 : 0;
+				at[1] = green ? 255 : 0;
+				at[2] = !green && x >= 900 ? 255 : 0;
+			}
+		}
+		std::filesystem::create_directories(folder / "files");
+		one::desktop::offscreen::write_png(folder / "files" / "banded.png", {1800, 1000, std::move(pixels)});
+		return folder;
+	}
+
+	// The window as it's drawn now, and what color it is at a place in it.
+	struct seen {
+		one::desktop::offscreen::image drawn;
+		std::array<int, 3> at(int x, int y) const {
+			const std::uint8_t* p = &drawn.rgba[(std::size_t(y) * std::size_t(drawn.width) + std::size_t(x)) * 4];
+			return {p[0], p[1], p[2]};
+		}
+	};
+	seen looked(one::desktop::window::state& w) {
+		return {one::desktop::offscreen::draw(w.size, 1, tested_theme().page, [&](one::desktop::canvas& c) {
+			one::desktop::detail::theme_in_use() = &tested_theme();
+			w.root->paint(c);
+		})};
+	}
+	const std::array<int, 3> black{0, 0, 0}, red{255, 0, 0}, blue{0, 0, 255}, green{0, 255, 0};
+
+}  // namespace
+
+TEST("a picture alone is all of its screen, fitted on black, its bars over it until it's been still, then hidden with the pointer, and a step leaves them so") {
+	auto folder = banded_picture(std::filesystem::temp_directory_path() / "uione-alone");
+	struct kept_there : memory_source {
+		std::filesystem::path in;
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return in / kept; }
+	} data;
+	data.in = folder;
+	auto s = archive_of(3, data, {.view = {}, .list = "posters", .columns = {{"title", "Title"}}, .link = "/posters/:poster"});
+	s.screens.back().build = [](page& p) {
+		auto archive = p.view("studio::archive");
+		return items(workspace(p, region{"toolbar", along(step(p, {.view = archive, .list = "posters", .route = "/posters/:poster"}, "Previous", "previous", {"left"}),
+		                                                  step(p, {.view = archive, .list = "posters", .route = "/posters/:poster", .next = true}, "Next", "next", {"right"}))},
+		                          region{"main", items(picture_alone(p, "files/banded.png", "/posters/:poster collage"))}, region{"status", along(text({words("Banded")}))}));
+	};
+	navigator nav(s, data);
+	nav.open("/posters");
+	nav.open("/posters/p0");
+	kept_window window(nav);
+	window.update();
+	window.update();
+	// Just opened, its bars are over it, the picture where it is without them.
+	CHECK(awake());
+	auto shown = looked(window.w);
+	CHECK(shown.at(450, 20) != black);
+	CHECK(shown.at(450, 590) != black);
+	CHECK(shown.at(200, 300) == red);
+	CHECK(shown.at(700, 300) == blue);
+	CHECK(one::desktop::cursor_at(window.w, {450, 300}) == one::desktop::cursor::normal);
+	std::size_t with_bars = focusable_in(*window.w.root).size();
+	// Still for long enough, they're gone, and so is the pointer; the picture hasn't moved.
+	rest();
+	window.update();
+	shown = looked(window.w);
+	CHECK(shown.at(450, 20) == black);
+	CHECK(shown.at(450, 590) == black);
+	CHECK(shown.at(450, 48) == black);
+	CHECK(shown.at(200, 52) == green);
+	CHECK(shown.at(200, 300) == red);
+	CHECK(focusable_in(*window.w.root).size() < with_bars);
+	CHECK(one::desktop::cursor_at(window.w, {450, 300}) == one::desktop::cursor::hidden);
+	// A step by its key leaves them hidden, the next picture fitted.
+	key_down(right_key);
+	CHECK(key(nav, right_key));
+	window.update();
+	CHECK(nav.current().address() == "/posters/p1");
+	CHECK(!awake());
+	CHECK(looked(window.w).at(450, 20) == black);
+	// Ctrl alone, as for the wheel, doesn't bring them back; another key does, and so
+	// does the pointer moving.
+	key_down({.symbol = 0xffe3, .text = "", .control = true});
+	CHECK(!awake());
+	key_down({.symbol = 'a', .text = "a"});
+	CHECK(awake());
+	window.update();
+	CHECK(looked(window.w).at(450, 20) != black);
+	rest();
+	wake();
+	CHECK(awake());
+	// Gone back to them all, and opened again, they're shown.
+	rest();
+	CHECK(key(nav, escape_key));
+	window.update();
+	nav.open("/posters/p2");
+	window.update();
+	CHECK(awake());
+	std::filesystem::remove_all(folder);
+}
+
+TEST("a side a toggle opens is a drawer over a picture alone, there while it's open whether the bars are resting or not, and closed until it's opened") {
+	auto folder = banded_picture(std::filesystem::temp_directory_path() / "uione-drawer");
+	struct kept_there : memory_source {
+		std::filesystem::path in;
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return in / kept; }
+	} data;
+	data.in = folder;
+	auto s = archive_of(2, data, {.view = {}, .list = "posters", .columns = {{"title", "Title"}}, .link = "/posters/:poster"});
+	s.screens.back().build = [](page& p) {
+		auto archive = p.view("studio::archive");
+		one::desktop::view drawer;
+		if (p.toggled("/posters/:poster about")) drawer = items(details(p, archive, {{"posters", "Posters"}}));
+		return items(workspace(p, region{"toolbar", along(toggle(p, "/posters/:poster about", "About", "info", std::vector<std::string>{"i"}))},
+		                          region{"main", items(picture_alone(p, "files/banded.png", "/posters/:poster collage"))}, region{"side", std::move(drawer), true}));
+	};
+	navigator nav(s, data);
+	nav.open("/posters");
+	nav.open("/posters/p0");
+	kept_window window(nav);
+	window.update();
+	window.update();
+	// Closed at first, the picture's right half is blue under the bars.
+	CHECK(!nav.current().toggled("/posters/:poster about"));
+	CHECK(looked(window.w).at(850, 300) == blue);
+	// Opened by its key, it's over the picture, and stays while the bars rest.
+	const one::desktop::key_event i_key{.symbol = 'i', .text = "i"};
+	key_down(i_key);
+	CHECK(key(nav, i_key));
+	window.update();
+	CHECK(looked(window.w).at(850, 300) != blue);
+	rest();
+	window.update();
+	auto shown = looked(window.w);
+	CHECK(shown.at(450, 20) == black);
+	CHECK(shown.at(850, 300) != blue);
+	CHECK(shown.at(200, 300) == red);
+	// Closed again, it's gone with them.
+	CHECK(key(nav, i_key));
+	rest();
+	window.update();
+	CHECK(looked(window.w).at(850, 300) == blue);
+	std::filesystem::remove_all(folder);
+}
+
+TEST("a step steps by itself every so long while its slideshow's toggle is on, the next picture read ahead, and stops at the end, at a key or a press, and opened afresh") {
+	memory_source data;
+	auto s = archive_of(3, data, {.view = {}, .list = "posters", .columns = {{"title", "Title"}}, .link = "/posters/:poster", .picture = "image"});
+	list posters;
+	for (int i = 0; i < 3; ++i) posters.push_back(value(fields{{"id", std::format("p{}", i)}, {"title", std::format("Poster {}", i)}, {"image", std::format("files/p{}.png", i)}}));
+	data.set("studio::archive", "", value(fields{{"posters", posters}}));
+	s.screens.back().build = [](page& p) {
+		auto archive = p.view("studio::archive");
+		return items(toggle(p, "/posters/:poster show", "Slideshow", "play", std::vector<std::string>{"s"}),
+		             step(p, {.view = archive, .list = "posters", .route = "/posters/:poster", .next = true, .opened = true, .every = 0.02, .while_on = "/posters/:poster show"}, "Next", "next",
+		                  std::vector<std::string>{"right"}));
+	};
+	navigator nav(s, data);
+	one::desktop::runtime::hold_posted(true);
+	auto opened = [&](const std::string& address) {
+		nav.open("/posters");
+		built(nav);
+		nav.open(address);
+		built(nav);
+	};
+	// Run for a while, or until it's at an address.
+	auto waited = [&](const std::string& at, std::chrono::milliseconds most) {
+		for (auto until = std::chrono::steady_clock::now() + most; nav.current().address() != at && std::chrono::steady_clock::now() < until;) {
+			if (one::desktop::runtime::run_posted() == 0) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			built(nav);
+		}
+	};
+	const one::desktop::key_event s_key{.symbol = 's', .text = "s"}, a_key{.symbol = 'a', .text = "a"};
+	auto pressed = [&](const one::desktop::key_event& e) {
+		key_down(e);
+		(void)key(nav, e);
+		built(nav);
+	};
+	auto playing = [&] { return nav.current().toggled("/posters/:poster show"); };
+	opened("/posters/p0");
+	// The picture the cards show for the next one, to read ahead.
+	CHECK(picture_shown_for(nav.current(), "/posters/p1") == "files/p1.png");
+	CHECK(picture_shown_for(nav.current(), "/posters/p9").empty());
+	// On, it steps on by itself to the end of the list, and goes off there.
+	pressed(s_key);
+	CHECK(playing());
+	waited("/posters/p2", std::chrono::seconds(5));
+	CHECK(nav.current().address() == "/posters/p2");
+	waited("", std::chrono::milliseconds(150));
+	CHECK(nav.current().address() == "/posters/p2");
+	CHECK(!playing());
+	// Any key stops it.
+	opened("/posters/p0");
+	pressed(s_key);
+	pressed(a_key);
+	CHECK(!playing());
+	waited("", std::chrono::milliseconds(100));
+	CHECK(nav.current().address() == "/posters/p0");
+	// So does its own toggle's key, which doesn't start it again; and a press.
+	pressed(s_key);
+	CHECK(playing());
+	pressed(s_key);
+	CHECK(!playing());
+	pressed(s_key);
+	input_heard();
+	CHECK(!playing());
+	waited("", std::chrono::milliseconds(100));
+	CHECK(nav.current().address() == "/posters/p0");
+	// Opened afresh, though it was left on, it starts off.
+	nav.current().toggle("/posters/:poster show");
+	CHECK(playing());
+	opened("/posters/p1");
+	CHECK(!playing());
+	one::desktop::runtime::hold_posted(false);
+}
+
+TEST("a record's screen reads the whole pictures of the records before and after it ahead, so a step draws the whole one in its first frame, and lets go of those stepped away from") {
+	auto folder = std::filesystem::temp_directory_path() / "uione-ahead";
+	std::filesystem::remove_all(folder);
+	std::filesystem::create_directories(folder / "files");
+	// Each a picture of stripes a pixel wide, black and white, which only the whole of it
+	// draws as they are at a pixel of it to a pixel of the window: a smaller copy grows gray.
+	for (int i = 0; i < 3; ++i) {
+		std::vector<std::uint8_t> pixels(std::size_t{1600} * 1000 * 4, 255);
+		for (std::size_t at = 0; at < std::size_t{1600} * 1000; ++at) {
+			if (at % 2 == 0) pixels[at * 4] = pixels[at * 4 + 1] = pixels[at * 4 + 2] = 0;
+		}
+		one::desktop::offscreen::write_png(folder / "files" / std::format("p{}.png", i), {1600, 1000, std::move(pixels)});
+	}
+	struct kept_there : memory_source {
+		std::filesystem::path in;
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return in / kept; }
+	} data;
+	data.in = folder;
+	auto s = archive_of(3, data, {.view = {}, .list = "posters", .columns = {{"title", "Title"}}, .link = "/posters/:poster"});
+	list posters;
+	for (int i = 0; i < 3; ++i) posters.push_back(value(fields{{"id", std::format("p{}", i)}, {"title", std::format("Poster {}", i)}, {"image", std::format("files/p{}.png", i)}}));
+	data.set("studio::archive", "", value(fields{{"posters", posters}}));
+	s.screens.back().build = [](page& p) {
+		auto archive = p.view("studio::archive");
+		return items(workspace(p, region{"toolbar", along(step(p, {.view = archive, .list = "posters", .route = "/posters/:poster", .picture = "image"}, "Previous", "previous", {"left"}),
+		                                                  step(p, {.view = archive, .list = "posters", .route = "/posters/:poster", .next = true, .picture = "image"}, "Next", "next", {"right"}))},
+		                          region{"main", items(picture_alone(p, std::format("files/{}.png", p.param("poster")), "/posters/:poster collage"))}));
+	};
+	navigator nav(s, data);
+	one::desktop::runtime::hold_posted(true);
+	nav.open("/posters/p0");
+	kept_window window(nav);
+	window.w.size = {1600, 1000};
+	window.update();
+	auto read = [&](int i) { return read_whole(nav.current(), std::format("files/p{}.png", i)); };
+	// A smaller copy of the next one, as cards would have, which would be drawn first
+	// were the whole one not read.
+	for (auto until = std::chrono::steady_clock::now() + std::chrono::seconds(20); !(read(0) && read(1) && picture_soon(nav.current(), "files/p1.png", 640)) && std::chrono::steady_clock::now() < until;) {
+		if (one::desktop::runtime::run_posted() == 0) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		window.update();
+	}
+	CHECK(read(0));
+	CHECK(read(1));
+	CHECK(picture_soon(nav.current(), "files/p1.png", 640).has_value());
+	rest();
+	key_down(right_key);
+	CHECK(key(nav, right_key));
+	window.update();
+	CHECK(nav.current().address() == "/posters/p1");
+	// Its first frame, nothing run since the step: the whole picture, stripe by stripe.
+	auto shown = looked(window.w);
+	auto a = shown.at(800, 500), b = shown.at(801, 500);
+	CHECK(((a == black && b == std::array<int, 3>{255, 255, 255}) || (b == black && a == std::array<int, 3>{255, 255, 255})));
+	// Beside it now, the one before is kept and the one after is read.
+	for (auto until = std::chrono::steady_clock::now() + std::chrono::seconds(20); !read(2) && std::chrono::steady_clock::now() < until;) {
+		if (one::desktop::runtime::run_posted() == 0) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		window.update();
+	}
+	CHECK(read(0));
+	CHECK(read(2));
+	// Stepped on again, the first is let go, as it's no longer beside the one shown.
+	key_down(right_key);
+	CHECK(key(nav, right_key));
+	window.update();
+	CHECK(nav.current().address() == "/posters/p2");
+	CHECK(!read(0));
+	CHECK(read(1));
+	CHECK(read(2));
+	one::desktop::runtime::hold_posted(false);
+	std::filesystem::remove_all(folder);
+}
+
+TEST("a picture alone fills its window, edge to edge, fitted on black, wide or tall, at any size and at any scale") {
+	auto folder = std::filesystem::temp_directory_path() / "uione-alone-fills";
+	std::filesystem::remove_all(folder);
+	std::filesystem::create_directories(folder / "files");
+	// A wide picture and a tall one, each white all over.
+	for (auto [name, w, h] : {std::tuple{"wide.png", 1800, 1000}, std::tuple{"tall.png", 1000, 1800}}) {
+		one::desktop::offscreen::write_png(folder / "files" / name, {w, h, std::vector<std::uint8_t>(std::size_t(w) * std::size_t(h) * 4, 255)});
+	}
+	struct kept_there : memory_source {
+		std::filesystem::path in;
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return in / kept; }
+	} data;
+	data.in = folder;
+	for (const char* name : {"wide.png", "tall.png"}) {
+		auto s = archive_of(1, data, {.view = {}, .list = "posters", .columns = {{"title", "Title"}}, .link = "/posters/:poster"});
+		s.screens.back().build = [name](page& p) {
+			auto archive = p.view("studio::archive");
+			return items(workspace(p, region{"toolbar", along(step(p, {.view = archive, .list = "posters", .route = "/posters/:poster", .next = true}, "Next", "next", {"right"}))},
+			                          region{"main", items(picture_alone(p, std::string("files/") + name, "/posters/:poster collage"))}, region{"status", along(text({words("Status")}))}));
+		};
+		navigator nav(s, data);
+		nav.open("/posters");
+		nav.open("/posters/p0");
+		kept_window window(nav);
+		for (auto [width, height, scale] : {std::tuple{900, 600, 1.0}, std::tuple{1600, 1000, 1.0}, std::tuple{1280, 800, 2.0}, std::tuple{700, 1100, 1.5}}) {
+			window.w.size = {width, height};
+			for (int built = 0; built < 3; ++built) {
+				window.update();
+				one::desktop::runtime::run_posted();
+			}
+			rest();
+			window.update();
+			auto drawn = one::desktop::offscreen::draw(window.w.size, scale, tested_theme().page, [&](one::desktop::canvas& c) {
+				one::desktop::detail::theme_in_use() = &tested_theme();
+				window.w.root->paint(c);
+			});
+			// Where it's white, in the window's own pixels, and so where the picture is.
+			int left = drawn.width, top = drawn.height, right = -1, bottom = -1;
+			for (int y = 0; y < drawn.height; ++y) {
+				for (int x = 0; x < drawn.width; ++x) {
+					const std::uint8_t* at = &drawn.rgba[(std::size_t(y) * std::size_t(drawn.width) + std::size_t(x)) * 4];
+					if (at[0] < 200 || at[1] < 200 || at[2] < 200) continue;
+					left = std::min(left, x), right = std::max(right, x), top = std::min(top, y), bottom = std::max(bottom, y);
+				}
+			}
+			bool wide = std::string(name) == "wide.png";
+			double fit = std::min(drawn.width / (wide ? 1800.0 : 1000.0), drawn.height / (wide ? 1000.0 : 1800.0));
+			double w = (wide ? 1800 : 1000) * fit, h = (wide ? 1000 : 1800) * fit;
+			CHECK_SAYING(std::abs((right - left + 1) - w) <= 2 && std::abs((bottom - top + 1) - h) <= 2,
+			             std::format("{} in {}x{} at {}: drawn {}x{} at {},{}, fitted is {:.0f}x{:.0f}", name, width, height, scale, right - left + 1, bottom - top + 1, left, top, w, h));
+			// Centered, so it touches two opposite edges of the window.
+			CHECK(std::abs(left - (drawn.width - 1 - right)) <= 2);
+			CHECK(std::abs(top - (drawn.height - 1 - bottom)) <= 2);
+		}
+	}
+	std::filesystem::remove_all(folder);
+}
+
+TEST("on a picture alone, left and right step through the list whatever has the keyboard, its bar's link, a step's button or a zoom button") {
+	auto folder = banded_picture(std::filesystem::temp_directory_path() / "uione-alone-keys");
+	struct kept_there : memory_source {
+		std::filesystem::path in;
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return in / kept; }
+	} data;
+	data.in = folder;
+	auto s = archive_of(12, data, {.view = {}, .list = "posters", .columns = {{"title", "Title"}}, .link = "/posters/:poster"});
+	s.screens.back().build = [](page& p) {
+		auto archive = p.view("studio::archive");
+		return items(workspace(p, region{"bar", along(link(p, "Posters", "/posters", "gallery", {"escape"}))},
+		                          region{"toolbar", along(step(p, {.view = archive, .list = "posters", .route = "/posters/:poster"}, "Previous", "previous", {"left"}),
+		                                                  step(p, {.view = archive, .list = "posters", .route = "/posters/:poster", .next = true}, "Next", "next", {"right"}),
+		                                                  collage_button(p, {.key = "/posters/:poster collage", .does = "zoom in", .label = "Larger", .icon = "zoom_in"}),
+		                                                  collage_button(p, {.key = "/posters/:poster collage", .does = "zoom out", .label = "Smaller", .icon = "zoom_out"}))},
+		                          region{"main", items(picture_alone(p, "files/banded.png", "/posters/:poster collage"))}));
+	};
+	navigator nav(s, data);
+	nav.open("/posters");
+	nav.open("/posters/p0");
+	one::desktop::app::state app;
+	one::desktop::window outer(std::make_unique<one::desktop::window::state>());
+	auto& w = outer.internals();
+	w.outside = &outer;
+	w.owner = &app;
+	w.size = {900, 600};
+	w.look = tested_theme();
+	w.build = [&nav] { return drawn(nav); };
+	outer.on_key = [&nav](const one::desktop::key_event& e) { return key(nav, e); };
+	auto update = [&] {
+		one::desktop::detail::theme_in_use() = &tested_theme();
+		w.needs_building = true;
+		one::desktop::bring_up_to_date(w);
+	};
+	update();
+	wake();
+	update();
+	std::size_t count = focusable_in(*w.root).size();
+	CHECK_SAYING(count >= 5, std::format("{} take the keyboard", count));
+	// Each of them given the keyboard in turn, right steps on, and left back and on again.
+	for (std::size_t i = 0; i < count; ++i) {
+		wake();
+		update();
+		auto all = focusable_in(*w.root);
+		for (auto* e : all) e->focused = false;
+		all[i]->focused = true;
+		std::string before = nav.current().address();
+		one::desktop::deliver_key(w, right_key);
+		update();
+		CHECK_SAYING(nav.current().address() == std::format("/posters/p{}", i + 1), std::format("right with {} of {} focused went to {}, from {}", i, count, nav.current().address(), before));
+		auto again = focusable_in(*w.root);
+		for (auto* e : again) e->focused = false;
+		again[std::min(i, again.size() - 1)]->focused = true;
+		one::desktop::deliver_key(w, left_key);
+		update();
+		CHECK(nav.current().address() == std::format("/posters/p{}", i));
+		one::desktop::deliver_key(w, right_key);
+		update();
+	}
+	std::filesystem::remove_all(folder);
+}
+
+TEST("a picture alone steps by a swipe across it at fit, a finger's, a drag's or three fingers' on a touchpad, following it, and not for one too short, nor while it's zoomed") {
+	auto folder = banded_picture(std::filesystem::temp_directory_path() / "uione-alone-swiped");
+	struct kept_there : memory_source {
+		std::filesystem::path in;
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return in / kept; }
+	} data;
+	data.in = folder;
+	auto s = archive_of(5, data, {.view = {}, .list = "posters", .columns = {{"title", "Title"}}, .link = "/posters/:poster"});
+	s.screens.back().build = [](page& p) {
+		auto archive = p.view("studio::archive");
+		return items(workspace(p, region{"toolbar", along(step(p, {.view = archive, .list = "posters", .route = "/posters/:poster"}, "Previous", "previous", {"left"}),
+		                                                  step(p, {.view = archive, .list = "posters", .route = "/posters/:poster", .next = true}, "Next", "next", {"right"}))},
+		                          region{"main", items(picture_alone(p, "files/banded.png", "/posters/:poster collage"))}));
+	};
+	navigator nav(s, data);
+	nav.open("/posters");
+	nav.open("/posters/p2");
+	kept_window window(nav);
+	window.update();
+	rest();
+	window.update();
+	auto left_edge = [&] {
+		auto shown = looked(window.w);
+		for (int x = 0; x < 900; ++x) {
+			if (shown.at(x, 300) != black) return x;
+		}
+		return -1;
+	};
+	CHECK(left_edge() == 0);
+	// Too short: it follows the finger, then goes back.
+	one::desktop::deliver_press(window.w, {500, 300}, 1);
+	one::desktop::deliver_pointer(window.w, {470, 300});
+	CHECK(left_edge() == 0);  // its left edge is under the window's, moved left
+	CHECK(looked(window.w).at(875, 300) == black);
+	one::desktop::deliver_release(window.w, {470, 300});
+	window.update();
+	CHECK(nav.current().address() == "/posters/p2");
+	CHECK(left_edge() == 0);
+	CHECK(looked(window.w).at(875, 300) != black);
+	// To the left, far enough: the next.
+	one::desktop::deliver_press(window.w, {600, 300}, 1);
+	one::desktop::deliver_pointer(window.w, {400, 300});
+	one::desktop::deliver_release(window.w, {400, 300});
+	window.update();
+	CHECK(nav.current().address() == "/posters/p3");
+	// Three fingers to the right: the one before, but not when they're called off.
+	one::desktop::deliver_swipe(window.w, {450, 300}, 150, 0, false);
+	one::desktop::deliver_swipe(window.w, {450, 300}, 0, 0, true);
+	window.update();
+	CHECK(nav.current().address() == "/posters/p3");
+	one::desktop::deliver_swipe(window.w, {450, 300}, 150, 0, false);
+	CHECK(left_edge() == 150);
+	one::desktop::deliver_swipe(window.w, {450, 300}, 200, 0, true);
+	window.update();
+	CHECK(nav.current().address() == "/posters/p2");
+	// Zoomed, a drag moves it about instead.
+	(void)looked(window.w);
+	one::desktop::deliver_pinch(window.w, {450, 300}, 2.f);
+	one::desktop::deliver_press(window.w, {600, 300}, 1);
+	one::desktop::deliver_pointer(window.w, {300, 300});
+	one::desktop::deliver_release(window.w, {300, 300});
+	window.update();
+	CHECK(nav.current().address() == "/posters/p2");
+	std::filesystem::remove_all(folder);
+}
+
+TEST("a picture alone is zoomed by Ctrl and its keys, its zoom buttons and a pinch, to 100% and back by a double click, and dragged about once it's larger, and stepping fits the next") {
+	auto folder = banded_picture(std::filesystem::temp_directory_path() / "uione-alone-zoomed");
+	struct kept_there : memory_source {
+		std::filesystem::path in;
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return in / kept; }
+	} data;
+	data.in = folder;
+	auto s = archive_of(3, data, {.view = {}, .list = "posters", .columns = {{"title", "Title"}}, .link = "/posters/:poster"});
+	s.screens.back().build = [](page& p) {
+		auto archive = p.view("studio::archive");
+		return items(workspace(p, region{"toolbar", along(step(p, {.view = archive, .list = "posters", .route = "/posters/:poster", .next = true}, "Next", "next", {"right"}))},
+		                          region{"main", items(picture_alone(p, "files/banded.png", "/posters/:poster collage"))}));
+	};
+	navigator nav(s, data);
+	nav.open("/posters");
+	nav.open("/posters/p0");
+	kept_window window(nav);
+	window.update();
+	window.update();
+	rest();
+	window.update();
+	const one::desktop::key_event larger{.symbol = '=', .text = "=", .control = true}, smaller{.symbol = '-', .text = "-", .control = true},
+	    fitted{.symbol = '0', .text = "0", .control = true};
+	// Fitted, a drag down doesn't move it: there's nowhere to move it to.
+	CHECK(looked(window.w).at(450, 40) == black);
+	one::desktop::deliver_press(window.w, {450, 300}, 1);
+	one::desktop::deliver_pointer(window.w, {450, 500});
+	CHECK(looked(window.w).at(450, 40) == black);
+	one::desktop::deliver_release(window.w, {450, 500});
+	// Larger by a quarter about its middle: 1125 × 625, past the window's top and foot.
+	CHECK(key(nav, larger));
+	CHECK(looked(window.w).at(450, 40) == green);
+	CHECK(looked(window.w).at(450, 590) != black);
+	CHECK(key(nav, smaller));
+	CHECK(looked(window.w).at(450, 40) == black);
+	// Smaller than fitted it doesn't go.
+	CHECK(key(nav, smaller));
+	CHECK(looked(window.w).at(450, 40) == black);
+	CHECK(looked(window.w).at(200, 300) == red);
+	// A zoom button asks it, as a collage is asked.
+	nav.current().kept<std::string>("collage do /posters/:poster collage").set("zoom in");
+	window.update();
+	CHECK(looked(window.w).at(450, 40) == green);
+	CHECK(key(nav, fitted));
+	CHECK(looked(window.w).at(450, 40) == black);
+	// Twice pressed, it's 100%, a pixel of it a pixel of the screen, about where it was
+	// pressed: what's under the pointer stays, and the green band's above the window.
+	one::desktop::deliver_press(window.w, {200, 300}, 1);
+	one::desktop::deliver_release(window.w, {200, 300});
+	one::desktop::deliver_press(window.w, {200, 300}, 2);
+	one::desktop::deliver_release(window.w, {200, 300});
+	auto shown = looked(window.w);
+	CHECK(shown.at(200, 300) == red);
+	CHECK(shown.at(450, 20) == red);
+	CHECK(shown.at(850, 300) == blue);
+	CHECK(shown.at(450, 590) != black);
+	// Larger than fits, it's dragged about: down, so its top comes into view, and no
+	// further than its edge however far it's dragged.
+	CHECK(one::desktop::cursor_at(window.w, {450, 300}) == one::desktop::cursor::hidden);
+	wake();
+	window.update();
+	CHECK(one::desktop::cursor_at(window.w, {450, 300}) == one::desktop::cursor::grab);
+	one::desktop::deliver_press(window.w, {450, 300}, 1);
+	CHECK(window.w.dragging != nullptr);
+	CHECK(one::desktop::cursor_at(window.w, {450, 300}) == one::desktop::cursor::grabbing);
+	one::desktop::deliver_pointer(window.w, {450, 500});
+	one::desktop::deliver_pointer(window.w, {450, 900});
+	one::desktop::deliver_release(window.w, {450, 900});
+	rest();
+	window.update();
+	shown = looked(window.w);
+	CHECK(shown.at(450, 50) == green);
+	CHECK(shown.at(450, 110) == red);
+	// Twice pressed again, it's fitted.
+	one::desktop::deliver_press(window.w, {450, 300}, 2);
+	one::desktop::deliver_release(window.w, {450, 300});
+	CHECK(looked(window.w).at(450, 40) == black);
+	// Pinched apart, larger, about where the fingers are.
+	one::desktop::deliver_pinch(window.w, {200, 300}, 1.5f);
+	shown = looked(window.w);
+	CHECK(shown.at(450, 40) != black);
+	CHECK(shown.at(200, 300) == red);
+	// Stepped on to the next picture, it's fitted, as one's first shown.
+	CHECK(key(nav, right_key));
+	window.update();
+	CHECK(nav.current().address() == "/posters/p1");
+	CHECK(looked(window.w).at(450, 40) == black);
+	std::filesystem::remove_all(folder);
+}
+
+namespace {
+
+	// Posters taken a few hours apart, newest first, from the end of October 2026 back,
+	// under a heading for each month as a mosaic, and the years and months beside them.
+	site dated_archive(int count, memory_source& data) {
+		using namespace std::chrono;
+		list posters;
+		auto newest = sys_days(year(2026) / October / day(30)) + hours(12);
+		for (int i = 0; i < count; ++i) {
+			value taken;
+			taken.type = value::kind::time;
+			taken.time.seconds = duration_cast<seconds>((newest - hours(30) * i).time_since_epoch()).count();
+			posters.push_back(value(fields{{"id", std::format("p{}", i)}, {"title", std::format("Poster {}", i)}, {"image", ""}, {"taken", taken}}));
+		}
+		data.set("studio::archive", "", value(fields{{"posters", posters}}));
+		site s{.name = "studio", .id = "org.uione.runtime-tests"};
+		s.look = tested_theme();
+		s.screens.push_back({"Posters", "/posters", "", [](page& p) {
+			                     auto archive = p.view("studio::archive");
+			                     return workspace(p, region{"main", items(cards(p, {.view = archive, .list = "posters", .columns = {{"title", "Title"}}, .link = "/posters/:poster", .picture = "image", .mosaic = true, .by = "taken", .unit = time_unit::month, .key = "/posters cards"}))},
+			                                      region{"side", items(dated_timeline(p, {.view = archive, .list = "posters", .by = "taken", .unit = time_unit::month, .cards = "/posters cards"}))});
+		                     }});
+		s.screens.push_back({"Poster", "/posters/:poster", "", [](page&) { return items(); }});
+		return s;
+	}
+
+	// What's drawn in a window: each mosaic, taking the keyboard with nothing made inside
+	// it until it's drawn, and the timeline, a row for each year and month.
+	void each_dated(one::desktop::element& e, std::vector<one::desktop::element*>& mosaics, one::desktop::element*& timeline) {
+		if (e.focusable() && e.children.empty()) mosaics.push_back(&e);
+		else if (e.focusable() && e.children.size() > 1) timeline = &e;
+		for (auto& child : e.children) each_dated(*child, mosaics, timeline);
+	}
+
+}  // namespace
+
+TEST("cards by a date are under a heading for each month, a mosaic's tiles starting again under each, and their timeline marks the month in view and scrolls one chosen to the top") {
+	use_time_zone("UTC");
+	memory_source data;
+	// 30 hours apart from October 30: 24 in October, 24 in September, 25 in August, the rest in July.
+	auto s = dated_archive(80, data);
+	navigator nav(s, data);
+	nav.open("/posters");
+	kept_window window(nav);
+	window.w.size = {1200, 700};
+	window.update();
+	(void)looked(window.w);
+	window.update();
+	std::vector<one::desktop::element*> mosaics;
+	one::desktop::element* timeline = nullptr;
+	each_dated(*window.w.root, mosaics, timeline);
+	CHECK(mosaics.size() == 4);
+	CHECK(timeline != nullptr);
+	if (mosaics.size() != 4 || !timeline) return;
+	CHECK(timeline->children.size() == 5);  // 2026, then each of its four months
+	// Each month's mosaic starts with its own tall tile, so its height is its count's.
+	float side = (mosaics[1]->frame.width - 32) / 3;
+	CHECK(std::abs(mosaics[0]->frame.height - (mosaic_rows(24) * side + (mosaic_rows(24) - 1) * 16)) < 2);
+	CHECK(std::abs(mosaics[2]->frame.height - (mosaic_rows(25) * side + (mosaic_rows(25) - 1) * 16)) < 2);
+	float top = mosaics[0]->frame.y;
+	auto marked = [&](std::size_t row) {
+		auto seen = looked(window.w);
+		auto& r = timeline->children[row]->frame;
+		return seen.at(static_cast<int>(r.x) + 2, static_cast<int>(r.y + r.height / 2)) != seen.at(static_cast<int>(timeline->frame.x) + 2, static_cast<int>(timeline->frame.bottom()) + 20);
+	};
+	// October is in view at first.
+	CHECK(marked(1));
+	CHECK(!marked(2));
+	// Chosen with the keyboard, August is scrolled to the top, and marked.
+	window.update();
+	each_dated(*window.w.root, mosaics = {}, timeline);
+	timeline->handle_key({.symbol = one::desktop::keys::down, .text = ""});
+	timeline->handle_key({.symbol = one::desktop::keys::down, .text = ""});
+	timeline->handle_key({.symbol = one::desktop::keys::down, .text = ""});
+	timeline->handle_key({.symbol = one::desktop::keys::enter, .text = ""});
+	window.update();
+	(void)looked(window.w);
+	window.update();
+	each_dated(*window.w.root, mosaics = {}, timeline);
+	CHECK_SAYING(std::abs(mosaics[2]->frame.y - top) < 30, std::format("{} {}", mosaics[2]->frame.y, top));
+	CHECK(marked(3));
+	CHECK(!marked(1));
+	// Scrolled back by the wheel to September, it's marked in its place.
+	one::desktop::deliver_wheel(window.w, {300, 300}, 0, -(mosaics[2]->frame.y - mosaics[1]->frame.y) + 10);
+	window.update();
+	(void)looked(window.w);
+	window.update();
+	each_dated(*window.w.root, mosaics = {}, timeline);
+	CHECK(marked(2));
+	CHECK(!marked(3));
+	// A click on one: July's heading at the top.
+	auto& july = timeline->children[4]->frame;
+	window.click({july.x + july.width / 2, july.y + july.height / 2});
+	window.update();
+	(void)looked(window.w);
+	window.update();
+	each_dated(*window.w.root, mosaics = {}, timeline);
+	CHECK_SAYING(std::abs(mosaics[3]->frame.y - top) < 30, std::format("{} {}", mosaics[3]->frame.y, top));
+	CHECK(marked(4));
+}
+
+TEST("twenty thousand cards by a date have their months worked out, and the oldest scrolled to, in a moment, drawing only what's in view") {
+	use_time_zone("UTC");
+	memory_source data;
+	auto s = dated_archive(20000, data);
+	navigator nav(s, data);
+	nav.open("/posters");
+	using clock = std::chrono::steady_clock;
+	auto rows = rows_of(nav.current().view("studio::archive").peek(), "posters");
+	auto started = clock::now();
+	auto entries = years_of(time_groups(rows, "taken", time_unit::month), time_unit::month);
+	auto months = clock::now() - started;
+	kept_window window(nav);
+	window.w.size = {1200, 700};
+	started = clock::now();
+	started = clock::now();
+	window.update();
+	(void)looked(window.w);
+	auto first = clock::now() - started;
+	std::vector<one::desktop::element*> mosaics;
+	one::desktop::element* timeline = nullptr;
+	each_dated(*window.w.root, mosaics, timeline);
+	CHECK(timeline != nullptr);
+	if (!timeline) return;
+	CHECK(timeline->children.size() == entries.size());
+	float top = mosaics.front()->frame.y;
+	started = clock::now();
+	// Scrolled, not built again, as the window does when it's chosen.
+	timeline->handle_key({.symbol = one::desktop::keys::end, .text = ""});
+	timeline->handle_key({.symbol = one::desktop::keys::enter, .text = ""});
+	one::desktop::bring_up_to_date(window.w);
+	(void)looked(window.w);
+	auto jump = clock::now() - started;
+	each_dated(*window.w.root, mosaics = {}, timeline);
+	CHECK_SAYING(std::abs(mosaics.back()->frame.y - top) < 30, std::format("{} {}", mosaics.back()->frame.y, top));
+	auto ms = [](auto d) { return std::chrono::duration<double, std::milli>(d).count(); };
+	std::fprintf(stderr, "    20000 cards in %zu months: months worked out in %.1f ms, first drawn in %.1f ms, the oldest month scrolled to and drawn in %.1f ms\n", mosaics.size(), ms(months), ms(first), ms(jump));
+	// Unoptimized and checked as these tests are built, a good deal slower than an app.
+	CHECK(ms(months) < 200);
+	CHECK(ms(jump) < 500);
+}
+
+TEST("a record's screen steps through the list it was opened from, cards or a table in its own order, and else through the first list that opens it, not past either end") {
+	memory_source data;
+	// By title in the archive, and newest first by year.
+	list by_title, by_year;
+	const std::pair<const char*, int> posters[] = {{"Arches", 1990}, {"Bridges", 2010}, {"Canyons", 2000}, {"Dunes", 2020}};
+	for (int i = 0; i < 4; ++i) by_title.push_back(value(fields{{"id", std::format("p{}", i)}, {"title", posters[i].first}, {"year", posters[i].second}}));
+	for (int i : {3, 1, 2, 0}) by_year.push_back(by_title[static_cast<std::size_t>(i)]);
+	data.set("studio::archive", "", value(fields{{"posters", by_title}}));
+	data.set("studio::by_year", "", value(fields{{"posters", by_year}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Posters", "/posters", "", [](page& p) {
+		                     return items(cards(p, {.view = p.view("studio::archive"), .list = "posters", .columns = {{"title", "Title"}}, .link = "/posters/:poster"}));
+	                     }});
+	s.screens.push_back({"Years", "/years", "", [](page& p) {
+		                     return items(table(p, {.view = p.view("studio::by_year"), .list = "posters", .columns = {{"title", "Title"}, {"year", "Year"}}, .link = "/posters/:poster"}));
+	                     }});
+	s.screens.push_back({"Poster", "/posters/:poster", "", [](page& p) {
+		                     auto archive = p.view("studio::archive");
+		                     return items(step(p, {.view = archive, .list = "posters", .route = "/posters/:poster", .opened = true}, "Previous", "previous", {"left"}),
+		                                  step(p, {.view = archive, .list = "posters", .route = "/posters/:poster", .next = true, .opened = true}, "Next", "next", {"right"}));
+	                     }});
+	navigator nav(s, data);
+	auto steps = [&](const one::desktop::key_event& k, int times) {
+		std::vector<std::string> went;
+		for (int i = 0; i < times; ++i) {
+			built(nav);
+			if (!key(nav, k)) break;
+			went.push_back(nav.current().address());
+		}
+		return went;
+	};
+	// Opened from the years, newest first: Dunes, Bridges, Canyons, Arches; and it stops at the end.
+	nav.open("/years");
+	built(nav);
+	nav.open("/posters/p1");
+	CHECK((steps(right_key, 4) == std::vector<std::string>{"/posters/p2", "/posters/p0"}));
+	CHECK((steps(left_key, 4) == std::vector<std::string>{"/posters/p2", "/posters/p1", "/posters/p3"}));
+	// Back at the years, what was stepped to last is what was opened from it.
+	CHECK(nav.back());
+	CHECK(nav.current().where_left().opened == "/posters/p3");
+	// Opened from the cards, by title.
+	nav.open("/posters");
+	built(nav);
+	nav.open("/posters/p1");
+	CHECK((steps(right_key, 4) == std::vector<std::string>{"/posters/p2", "/posters/p3"}));
+	// Opened by its address alone, it steps through the archive the screen names.
+	navigator alone(s, data);
+	alone.open("/posters/p0");
+	built(alone);
+	CHECK(key(alone, right_key));
+	CHECK(alone.current().address() == "/posters/p1");
 }

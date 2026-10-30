@@ -233,7 +233,7 @@ namespace one::screens {
 	// A field of a record by its path: a joined field whole, like assignee.name, and
 	// otherwise a name within a field of data, like stats.cpu.
 	value value_at(const value& record, const std::string& path);
-	// A value as it reads: 42%, 1.5 GiB, 3.2 MiB/s, or 12.5.
+	// A value as it reads: 42%, 1.5 GB, 3.2 MB/s, or 12.5, each K 1,024 of what's under it.
 	std::string read_value(double v, const std::string& unit);
 	// The top of a chart's scale: 100 for a percent, else the least round number at or
 	// above its highest value.
@@ -422,6 +422,54 @@ namespace one::screens {
 		std::vector<card_link> filters;
 	};
 	std::vector<card_model> cards_of(page_base& p, const cards_spec& spec);
+	// The address of the record a step goes to: the same screen for the row before or
+	// after the one the page's address names. None at either end, as it doesn't go
+	// around, nor while the list isn't there or doesn't hold the one shown.
+	std::string stepped_to(page_base& p, const step_spec& spec);
+	// The picture the list a record was opened from shows for the address a step goes to,
+	// where its cards show one, for it to be read ahead; or nothing.
+	std::string picture_shown_for(page_base& p, const std::string& to);
+	// The picture of the record a step goes to, `to`: as the list it was opened from shows
+	// it, or from the step's list's rows by the field the screen's picture alone shows.
+	std::string picture_stepped_to(page_base& p, const step_spec& spec, const std::string& to);
+
+	// A list ordered by a date, under a heading for each year, month or day of it as
+	// it's read here, in the list's own order: each heading's key, like 2026-10, what
+	// it says, like October 2026, and the rows under it, from the first, so a mosaic
+	// starts each from its own first tile. Rows that don't say a date are under one
+	// heading saying so. Worked out once each time the list changes, in one pass. The
+	// same as the web's.
+	struct time_group {
+		std::string key, title;
+		std::size_t first = 0, count = 0;
+	};
+	std::vector<time_group> time_groups(const std::vector<value>& rows, const std::string& field, time_unit by);
+	// What a timeline of them lists: each year, with how many it holds, and under it
+	// its months, each with its own count, as the list orders them; only the years when
+	// the headings are a year's. A month of headings by day is all of its days.
+	struct dated_entry {
+		std::string key, title;
+		std::size_t count = 0;
+		bool year = false;
+	};
+	std::vector<dated_entry> years_of(const std::vector<time_group>& groups, time_unit by);
+	// Whether a heading's key is in what a timeline's entry names, as 2026-10-12 is in
+	// 2026-10 and in 2026.
+	bool within(const std::string& key, const std::string& entry);
+
+	// Where the nth card of a mosaic goes, in its columns and rows: every 8 cards are
+	// two blocks, one above the other, each three equal columns by two rows as tall as
+	// a column is wide. In the first, its first card is a column wide and both rows
+	// tall at the left, its second two columns wide on the top row at the right, and
+	// its third and fourth a tile each under that; the second block is the first
+	// mirrored, its first card on the right. Worked out from n alone, so nothing moves
+	// as pictures come in. The same as the web's.
+	struct mosaic_place {
+		int column, row, columns, rows;
+	};
+	mosaic_place mosaic_tile(std::size_t n);
+	// How many rows a mosaic of `count` cards takes: the last block ends with them.
+	int mosaic_rows(std::size_t count);
 
 	// What find found in each list, and how many more.
 	struct found {

@@ -8,6 +8,11 @@ project(uione_terminal LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# Built optimized unless another build is asked for, here or by CMAKE_BUILD_TYPE in
+# the environment: unoptimized, a camera's picture takes seconds to read.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+	set(CMAKE_BUILD_TYPE Release CACHE STRING "how the app is built" FORCE)
+endif()
 
 # uione's libraries: a checkout of uione named by UIONE, or the release installed with
 # the compiler, in ~/.local/share/uione/0.18.0.

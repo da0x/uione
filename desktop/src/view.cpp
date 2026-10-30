@@ -170,15 +170,21 @@ namespace one::desktop {
 		if (w.root && (w.needs_placing || w.placed_at != w.size || w.placed_scale != w.scale)) {
 			w.root->place({0, 0, static_cast<float>(w.size.width), static_cast<float>(w.size.height)});
 			each_element(*w.root, [](element& e) {
-				if (!e.to_top || e.brought) return;
+				if ((!e.to_top && !e.in_view) || e.brought) return;
 				e.brought = true;
-				e.bring_to_top();
+				if (e.to_top) e.bring_to_top();
+				else e.reveal(e.frame);
 			});
 			w.placed_at = w.size;
 			w.placed_scale = w.scale;
 			w.needs_placing = false;
 			auto& input = w.owner->input;
-			if (input && input->pointer_over == &w) point_to(w, input->pointer_at);
+			if (input && input->pointer_over == &w) {
+				point_to(w, input->pointer_at);
+				// What it's over now may look otherwise, as a picture's pointer hides once
+				// it's been still.
+				point_again(w);
+			}
 		}
 	}
 
@@ -212,7 +218,14 @@ namespace one::desktop {
 				w.redraw();
 				return;
 			}
-			if (!e.control && !e.alt && !e.super && move_focus(w, e)) return;
+			// A key the window's own lines take, like left for the previous picture, is
+			// theirs before it moves the keyboard to what's beside.
+			if (w.outside->on_key && w.outside->on_key(e)) {
+				w.redraw();
+				return;
+			}
+			if (!e.control && !e.alt && !e.super) move_focus(w, e);
+			return;
 		}
 		if (w.outside->on_key && w.outside->on_key(e)) w.redraw();
 	}
@@ -222,6 +235,7 @@ namespace one::desktop {
 		in_window context(w);
 		if (w.dragging) w.dragging->drag(at);
 		point_to(w, at);
+		if (w.outside && w.outside->on_pointer) w.outside->on_pointer();
 		w.redraw();
 	}
 
@@ -235,6 +249,7 @@ namespace one::desktop {
 	void deliver_press(window::state& w, one::desktop::point at, int clicks) {
 		bring_up_to_date(w);
 		in_window context(w);
+		if (w.outside && w.outside->on_press) w.outside->on_press();
 		if (!w.root) return;
 		detail::close_popovers_outside(at);
 		element* target = detail::popover_hit(at);
@@ -279,6 +294,30 @@ namespace one::desktop {
 		for (element* e = w.root->hit(at); e; e = e->parent) {
 			if (e->wheel(at, dx, dy)) {
 				point_to(w, at);
+				w.redraw();
+				return;
+			}
+		}
+	}
+
+	void deliver_pinch(window::state& w, one::desktop::point at, float by) {
+		bring_up_to_date(w);
+		in_window context(w);
+		if (!w.root) return;
+		for (element* e = w.root->hit(at); e; e = e->parent) {
+			if (e->pinch(at, by)) {
+				w.redraw();
+				return;
+			}
+		}
+	}
+
+	void deliver_swipe(window::state& w, one::desktop::point at, float dx, float dy, bool ended) {
+		bring_up_to_date(w);
+		in_window context(w);
+		if (!w.root) return;
+		for (element* e = w.root->hit(at); e; e = e->parent) {
+			if (e->swipe(at, dx, dy, ended)) {
 				w.redraw();
 				return;
 			}

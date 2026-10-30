@@ -6,14 +6,19 @@
 # fails while this differs from what's so, so it only ever gets shorter; a new
 # target starts with everything here and is done when none of its lines are left.
 # A terminal draws no pictures, so it can't show one alone, on a card or a table's
-# row, crop one in place, match a collage's colors, or copy, save or keep a picture of
+# row, set cards as a mosaic of them, take one dropped on cards, crop one in place, match a collage's colors, or copy, save or keep a picture of
 # a collage, nor save or copy one as SVG yet, and it has no screen of its own to take a screenshot of, nor pictures to
 # choose from files, a calendar's rows are moved by its commands, not dragged, and what's
 # said as a row's time comes is the bell and its words, without buttons. A paper is
 # written on in place, which a terminal doesn't do yet, and a collage's layer is drawn
 # or reshaped by a pointer's drag, or picked as a group, raised, lowered or zoomed, which a terminal has none of; nor does it pick colors yet.
 terminal cards.picture
+terminal cards.paste
+terminal cards.mosaic
+terminal cards.by
+terminal timeline.by
 terminal picture
+terminal picture.alone
 terminal collage.copy
 terminal collage.crop
 terminal collage.draw
@@ -31,6 +36,7 @@ terminal collage.save
 terminal collage.screenshot
 terminal collage.svg
 terminal pictures.choose
+terminal pictures.folder
 terminal calendar.move
 terminal notify.buttons
 terminal table.picture

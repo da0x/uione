@@ -1765,11 +1765,12 @@ namespace one::language {
             bool groups = at_word("group") && peek(1).kind == token_kind::identifier && peek(1).text == "picked";
             bool collage_does = ((at_word("crop") || at_word("paste") || at_word("screenshot") || at_word("ungroup") || at_word("raise") || at_word("lower")) && alone) || as_picture || zooms || groups ||
                                 ((at_word("edit") || at_word("add")) && peek(1).kind == token_kind::identifier && peek(1).text == "words") ||
-                                (at_word("add") && peek(1).kind == token_kind::identifier && peek(1).text == "pictures");
+                                (at_word("add") && peek(1).kind == token_kind::identifier && (peek(1).text == "pictures" || peek(1).text == "folder"));
             if (collage_does) {
                 collage_button button;
                 std::string first = advance().text;
                 bool pictures = first == "add" && peek().text == "pictures";
+                bool folder = first == "add" && peek().text == "folder";
                 if (first == "edit" || first == "add") advance();
                 std::string zoom = first == "zoom" ? advance().text : "";
                 if (first == "group") advance();
@@ -1795,6 +1796,7 @@ namespace one::language {
                               : zoom == "to"          ? collage_button::kind::zoom_fit
                               : first == "edit"       ? collage_button::kind::edit_words
                               : pictures              ? collage_button::kind::add_pictures
+                              : folder                ? collage_button::kind::add_folder
                                                       : collage_button::kind::add_words;
                 if (at(token_kind::string)) button.label = advance().text;
                 parse_icon(button.icon, button.icon_where);
@@ -1973,7 +1975,17 @@ namespace one::language {
             if (at_word("link") && peek(1).kind != token_kind::scope) {
                 advance();
                 content_link link;
-                if (at(token_kind::route)) {
+                if ((at_word("previous") || at_word("next")) && peek(1).kind == token_kind::identifier && peek(1).text == "in") {
+                    link.step = advance().text;
+                    advance();
+                    link.step_view = parse_qualified_name("the view whose list it steps through, like library.things");
+                    if (at(token_kind::dot)) {
+                        advance();
+                        link.step_list = expect(token_kind::identifier, "which of the view's lists, like things").text;
+                    }
+                } else if ((at_word("previous") || at_word("next")) && peek(1).kind == token_kind::string) {
+                    link.step = advance().text;  // link next "Next": through the list it was opened from
+                } else if (at(token_kind::route)) {
                     link.target = advance().text;
                 } else if (at(token_kind::anchor)) {
                     link.target = "#" + advance().text;
@@ -1991,7 +2003,7 @@ namespace one::language {
                     link.built_where = peek().where;
                     link.built = expect(token_kind::identifier, "what the site was built from, release or source").text;
                 } else {
-                    fail_expecting("where the link goes, like /docs, #waitlist, namespace projects or \"https://example.com\"");
+                    fail_expecting("where the link goes, like /docs, #waitlist, namespace projects, \"https://example.com\" or next in library.things");
                 }
                 link.label = expect(token_kind::string, "the link's text").text;
                 if (at_word("icon")) {
@@ -2000,6 +2012,18 @@ namespace one::language {
                     link.icon = expect(token_kind::identifier, "the icon it's drawn as, like workflow").text;
                 }
                 parse_keys(link.keys);
+                // every 4 seconds while slideshow
+                if (!link.step.empty() && at_word("every")) {
+                    advance();
+                    link.every_where = peek().where;
+                    link.every = std::stod(expect(token_kind::number, "how many seconds apart it steps, like every 4 seconds").text);
+                    const token& unit = expect(token_kind::identifier, "seconds, like every 4 seconds");
+                    if (unit.text != "seconds" && unit.text != "second") fail(unit.where, "it steps every so many seconds, like every 4 seconds, not " + unit.text);
+                    if (!at_word("while")) fail_expecting("while and the toggle it steps while, like every 4 seconds while slideshow");
+                    advance();
+                    link.every_while_where = peek().where;
+                    link.every_while = expect(token_kind::identifier, "the toggle it steps while, like slideshow").text;
+                }
                 end_line();
                 return {where, std::move(link)};
             }
@@ -2412,12 +2436,13 @@ namespace one::language {
                 return {where, std::move(pipeline), std::move(shown_when)};
             }
             // collage poster_page.layers size width height { ... }: a picture made of layers.
-            // picture poster.preview fit: the file a value holds, shown.
+            // picture poster.preview fit: the file a value holds, shown; alone, all of its screen.
             if (at_word("picture") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::dot) {
                 advance();
                 picture_item picture;
                 picture.source = parse_expression();
                 if (at_word("fit") || at_word("fill")) picture.fit = advance().text == "fit";
+                if (at_word("alone")) picture.alone_where = advance().where, picture.alone = true;
                 expression_ptr shown_when = shown_while();
                 end_line();
                 return {where, std::move(picture), std::move(shown_when)};
@@ -2553,7 +2578,7 @@ namespace one::language {
             }
             // layers drawing_page.layers { hide layer::show  order layer::update  delete layer::delete }:
             // the screen's collage's layers as a list.
-            if (at_word("layers") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::dot) {
+            if (at_word("layers") && peek(1).kind == token_kind::identifier && (peek(2).kind == token_kind::dot || peek(2).kind == token_kind::scope)) {
                 advance();
                 layers_item layers;
                 layers.view = parse_qualified_name("the view whose list is the collage's layers, like drawing_page");
@@ -2894,6 +2919,19 @@ namespace one::language {
                     advance();
                     cards.list = expect(token_kind::identifier, "the view's list, like boards").text;
                 }
+                // mosaic: their pictures set as a mosaic, each filling its tile.
+                if (at_word("mosaic")) {
+                    cards.mosaic_where = advance().where;
+                    cards.mosaic = true;
+                }
+                // by picture_date month: under a heading for each month of the date.
+                if (at_word("by")) {
+                    advance();
+                    cards.by_where = peek().where;
+                    cards.by = expect(token_kind::identifier, "the date the list is ordered by, like by picture_date month").text;
+                    if (!at_word("year") && !at_word("month") && !at_word("day")) fail_expecting("year, month or day, as in by picture_date month");
+                    cards.by_unit = advance().text;
+                }
                 if (at_word("link")) {
                     advance();
                     cards.link_where = peek().where;
@@ -2919,6 +2957,20 @@ namespace one::language {
                             cards.picture_where = peek().where;
                             cards.picture = advance().text;
                             if (at_word("fit") || at_word("fill")) cards.picture_sits = advance().text;
+                            end_line();
+                            continue;
+                        }
+                        // add piece::create: what each picture dropped, pasted or chosen is made a record by.
+                        if (at_word("add") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::scope) {
+                            advance();
+                            cards.add = parse_qualified_name("the command each picture is made a record by, like piece::create");
+                            end_line();
+                            continue;
+                        }
+                        // paste: pictures dropped on them, or pasted or chosen by the screen's buttons, each made a record by add.
+                        if (at_word("paste") && (peek(1).kind == token_kind::newline || peek(1).kind == token_kind::right_brace)) {
+                            cards.paste_where = advance().where;
+                            cards.paste = true;
                             end_line();
                             continue;
                         }
@@ -3022,6 +3074,12 @@ namespace one::language {
                         field.where = peek().where;
                         field.value = parse_postfix();
                         if (at(token_kind::string)) field.label = advance().text;
+                        // picture_bytes "Size" as bytes
+                        if (at_word("as") && peek(1).kind == token_kind::identifier && peek(1).text == "bytes") {
+                            advance();
+                            advance();
+                            field.bytes = true;
+                        }
                         details.fields.push_back(std::move(field));
                     }
                     end_line();
@@ -3083,7 +3141,15 @@ namespace one::language {
                     end_line();
                     return {where, thread_item{std::move(view), std::move(list)}};
                 }
-                timeline_item timeline{std::move(view), std::move(list), std::nullopt, {}, std::nullopt, nullptr, {}, std::nullopt, {}};
+                timeline_item timeline{std::move(view), std::move(list), std::nullopt, {}, std::nullopt, nullptr, {}, std::nullopt, {}, std::nullopt, {}};
+                // timeline library.photos by picture_date: the years and months of the cards by it.
+                if (at_word("by")) {
+                    advance();
+                    timeline.by_where = peek().where;
+                    timeline.by = expect(token_kind::identifier, "the date its cards are under headings by, like by picture_date").text;
+                    end_line();
+                    return {where, std::move(timeline)};
+                }
                 if (at(token_kind::string)) timeline.title = advance().text;
                 if (at_word("link")) {
                     advance();

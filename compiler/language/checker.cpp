@@ -150,6 +150,7 @@ namespace one::language {
         std::vector<std::string> targets_;  // the apps being built, which say what files a component needs
         std::map<std::string, scope> scopes_;  // by namespace, "" is the top level
         std::map<std::string, origin> routes_;
+        std::set<std::string> opened_routes_;  // the screens a list's rows open, as a record's
         // The app's Stripe webhook, which names Stripe's customer, and its namespace.
         const webhook_declaration* stripe_ = nullptr;
         std::string stripe_ns_;
@@ -201,7 +202,9 @@ namespace one::language {
         std::map<std::string, std::set<std::string>> choices_;  // and those over an enum, each choice pressed
         std::map<std::string, const view_each*> picks_;  // and its picks, each the list it picks a row of
         std::vector<const collage_item*> collages_;      // and its collages, which its collage buttons act on
+        bool alone_ = false;                             // and whether it's only its picture, which its zoom buttons act on too
         std::vector<const paper_item*> papers_;          // and its papers, which its insert buttons act on
+        std::vector<const cards_item*> cards_;           // and its cards, which its paste and add pictures buttons may go into
         bool in_toolbar_ = false;        // whether what's being checked is in a workspace's toolbar
 
         std::string prefix_of(const std::string& ns) const {
@@ -302,6 +305,9 @@ namespace one::language {
                                            "; the first is at " + first_seen(it->second));
                     }
                 } else if (auto* s = std::get_if<screen_declaration>(&d.node)) {
+                    std::vector<opening_list> lists;
+                    lists_opening(s->items, lists);
+                    for (const auto& l : lists) opened_routes_.insert(full_route(ns, l.link));
                     std::vector<std::string> routes{full_route(ns, s->route)};
                     // A screen of markdown pages, like /docs/:page, is at /docs too, where
                     // it shows its first page.
@@ -988,7 +994,9 @@ namespace one::language {
                 for (const auto& item : list) {
                     auto* text = std::get_if<content_text>(&item.node);
                     auto* block = std::get_if<content_block>(&item.node);
-                    if ((text && text->type == content_text::kind::text) || std::holds_alternative<content_link>(item.node)) {
+                    if (auto* l = std::get_if<content_link>(&item.node); l && !l->step.empty()) {
+                        error(item.where, "a footer is on every screen, so its links can't step from record to record");
+                    } else if ((text && text->type == content_text::kind::text) || std::holds_alternative<content_link>(item.node)) {
                         continue;
                     } else if (block && block->type == content_block::kind::section && !in_section) {
                         items(block->items, true);
@@ -2290,8 +2298,11 @@ namespace one::language {
             const entity_declaration* subject = v.per && *v.per != "user" ? find_entity(ns, qualified_name{{*v.per}, where}) : nullptr;
             context plain{ns, nullptr, nullptr, {}, true, subject};
             for (const auto& value : v.values) {
-                if (counted_rows(v, value).list) {
-                    verify_row_count(v, value);
+                if (auto counted = counted_rows(v, value); counted.list) {
+                    verify_row_count(v, value, counted);
+                } else if (auto summed = summed_rows(v, value); summed.list) {
+                    verify_row_count(v, value, summed);
+                    verify_row_sum(ns, summed, value);
                 } else {
                     verify_view_value(plain, value);
                 }
@@ -2517,9 +2528,9 @@ namespace one::language {
         // unread = count(changes where created_at > seen): the rows of one of the view's
         // own lists, each test a field its rows hold, compared with another of the
         // view's values.
-        void verify_row_count(const view_declaration& v, const view_value& value) {
+        void verify_row_count(const view_declaration& v, const view_value& value, const row_count& counted) {
             snake_parts(*value.name, value.where);
-            auto [list, w] = counted_rows(v, value);
+            auto [list, w] = counted;
             if (!w) return;
             auto holds = [&](const std::string& name) {
                 return std::any_of(list->rows.begin(), list->rows.end(), [&](const view_value& row) {
@@ -2528,7 +2539,7 @@ namespace one::language {
             };
             auto valued = [&](const std::string& name) {
                 return std::any_of(v.values.begin(), v.values.end(), [&](const view_value& other) {
-                    return other.name && *other.name == name && &other != &value && !counted_rows(v, other).list;
+                    return other.name && *other.name == name && &other != &value && !counted_rows(v, other).list && !summed_rows(v, other).list;
                 });
             };
             std::function<void(const expression&)> test = [&](const expression& e) {
@@ -2555,6 +2566,18 @@ namespace one::language {
                 }
             };
             test(*w->condition);
+        }
+
+        // size = sum(clippings).picture_bytes: a number its rows hold, listed in its block.
+        void verify_row_sum(const std::string& ns, const row_sum& summed, const view_value& value) {
+            const entity_declaration* rows = listed_entity(ns, *summed.list);
+            const field* f = rows ? find_field(*rows, summed.field) : nullptr;
+            bool held = std::ranges::any_of(summed.list->rows, [&](const view_value& row) { return row.name ? *row.name == summed.field : written(*row.value) == summed.field; });
+            if (rows && (!f || !f->type || f->type->text() != "number" || f->list)) {
+                error(value.value->where, "sum adds up a number, and " + rows->name + " holds no number " + summed.field);
+            } else if (!held) {
+                error(value.value->where, *summed.list->name + "'s rows don't hold " + summed.field + "; list it in its block to add it up");
+            }
         }
 
         // stage.title, a field through what it points at, is snake_case in each part.
@@ -2609,10 +2632,56 @@ namespace one::language {
             statements(ns, f.body, nullptr, context{ns, nullptr, nullptr, f.parameters, false});
         }
 
+        // link next in library.things: a screen whose address names one record steps to
+        // the one after it in a list of them, so the list is of what the address names,
+        // in a view the screen reads whole, not one per record.
+        void step(const std::string& ns, const std::string& screen_route, const content_link& link, location where) {
+            // every 4 seconds while slideshow: a toggle of this screen's, on or off alone.
+            if (!link.every_while.empty()) {
+                if (link.every <= 0) error(link.every_where, "a link " + link.step + " steps every so many seconds, more than none, like every 4 seconds");
+                if (!toggles_.contains(link.every_while) || choices_.contains(link.every_while)) {
+                    error(link.every_while_where, "there's no toggle " + link.every_while + " on this screen for it to step while; add one, like toggle " + link.every_while + " \"Slideshow\" icon play key s");
+                }
+            }
+            // With no list, through the one it was opened from, so some list opens it.
+            if (!link.step_view) {
+                if (screen_route.rfind("/:") == std::string::npos) {
+                    error(where, "a link " + link.step + " steps from one record to another, so its screen's address names one, like /things/:thing");
+                } else if (!opened_routes_.contains(screen_route)) {
+                    error(where, "a link " + link.step + " with no list steps through the one its record was opened from, and no list's rows open " + screen_route +
+                                     "; say which it steps through, like link " + link.step + " in library.things");
+                }
+                return;
+            }
+            const view_declaration* view = find(ns, *link.step_view, &scope::views);
+            if (view && view->per) {
+                error(link.step_view->where, "view " + link.step_view->text() + " is one per " + *view->per + ", so its list changes with each record; step through a view of them all");
+                return;
+            }
+            const view_each* rows = named_list(ns, *link.step_view, link.step_list, screen_route);
+            if (!rows) return;
+            std::size_t at = screen_route.rfind("/:");
+            if (at == std::string::npos) {
+                error(where, "a link " + link.step + " steps from one record to another, so its screen's address names one, like /things/:thing");
+                return;
+            }
+            std::string last = screen_route.substr(at + 2);
+            if (last.ends_with("*")) last.pop_back();
+            const entity_declaration* listed = listed_entity(ns, *rows);
+            if (listed && listed->name != last) {
+                error(link.step_view->where, link.step_view->text() + (link.step_list.empty() ? "" : "." + link.step_list) + " lists " + listed->name +
+                                                 "s, and this screen's address names a " + last + ", so it can't step through them");
+            }
+        }
+
         // A link opens a screen that's there: one written as an address matches a
         // screen's, with any :parameter standing for one part, and a namespace has a
         // screen at its own address.
         void link(const std::string& ns, const std::string& screen_route, const content_link& link, location where) {
+            if (!link.step.empty()) {
+                step(ns, screen_route, link, where);
+                return;
+            }
             if (link.namespace_name) {
                 snake(*link.namespace_name);
                 std::string name = link.namespace_name->text();
@@ -2728,6 +2797,24 @@ namespace one::language {
                     }
                 }
             }
+            // A picture alone is all of a workspace's screen, its bars over it, so it's
+            // the only line of main, and shown whole.
+            alone_ = false;
+            std::function<void(const std::vector<screen_item>&, const content_block*)> alone = [&](const std::vector<screen_item>& inside, const content_block* in) {
+                for (const auto& item : inside) {
+                    if (auto* block = std::get_if<content_block>(&item.node)) alone(block->items, block);
+                    auto* picture = std::get_if<picture_item>(&item.node);
+                    if (!picture || !picture->alone) continue;
+                    alone_ = true;
+                    if (layout != "workspace") {
+                        error(picture->alone_where, "a picture alone is all of a workspace's screen, its bars drawn over it, so its screen says layout workspace");
+                    } else if (!in || in->type != content_block::kind::region || in->title != "main" || in->items.size() != 1) {
+                        error(picture->alone_where, "a picture alone is all of its screen, so it's the only line in main, as in main { picture clipping_page.image fit alone }");
+                    }
+                    if (!picture->fit) error(picture->alone_where, "a picture alone is shown whole, fitted in, so it says fit alone");
+                }
+            };
+            alone(s.items, nullptr);
             // Its toggles, each named once, so its whens can read them wherever they are.
             toggles_.clear();
             choices_.clear();
@@ -2773,10 +2860,12 @@ namespace one::language {
             picks(s.items);
             collages_.clear();
             papers_.clear();
+            cards_.clear();
             std::function<void(const std::vector<screen_item>&)> collages = [&](const std::vector<screen_item>& inside) {
                 for (const auto& item : inside) {
                     if (auto* c = std::get_if<collage_item>(&item.node)) collages_.push_back(c);
                     if (auto* paper = std::get_if<paper_item>(&item.node)) papers_.push_back(paper);
+                    if (auto* cards = std::get_if<cards_item>(&item.node)) cards_.push_back(cards);
                     if (auto* block = std::get_if<content_block>(&item.node)) collages(block->items);
                 }
             };
@@ -3324,9 +3413,9 @@ namespace one::language {
                 "edit",   "add",    "follow", "following", "settings", "workflow", "delete", "archive", "robot",   "building", "database",   "code",
                 "connect", "shield", "cloud", "chart",     "spark",    "people",   "lock",   "globe",   "layers",  "crop",     "copy",       "raise",
                 "lower",  "rotate_left", "rotate_right", "flip_horizontal", "flip_vertical", "check", "close", "paste", "save", "undo", "redo",
-                "text",   "screenshot", "picture", "gallery", "fullscreen", "sun", "moon", "bold", "smaller", "larger", "fill", "fit", "stretch",
+                "text",   "screenshot", "picture", "folder", "gallery", "fullscreen", "sun", "moon", "bold", "smaller", "larger", "fill", "fit", "stretch",
                 "center", "color", "edges", "blend", "harmonize", "clear", "square", "rounded", "pointer", "rectangle", "ellipse", "line", "italic", "magic", "align_left", "align_center", "align_right",
-                "title", "heading", "quote", "equation", "book", "letters", "quill", "typewriter", "coffee", "eye", "eye_off", "opacity", "spectrum", "zoom_in", "zoom_out", "zoom_fit", "star", "polygon", "cut", "group", "ungroup", "chevron_right", "chevron_down", "spread", "contents", "calendar", "bell", "inbox", "previous", "next"};
+                "title", "heading", "quote", "equation", "book", "letters", "quill", "typewriter", "coffee", "eye", "eye_off", "opacity", "spectrum", "zoom_in", "zoom_out", "zoom_fit", "star", "polygon", "cut", "group", "ungroup", "chevron_right", "chevron_down", "spread", "contents", "calendar", "bell", "inbox", "previous", "next", "info", "play"};
             if (name && !known.contains(*name)) error(where, "there's no icon " + *name + nearest(*name, {known.begin(), known.end()}));
         }
 
@@ -3416,6 +3505,8 @@ namespace one::language {
                         for (const auto& inside : block->items) {
                             if (!std::holds_alternative<content_link>(inside.node)) {
                                 error(inside.where, "a menu holds links, like link /settings \"General\"");
+                            } else if (!std::get<content_link>(inside.node).step.empty()) {
+                                error(inside.where, "a menu's links each open a screen, so stepping from record to record is a link of the screen's own");
                             }
                         }
                     }
@@ -3471,6 +3562,14 @@ namespace one::language {
                                 }
                             }
                             if (!has) error(f.where, "view " + details->view.text() + " has no " + key + " to show");
+                            // Only a number of bytes is said as KB, MB or GB.
+                            const entity_declaration* per = f.bytes && view->per ? find_entity(ns, qualified_name{{*view->per}, f.where}) : nullptr;
+                            for (const auto& v : view->values) {
+                                if (!per) break;
+                                auto* member = std::get_if<member_expression>(&v.value->node);
+                                const field* named = member && (v.name ? *v.name : written(*v.value)) == key ? find_field(*per, member->member) : nullptr;
+                                if (named && (!named->type || named->type->text() != "number" || named->list)) error(f.where, key + " isn't a number, so it isn't said as bytes");
+                            }
                         }
                         if (details->tint && std::none_of(view->values.begin(), view->values.end(), [&](const view_value& v) { return (v.name ? *v.name : written(*v.value)) == *details->tint; })) {
                             error(details->tint_where, "view " + details->view.text() + " has no " + *details->tint + " to tint by");
@@ -3485,6 +3584,13 @@ namespace one::language {
                     }
                 } else if (auto* thread = std::get_if<thread_item>(&item.node)) {
                     verify_listing(ns, thread->view, thread->list, route, false, {"body", "author.name"});
+                } else if (auto* timeline = std::get_if<timeline_item>(&item.node); timeline && timeline->by) {
+                    // The years and months of cards under headings by the same date, on this screen.
+                    snake(timeline->view);
+                    bool beside = std::ranges::any_of(cards_, [&](const cards_item* c) { return c->view.text() == timeline->view.text() && c->list.value_or("") == timeline->list && c->by == timeline->by; });
+                    if (!beside) {
+                        error(timeline->by_where, "a timeline by " + *timeline->by + " goes with the cards it scrolls, so this screen has cards " + timeline->view.text() + "." + timeline->list + " by " + *timeline->by + " month");
+                    }
                 } else if (auto* timeline = std::get_if<timeline_item>(&item.node)) {
                     verify_listing(ns, timeline->view, timeline->list, route, true, {"field", "before", "after", "created_at"});
                     if (timeline->link && !routes_.contains(full_route(ns, *timeline->link))) {
@@ -3648,7 +3754,7 @@ namespace one::language {
                     icon(does->icon, does->icon_where);
                     keys(does->keys);
                     using kind = collage_button::kind;
-                    bool takes_pictures = does->does == kind::paste || does->does == kind::screenshot || does->does == kind::add_pictures;
+                    bool takes_pictures = does->does == kind::paste || does->does == kind::screenshot || does->does == kind::add_pictures || does->does == kind::add_folder;
                     if (does->does == kind::cut) {
                         // Cut: copied, then deleted, so it's the pick, and the collage deletes.
                         bool picks = does->of && std::ranges::any_of(collages_, [&](const collage_item* c) { return c->over && *c->over == *does->of && c->remove; });
@@ -3663,15 +3769,19 @@ namespace one::language {
                             error(does->of_where, *does->of + " isn't a collage on this screen, or its pick; a picture is made of one" + like);
                         }
                     }
-                    // A picture pasted or chosen can go into the screen's paper too, when it says paste.
-                    bool into_paper = (does->does == kind::paste || does->does == kind::add_pictures) && std::ranges::any_of(papers_, [](const paper_item* p) { return p->paste; });
-                    bool can = does->of.has_value() || into_paper || std::ranges::any_of(collages_, [&](const collage_item* c) {
-                        bool zooms = does->does == kind::zoom_in || does->does == kind::zoom_out || does->does == kind::zoom_fit;
+                    // A picture pasted or chosen can go into the screen's paper or cards too, when they say paste.
+                    bool into_paper = (does->does == kind::paste || does->does == kind::add_pictures || does->does == kind::add_folder) &&
+                                      (std::ranges::any_of(papers_, [](const paper_item* p) { return p->paste; }) || std::ranges::any_of(cards_, [](const cards_item* c) { return c->paste; }));
+                    bool zooms = does->does == kind::zoom_in || does->does == kind::zoom_out || does->does == kind::zoom_fit;
+                    bool can = does->of.has_value() || into_paper || (zooms && alone_) || std::ranges::any_of(collages_, [&](const collage_item* c) {
                         return zooms || (does->does == kind::crop ? c->crop.has_value() : does->does == kind::edit_words ? c->write.has_value() : does->does == kind::ungroup ? c->group.has_value() : does->does == kind::group_picked ? c->group.has_value() && c->add.has_value() : does->does == kind::raise || does->does == kind::lower ? c->order.has_value() : takes_pictures ? c->paste : c->add.has_value());
                     });
                     if (!can) {
                         std::string needs = does->does == kind::crop ? "crop layer::crop" : does->does == kind::edit_words ? "write layer::write" : does->does == kind::ungroup ? "group layer::group" : does->does == kind::group_picked ? "group layer::group and add layer::create" : does->does == kind::raise || does->does == kind::lower ? "order layer::update" : takes_pictures ? "paste" : "add layer::create";
-                        error(item.where, "this screen has no collage that says " + needs + " for this button to use");
+                        bool pictures = does->does == kind::paste || does->does == kind::add_pictures || does->does == kind::add_folder;
+                        error(item.where, pictures ? "this screen has no collage, paper or cards that say paste for this button to use"
+                                          : zooms  ? "this screen has no collage, nor a picture alone, for this button to zoom"
+                                                   : "this screen has no collage that says " + needs + " for this button to use");
                     }
                 } else if (auto* opening = std::get_if<on_open_item>(&item.node)) {
                     verify_on_open(ns, *opening, item.where, route);
@@ -4524,6 +4634,47 @@ namespace one::language {
             }
             // A picture on each card is a file each row holds.
             if (cards.picture) verify_picture(ns, *rows, cards.view, cards.list, *cards.picture, cards.picture_where);
+            // A mosaic is its cards' pictures, each filling its tile.
+            if (cards.mosaic && !cards.picture) error(cards.mosaic_where, "a mosaic is its cards' pictures, so its cards say which file each shows, like picture image");
+            else if (cards.mosaic && cards.picture_sits == "fit") error(cards.picture_where, "a mosaic's pictures each fill their tile, so its picture line says fill, or nothing");
+            // Under a heading for each month of a date: one the rows hold, which the list is
+            // ordered by first, so each month's cards are together.
+            if (cards.by) {
+                const entity_declaration* card = listed_entity(ns, *rows);
+                const field* f = card ? find_field(*card, *cards.by) : nullptr;
+                std::string order;
+                if (!rows->order.empty()) {
+                    const expression& first = *rows->order.front();
+                    auto* reversed = std::get_if<unary_expression>(&first.node);
+                    order = written(reversed ? *reversed->operand : first);
+                }
+                if (card && f && (!f->type || f->type->text() != "date" || f->list)) error(cards.by_where, "cards are under headings by a date, and " + card->name + "." + *cards.by + " isn't one");
+                else if (!in_rows(*rows, *cards.by)) error(cards.by_where, "view " + cards.view.text() + " has no " + *cards.by + (cards.list ? " in its " + *cards.list : "") + "; add it to the list's block");
+                else if (order != *cards.by) error(cards.by_where, "cards under headings by " + *cards.by + " keep each " + cards.by_unit + " together, so their list is ordered by it first, like order by " + *cards.by + " descending");
+            }
+            // Pictures dropped, pasted or chosen, each made a record by add, the file in its
+            // picture, and each other part in the field named like it, of the part's type.
+            if (cards.add || cards.paste) {
+                const entity_declaration* card = listed_entity(ns, *rows);
+                if (cards.add) {
+                    verify_command_use(ns, *cards.add);
+                    const entity_declaration* on = find_command(ns, *cards.add);
+                    if (card && on && (on != card || cards.add->parts.back() != "create")) error(cards.add->where, "these cards are " + card->name + "s, so add names " + card->name + "::create");
+                }
+                if (!cards.paste) error(cards.add->where, "cards make records of pictures dropped or pasted on them, so add goes with paste");
+                else if (!cards.add) error(cards.paste_where, "pasted pictures are made records by the cards' add, so they say one too, like add " + (card ? card->name : std::string("piece")) + "::create");
+                else if (!cards.picture) error(cards.paste_where, "a pasted picture is kept in the field the cards' picture line names, like picture image");
+                for (const auto& part : cards_parts()) {
+                    const field* f = card && part.name != std::string("picture") ? find_field(*card, part.name) : nullptr;
+                    if (!f || (f->type && f->type->text() == part.type && !f->list)) continue;
+                    static const std::map<std::string, std::string> kept{{"picture_width", "a pasted picture's width"}, {"picture_height", "a pasted picture's height"},
+                                                                         {"name", "a pasted picture's file name"}, {"picture_bytes", "how many bytes a pasted picture is"},
+                                                                         {"picture_date", "when a pasted picture was taken, or its file last changed"},
+                                                                         {"picture_camera", "the camera a pasted picture was taken with"}};
+                    std::string what = part.type == std::string("number") ? "a number" : part.type == std::string("date") ? "a date" : "text";
+                    error(cards.paste ? cards.paste_where : cards.add->where, card->name + "." + part.name + " keeps " + kept.at(part.name) + ", so it's " + what);
+                }
+            }
             if (cards.tally) {
                 if (const view_each* counted = named_list(ns, *cards.tally, cards.tally_list, route)) {
                     for (const auto& field : {cards.tally_by, cards.tally_and}) {

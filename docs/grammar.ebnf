@@ -277,6 +277,8 @@ paper_line     ::= ("write" qualified | "add" qualified | "delete" qualified | "
 key            ::= "key" (NAME | NUMBER) ("+" (NAME | NUMBER))*
 screen_item    ::= ("hero" | "section") STRING ANCHOR? ("icon" NAME)? ("color" NAME)? ("as" "steps")? ("when" expression)? screen_block END
                  | "menu" screen_block END
+                 /* with when, there only while it holds; side when a toggle, a drawer it opens, which stays
+                    over a picture alone while it's open, its bars resting or not */
                  | ("main" | "side" | "bar" | "toolbar" | "tools" | "status") ("when" expression)? screen_block END
                  /* a named part of a workspace's toolbar, its buttons tools */
                  | "group" STRING "small"? ("rows" "of" NUMBER)? ("at" "end")? ("when" expression)? screen_block END
@@ -294,13 +296,15 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? ("icon" NAME)? ("color" N
                  | ("larger" | "smaller") STRING ("icon" NAME)? key* ("when" expression)? END
                  /* what the screen's collage does: crops its picked picture, writes its picked words, adds words,
                     pastes what's on the clipboard, adds a screenshot or pictures chosen from the device's files, or copies
-                    or saves it, or its picked layer, as a picture; paste and add pictures go into a paper that says paste */
-                 | ("crop" | "edit" "words" | "add" "words" | "add" "pictures" | "paste" | "screenshot" | "ungroup" | "group" "picked" | "raise" | "lower" | "zoom" ("in" | "out" | "to" "fit") | ("copy" | "save" | "cut") NAME "as" ("picture" | "svg")) STRING? ("icon" NAME)? key* ("when" expression)? END
+                    or saves it, or its picked layer, as a picture; paste, add pictures and add folder go into a paper or cards that say paste;
+                    add folder takes every picture in a folder chosen and the folders in it, but hidden ones */
+                 | ("crop" | "edit" "words" | "add" "words" | "add" "pictures" | "add" "folder" | "paste" | "screenshot" | "ungroup" | "group" "picked" | "raise" | "lower" | "zoom" ("in" | "out" | "to" "fit") | ("copy" | "save" | "cut") NAME "as" ("picture" | "svg")) STRING? ("icon" NAME)? key* ("when" expression)? END
                  /* what the screen does as it's opened, the first of its lines that applies: the first row of a
                     view's list the condition holds for opened, the row named by what it's of; or a command run */
                  | "on" "open" ("open" ROUTE "for" qualified ("." NAME)? ("where" expression)? ("when" expression)? END | screen_item)
-                 /* the file a view's value, or a field of what's picked, holds, as wide as its place */
-                 | "picture" NAME "." NAME ("fit" | "fill")? ("when" expression)? END
+                 /* the file a view's value, or a field of what's picked, holds, as wide as its place; alone,
+                    the whole of a workspace's screen, its bars over it, zoomed and moved about as it's looked at */
+                 | "picture" NAME "." NAME ("fit" | "fill")? "alone"? ("when" expression)? END
                  /* a row of a view's list the screen holds, picked with a click, read by its name */
                  | "pick" NAME "from" qualified ("." NAME)? END
                  /* something on or off, read by its name, like side when layers; or one of an
@@ -316,7 +320,11 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? ("icon" NAME)? ("color" N
                  /* the short line over a hero's or a section's title, and a front page's one sentence that stands for the site */
                  | "overline" STRING END
                  | "statement" STRING END
-                 | "cards" qualified ("." NAME)? ("link" ROUTE)? ("when" expression)? ("{" NEWLINE? cards_line* "}")? END
+                 /* mosaic: their pictures set edge to edge, each filling its tile, every eight two blocks of three columns
+                    by two rows as tall as a column is wide, a tall tile, a wide one and two small, the second block mirrored;
+                    by: under a heading for each year, month or day of a date the list is ordered by first, newest first
+                    when it's descending, a mosaic's tiles starting again under each */
+                 | "cards" qualified ("." NAME)? "mosaic"? ("by" NAME ("year" | "month" | "day"))? ("link" ROUTE)? ("when" expression)? ("{" NEWLINE? cards_line* "}")? END
                  /* a run of numbers over time, or several side by side */
                  | "chart" qualified "." series ("when" expression)? END
                  | "charts" qualified ("when" expression)? "{" NEWLINE? (series END)* "}" END
@@ -326,14 +334,23 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? ("icon" NAME)? ("color" N
                  | "code" STRING END
                  | "markdown" STRING ("as" "document")? END
                  | "link" (ROUTE | ANCHOR | "namespace" qualified | STRING | "build" "." ("release" | "source")) STRING ("icon" NAME)? key* END
+                 /* previous or next: the same screen for the record before or after, in the list named, or with
+                    none, in the list the record was opened from, else the first list whose rows open it;
+                    every 4 seconds while slideshow: stepped by itself that often while the screen's toggle is on,
+                    the next picture read ahead, the toggle going off at the list's end, or at a key or a click */
+                 | "link" ("previous" | "next") ("in" qualified ("." NAME)?)? STRING ("icon" NAME)? key* ("every" NUMBER ("seconds" | "second") "while" NAME)? END
                  | "table" qualified ("." NAME)? ("by" NAME tabs_over?)? ("link" ROUTE)? ("when" expression)? ("{" NEWLINE? table_line* "}")? END
                  | "form" qualified+ STRING? "{" NEWLINE? form_line* "}" END
                  | "confirm" qualified STRING END
                  | "thread" qualified "." NAME END
                  | "timeline" qualified "." NAME STRING? ("link" ROUTE)? ("{" NEWLINE timeline_line* "}")? END
+                 /* the years and months of the screen's cards under headings by the date, each with how many it
+                    holds, the one in view marked; one chosen scrolls the cards to its heading */
+                 | "timeline" qualified "." NAME "by" NAME END
                  | "copy" qualified STRING? END
                  | "themes" END
-                 | "details" qualified "{" NEWLINE? (("tint" "by" NAME | column+) END)* "}" END
+                 /* a record's values, each beside its name; as bytes: a number of them, said as KB, MB or GB */
+                 | "details" qualified "{" NEWLINE? (("tint" "by" NAME | (column ("as" "bytes")?)+) END)* "}" END
                  /* a box finding rows of several lists as it's typed in */
                  | "find" STRING "{" NEWLINE? find_line* "}" END
                  | ("grid" | "diagram") qualified "." NAME "by" NAME "and" NAME "over" qualified "." NAME ("{" NEWLINE? (postfix END)? "}")? END
@@ -354,7 +371,13 @@ pipeline_line  ::= (("lanes" | "path" | "status") "by" NAME | column+) END
 canvas_line    ::= ("place" qualified | "at" NAME NAME ("size" NAME NAME)? | "size" NAME NAME | "kind" NAME | "grid" NUMBER ("from" NUMBER NUMBER)?
                     | "regions" "by" NAME | "move" qualified ("along" qualified "." NAME)? | "resize" qualified
                     | "paste" qualified "into" NAME | "picture" NAME | column+) END
-cards_line     ::= ("tally" qualified "." NAME "by" NAME "and" NAME | "filter" STRING filter ("color" NAME)? | "picture" NAME ("fit" | "fill")? | column+) END
+cards_line     ::= ("tally" qualified "." NAME "by" NAME "and" NAME | "filter" STRING filter ("color" NAME)? | "picture" NAME ("fit" | "fill")?
+                  /* pictures dropped, pasted or chosen, each a record made by add, its file in the picture,
+                     its own size, upright, its file's name, bytes, date and camera each kept in the field named
+                     like it: picture_width, picture_height, name, picture_bytes, picture_date, when its camera
+                     says it was taken or else when its file last changed, and picture_camera, its make and model */
+                  | "add" qualified | "paste"
+                  | column+) END
 series         ::= NAME ("." NAME)? STRING ("percent" | "bytes" | "rate")?
 monitor_line   ::= ("title" field_path | "status" field_path | "since" field_path | "doing" field_path
                    | "progress" field_path "of" field_path | "seen" field_path NUMBER | "chart" series) END

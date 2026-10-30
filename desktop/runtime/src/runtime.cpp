@@ -12,12 +12,17 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <atomic>
+#include <condition_variable>
+#include <deque>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <format>
 #include <functional>
+#include <iterator>
+#include <mutex>
 #include <optional>
 #include <thread>
 
@@ -71,8 +76,9 @@ namespace one::desktop::runtime {
 			parts.push_back(desktop::divider());
 			parts.push_back(s.footer(p));
 		}
-		if (wide) return desktop::scroll(desktop::column(std::move(parts)).spacing(16).padding(edges(24, 32)));
-		return desktop::scroll(desktop::column(std::move(parts)).spacing(16).padding(edges(24, 32)).width(880)).align(align::center);
+		// Scrolled where it was left, when it's shown again.
+		if (wide) return desktop::scroll(desktop::column(std::move(parts)).spacing(16).padding(edges(24, 32)), p.where_left().scroll);
+		return desktop::scroll(desktop::column(std::move(parts)).spacing(16).padding(edges(24, 32)).width(880), p.where_left().scroll).align(align::center);
 	}
 
 	namespace {
@@ -158,6 +164,7 @@ namespace one::desktop::runtime {
 		// Keyed by where it is, so a page keeps nothing of the one before it.
 		std::string key = std::format("{}#{}", here.address(), nav.depth());
 		bool alone = false;
+		screen_begun();
 		desktop::view shown = page_view(nav, here, &alone).key(key).grow();
 		if (alone) return shown;
 		auto brand = t.strong();
@@ -293,11 +300,97 @@ namespace one::desktop::runtime {
 		return handed;
 	}
 
+	namespace {
+		// What a test holds back of what's handed to the window, while it does.
+		std::atomic<bool> held = false;
+		std::mutex holding;
+		std::vector<std::function<void()>> held_back;
+
+		// The threads work away from the window's is done on, started the first time
+		// there's some, each taking the next in turn. Never stopped: they wait, and go
+		// with the app.
+		class workers {
+		public:
+			void add(std::function<void()> work) {
+				{
+					std::lock_guard hold(lock_);
+					if (started_ == 0) {
+						started_ = std::clamp(static_cast<int>(std::thread::hardware_concurrency()) - 1, 1, 4);
+						for (int i = 0; i < started_; ++i) std::thread([this] { serve(); }).detach();
+					}
+					waiting_.push_back(std::move(work));
+				}
+				woken_.notify_one();
+			}
+
+		private:
+			void serve() {
+				for (;;) {
+					std::function<void()> next;
+					{
+						std::unique_lock hold(lock_);
+						woken_.wait(hold, [this] { return !waiting_.empty(); });
+						next = std::move(waiting_.front());
+						waiting_.pop_front();
+					}
+					next();
+				}
+			}
+			std::mutex lock_;
+			std::condition_variable woken_;
+			std::deque<std::function<void()>> waiting_;
+			int started_ = 0;
+		};
+		workers& shared_workers() {
+			static workers* all = new workers();
+			return *all;
+		}
+	}  // namespace
+
 	void post(std::function<void()> task) {
+		if (held) {
+			std::lock_guard hold(holding);
+			held_back.push_back(std::move(task));
+			return;
+		}
 		if (desktop::app* app = posting_to.load()) app->post(std::move(task));
 	}
 
-	bool posting() { return posting_to.load() != nullptr; }
+	bool posting() { return held || posting_to.load() != nullptr; }
+
+	void in_background(std::function<void()> work) {
+		if (!posting()) return work();
+		shared_workers().add(std::move(work));
+	}
+
+	void handed_back(std::function<void()> task) {
+		if (posting()) post(std::move(task));
+		else task();
+	}
+
+	void redraw() {
+		if (shown_in) shown_in->redraw();
+	}
+
+	void hold_posted(bool on) {
+		held = on;
+		if (!on) {
+			std::lock_guard hold(holding);
+			held_back.clear();
+		}
+	}
+
+	std::size_t run_posted(std::size_t most) {
+		std::vector<std::function<void()>> now;
+		{
+			std::lock_guard hold(holding);
+			std::size_t taken = std::min(most, held_back.size());
+			now.assign(std::make_move_iterator(held_back.begin()), std::make_move_iterator(held_back.begin() + static_cast<std::ptrdiff_t>(taken)));
+			held_back.erase(held_back.begin(), held_back.begin() + static_cast<std::ptrdiff_t>(taken));
+		}
+		for (auto& task : now) task();
+		return now.size();
+	}
 
 	namespace {
 		// A site's notices, said by the desktop whatever screen is open (decision 0024):
@@ -362,7 +455,12 @@ namespace one::desktop::runtime {
 			return shown;
 		});
 		window.on_key = [&](const key_event& e) { return key(nav, e); };
-		window.on_key_first = [](const key_event& e) { return typed_into && typed_into(e); };
+		window.on_key_first = [](const key_event& e) {
+			key_down(e);
+			return typed_into && typed_into(e);
+		};
+		window.on_pointer = [] { wake(); };
+		window.on_press = [] { input_heard(); };
 		// Started with agents that stop when it quits, as publish starts its own, it asks
 		// before closing while they're working on something.
 		const char* stops = std::getenv("ONE_QUIT_STOPS_AGENTS");

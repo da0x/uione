@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <functional>
 #include <map>
 #include <optional>
 #include <set>
@@ -15,6 +16,7 @@
 #include "code/stream.hpp"
 #include "generators/native_names.hpp"
 #include "language/names.hpp"
+#include "language/written.hpp"
 
 namespace one::generators {
 
@@ -686,6 +688,30 @@ namespace one::generators {
                     // board.stage.title.
                     if (auto through = rooted(*value.value, s.per)) {
                         lines.emplace_back(".copy(" + str(*value.name) + ", " + str(*through) + ")", value.where.line);
+                        continue;
+                    }
+                    // How many of its own list's rows pass, or what a number of theirs adds up
+                    // to: total = count(clippings), size = sum(clippings).picture_bytes.
+                    auto counted = language::counted_rows(v, value);
+                    auto summed = language::summed_rows(v, value);
+                    if (const language::row_count& over = counted.list ? counted : summed; over.list) {
+                        std::string tests;
+                        std::function<void(const language::expression&)> add = [&](const language::expression& e) {
+                            auto& b = std::get<language::binary_expression>(e.node);
+                            if (b.op == language::token_kind::logical_and) {
+                                add(*b.left);
+                                add(*b.right);
+                                return;
+                            }
+                            static const std::map<language::token_kind, std::string> ops{
+                                {language::token_kind::equal, "=="}, {language::token_kind::not_equal, "!="}, {language::token_kind::less, "<"},
+                                {language::token_kind::less_equal, "<="}, {language::token_kind::greater, ">"}, {language::token_kind::greater_equal, ">="}};
+                            tests += (tests.empty() ? "" : ", ") + strings({language::text_of(*b.left), ops.at(b.op), language::text_of(*b.right)});
+                        };
+                        if (over.where) add(*over.where->condition);
+                        std::string line = counted.list ? ".tally(" + str(*value.name) + ", " + str(*over.list->name)
+                                                        : ".total(" + str(*value.name) + ", " + str(*over.list->name) + ", " + str(summed.field);
+                        lines.emplace_back(line + (tests.empty() ? "" : ", " + bracketed(tests)) + ")", value.where.line);
                         continue;
                     }
                     auto* call = std::get_if<language::call_expression>(&value.value->node);

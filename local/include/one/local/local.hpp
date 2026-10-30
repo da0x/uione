@@ -123,8 +123,8 @@ namespace one::local {
 		std::expected<std::string, std::string> keep(const std::filesystem::path& file);
 		// Where a file named that way is.
 		std::filesystem::path file(const std::string& kept) const { return root_ / kept; }
-		// Every kept file but those named let go of, as nothing names them any more;
-		// how many.
+		// Every kept file but those named let go of, as nothing names them any more, and
+		// the smaller copies drawn of them; how many.
 		std::size_t forget_files_but(const std::set<std::string>& named);
 
 	private:
@@ -175,6 +175,8 @@ namespace one::local {
 		using screens::source::run;
 		void run(const std::string& command_name, const value& fields, std::function<void(const screens::answer&)> answered) override;
 		// Each file kept in the folder first, its field then holding files/<sha-256>.
+		// Keeping one ahead of its command may be done on any thread.
+		std::optional<std::expected<std::string, std::string>> keep(const std::filesystem::path& file) override { return folder_.keep(file); }
 		void run(const std::string& command_name, const value& fields, const screens::attached_files& files, std::function<void(const screens::answer&)> answered) override;
 
 	private:

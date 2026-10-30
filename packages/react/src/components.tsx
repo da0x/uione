@@ -5,14 +5,19 @@
 // a command, asking before it does, or hiding a value that can't be trusted, and
 // then hands the drawing to the app's component set.
 
-import { Children, createContext, isValidElement, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { Children, createContext, isValidElement, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import type { ReactElement, ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { partsOf } from "./keys.js";
-import { ShownPath, fill, useConfirmContext, useFill, usePageTitle, useSignIn, useSite } from "./app.js";
-import { hintOf, rememberGiven, setPicked as pickRow, useInGroup, useInOptions, useLastGiven, useOverRun, useStyled, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
-import type { BoardCard, CanvasRegion, ChartProps, FieldProps, Filtered, Hue, LandingFeature, LandingProps, LinkProps, PipelineRow, TrackStep } from "./contract.js";
+import { ShownPath, fill, pictureShownFor, useConfirmContext, useFill, useListOpens, usePageTitle, useSignIn, useSite, useSteppedAmong } from "./app.js";
+import { hintOf, rememberGiven, setPicked as pickRow, useInGroup, useInOptions, useLastGiven, useOverRun, usePicturesHanded, useStyled, takeInTurn, alreadyIn, notAPicture, useKeys, useOff, usePickedId, useTool, setToggled, stoppedBy, useToggled } from "./workspace.js";
+import { useSaying } from "./said.js";
+import { PictureAlone, stepped, useAwakeOn, useSwipeStep } from "./alone.js";
+import { pictureSize } from "./vectors.js";
+import { cameraOf, factsOf, takenAt } from "./exif.js";
+import { timeGroups, within, yearsOf } from "./contract.js";
+import type { BoardCard, CanvasRegion, CardGroup, ChartProps, FieldProps, Filtered, Hue, LandingFeature, LandingProps, LinkProps, PipelineRow, TimeUnit, TrackStep } from "./contract.js";
 import { readValue, scaleTop, seriesOf, toneOfState, valueAt, type ChartUnit } from "./series.js";
 import { calendarGo, calendarOf, dateOf, dayOf, movedTo } from "./calendar.js";
 import { fileName, useAuth, useFiles, useRunner, useSearch } from "./data.js";
@@ -62,6 +67,144 @@ function useFilled(): (to: string) => string {
       const value = params[name];
       return value === undefined ? written : encodeURIComponent(value);
     });
+}
+
+// A link to the record before or after this one in a list, in its own order: the same
+// screen for that one, in this one's place, so going back goes where it was opened from.
+// At either end it's there, but can't be followed, as it doesn't go around.
+export function StepLink({
+  view,
+  list = "rows",
+  to,
+  next = false,
+  opened = false,
+  every,
+  whileOn,
+  picture,
+  icon,
+  keys,
+  children,
+}: {
+  view?: ViewState; // the list stepped through, or, when it's opened from one, the list it's stepped through otherwise
+  list?: string;
+  to: string; // the screen's route, its last parameter the record shown, like /things/:thing
+  next?: boolean;
+  opened?: boolean; // through the list the record was opened from, whichever it was
+  every?: number; // every 4 seconds while slideshow: stepped by itself that often while the toggle's on
+  whileOn?: string;
+  picture?: string; // the field the screen's picture alone shows, read ahead for the record it goes to from the list's rows
+  icon?: string;
+  keys?: string[];
+  children: ReactNode;
+}) {
+  const ui = useUI();
+  const params = useParams();
+  const navigate = useNavigate();
+  const { pathname, search } = useLocation();
+  const here = pathname + search;
+  const tool = useTool();
+  const off = useOff();
+  const among = useSteppedAmong(next);
+  const target =
+    opened && among !== undefined ? (among ?? undefined) : view?.status === "live" ? steppedTo(rowsOf(view.data?.[list]), to, params, next) : undefined;
+  const go = () => {
+    if (!target) return;
+    lastStep = { to: target, at: Date.now() };
+    void navigate(target, { replace: true });
+  };
+  // The whole picture of the record it goes to, read ahead, so it's drawn at once: as the
+  // list it was opened from shows it, or from its own list's rows.
+  const row = !target || !picture || view?.status !== "live" ? undefined : rowsOf(view.data?.[list]).find((r) => rowLink(to, r, params) === target);
+  const ahead = target ? ((opened ? pictureShownFor(here, target) : undefined) ?? (row && typeof row[picture!] === "string" ? (row[picture!] as string) : undefined)) : undefined;
+  useReadAhead(next ? "next" : "previous", ahead);
+  useSlideshow(whileOn && every ? { toggle: whileOn, every, here, target, off } : undefined, () => {
+    if (target) shownNext = target;
+    go();
+  });
+  // A swipe across a picture alone steps too, while it can.
+  useSwipeStep(next, !off && target !== undefined ? go : undefined);
+  // By its key, it leaves a picture's bars hidden, as they were.
+  useKeys(
+    keys,
+    () => {
+      go();
+      stepped();
+    },
+    !off && target !== undefined,
+  );
+  return (
+    <ui.Button kind="secondary" icon={icon} tool={tool} disabled={off || target === undefined} hint={hintOf(typeof children === "string" ? children : "", keys)} onClick={go}>
+      {children}
+    </ui.Button>
+  );
+}
+
+// The whole pictures read ahead, the one before and the one after the record shown, each
+// decoded; one stepped away from is let go as another takes its place.
+const readAhead = new Map<string, HTMLImageElement>();
+function useReadAhead(way: string, path: string | undefined): void {
+  const addresses = useAddresses(path ? [{ id: path, path }] : [], "path");
+  const reading = path ? addresses[path] : undefined;
+  useEffect(() => {
+    if (!reading || typeof Image === "undefined" || readAhead.get(way)?.src === reading) return;
+    const picture = new Image();
+    picture.src = reading;
+    void picture.decode?.().catch(() => {});
+    readAhead.set(way, picture);
+  }, [way, reading]);
+}
+
+// Where a slideshow last stepped, where it carries on; and where any step last went, and
+// when, which a picture alone shows the last picture on until its own is read.
+let shownNext = "";
+let lastStep = { to: "", at: 0 };
+
+// every 4 seconds while slideshow: while its toggle's on, the next step waited for by a
+// timer, the picture it goes to read meanwhile; off at the list's end, and as a key is
+// pressed or a click made. Opened some other way than by its own step, it starts off.
+function useSlideshow(show: { toggle: string; every: number; here: string; target?: string; off: boolean } | undefined, step: () => void): void {
+  const playing = useToggled(show?.toggle ?? "");
+  const on = Boolean(show) && playing;
+  const latest = useRef(step);
+  latest.current = step;
+  useEffect(() => {
+    if (show && playing && shownNext !== show.here) setToggled(show.toggle, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (!show || !on || show.off) return;
+    const timer = window.setTimeout(() => {
+      if (show.target === undefined) setToggled(show.toggle, false);
+      else latest.current();
+    }, show.every * 1000);
+    return () => window.clearTimeout(timer);
+  }, [show?.toggle, show?.every, show?.target, show?.off, on]);
+  useEffect(() => {
+    if (!show || !on) return;
+    const stop = (e: Event) => {
+      if (e instanceof KeyboardEvent && ["Shift", "Control", "Alt", "Meta"].includes(e.key)) return;
+      shownNext = "";
+      setToggled(show.toggle, false);
+      stoppedBy(show.toggle, e.type === "pointerdown");
+    };
+    window.addEventListener("keydown", stop, true);
+    window.addEventListener("pointerdown", stop, true);
+    return () => {
+      window.removeEventListener("keydown", stop, true);
+      window.removeEventListener("pointerdown", stop, true);
+    };
+  }, [show?.toggle, on]);
+}
+
+// The address of the row before or after the one a route's last parameter names, as
+// its own link does, or none at either end, or when the rows don't hold that one.
+function steppedTo(rows: Row[], route: string, params: Readonly<Record<string, string | undefined>>, next: boolean): string | undefined {
+  const last = /\/:([a-z_]+)[*?]?$/.exec(route)?.[1];
+  if (!last) return undefined;
+  const named = (row: Row) => (typeof row[last] === "string" && row[last] !== "" ? String(row[last]) : row.id);
+  const at = rows.findIndex((row) => named(row) === params[last]);
+  const to = rows[next ? at + 1 : at - 1];
+  return at < 0 || !to ? undefined : rowLink(route, to, params);
 }
 
 export function Link({ to, icon, keys, children }: { to: string; icon?: string; keys?: string[]; children: ReactNode }) {
@@ -325,6 +468,7 @@ export function Details({
   choices = {},
   labels = [],
   files = [],
+  bytes = [],
   tint,
 }: {
   view: ViewState;
@@ -332,6 +476,7 @@ export function Details({
   choices?: Record<string, Record<string, string>>;
   labels?: string[];
   files?: string[]; // the values holding a file, or a list of them
+  bytes?: string[]; // the numbers of bytes, said as KB, MB or GB
   tint?: Tint; // the box colored by how urgent what it's about is, like its priority
 }) {
   const ui = useUI();
@@ -346,25 +491,37 @@ export function Details({
       const words = value.map((word) => show(word)).filter((word) => word !== "");
       return words.length ? [{ label, value: <ui.Labels items={words} /> }] : [];
     }
-    const said = typeof value === "string" ? (choices[name]?.[value] ?? value) : show(value);
+    // A moment is said with its time of day, as a record's own details are read closely.
+    const said =
+      typeof value === "string"
+        ? (choices[name]?.[value] ?? value)
+        : bytes.includes(name) && typeof value === "number"
+          ? readValue(value, "bytes")
+          : value instanceof Date && !dateOnly(value)
+            ? value.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+            : show(value);
     return said === "" ? [] : [{ label, value: said }];
   });
   return items.length ? <ui.Details items={items} tone={toneOf(view.data ?? {}, tint)} /> : null;
 }
 
-// One region of a screen's layout, like main: what's in it, which Layout places.
-export function Region({ children }: { name: string; children?: ReactNode }) {
+// One region of a screen's layout, like main: what's in it, which Layout places. A
+// drawer, like side when about, is opened and closed by what it's shown while.
+export function Region({ children }: { name: string; drawer?: boolean; children?: ReactNode }) {
   return <>{children}</>;
 }
 
 // A screen laid out in regions, gathered from the Regions inside it by name. A
 // workspace fills the window, with nothing of the site around it, so its bar says
 // the app's name and switches light and dark, as the site's would.
-export function Layout({ name, children }: { name: string; children?: ReactNode }) {
+export function Layout({ name, alone = false, children }: { name: string; alone?: boolean; children?: ReactNode }) {
   const ui = useUI();
   const site = useSite();
   useFill(name === "workspace");
-  // Filling the screen, a workspace is only its work, like a picture on a wall.
+  // Only its picture: its bars over it while the pointer's moved lately.
+  const awake = useAwakeOn(alone);
+  // Filling the screen, a workspace is only its work, like a picture on a wall; a
+  // picture alone keeps its bars, hidden, for their keys.
   const full = useSyncExternalStore(
     (changed) => {
       if (typeof document === "undefined") return () => {};
@@ -375,12 +532,14 @@ export function Layout({ name, children }: { name: string; children?: ReactNode 
     () => false,
   );
   const regions: Record<string, ReactNode> = {};
+  const drawers: string[] = [];
   Children.forEach(children, (child) => {
-    if (isValidElement<{ name: string; children?: ReactNode }>(child) && child.type === Region && (!full || name !== "workspace" || child.props.name === "main")) {
+    if (isValidElement<{ name: string; drawer?: boolean; children?: ReactNode }>(child) && child.type === Region && (!full || name !== "workspace" || alone || child.props.name === "main")) {
       regions[child.props.name] = child.props.children;
+      if (child.props.drawer) drawers.push(child.props.name);
     }
   });
-  return <ui.Layout name={name} regions={regions} site={site.name} />;
+  return <ui.Layout name={name} regions={regions} site={site.name} alone={alone ? { awake: awake && !full, drawers } : undefined} />;
 }
 
 // Buttons one after another, in a row.
@@ -1686,7 +1845,7 @@ export function Table({
   const links = useLinks();
   const params = useParams();
   const pickedId = usePickedId(pick ?? "");
-  const addresses = useAddresses(rowsOf(view.data?.[list]), picture);
+  const addresses = useAddresses(rowsOf(view.data?.[list]), picture, 640);
   // What's typed in the search box, over the fields it searches, as they're shown,
   // the tab that's open and the page it's on, kept in the address under the list's
   // name, like issues.tab=done, so a link shows the same.
@@ -1750,6 +1909,8 @@ export function Table({
   const pressed: RowAction[] = actions.map((a) => (typeof a === "string" ? { name: a } : a)).filter((a) => a.allowed !== false);
   // The row whose button opened its form, while it's open.
   const [asking, setAsking] = useState<{ action: RowAction; row: Row }>();
+  // What its rows open, in the order they're shown, for a record's screen to step through.
+  useListOpens(`table ${list} ${link ?? ""}`, link ? sorted.map((row) => rowLink(link, row, params, keyed, named)) : undefined);
   // What's refused to someone signed out, like their own projects, means nothing to
   // them, so it isn't drawn; signing in shows it.
   if (view.status === "denied" && auth && !auth.person) return null;
@@ -2708,25 +2869,55 @@ export interface Tally {
 
 // Where each row's picture is read from, a file it holds in a field, asked once for
 // each file.
-function useAddresses(rows: Row[], field: string | undefined): Record<string, string> {
+// A smaller copy's, no longer on its longer side than `longest`, where that's given and
+// the store makes them, as for cards.
+// Addresses of whole files already worked out, the last few, so one read ahead is there
+// as soon as the page showing it is.
+const addressesKnown = new Map<string, string>();
+function useAddresses(rows: Row[], field: string | undefined, longest?: number): Record<string, string> {
   const store = useFiles();
   const [addresses, setAddresses] = useState<Record<string, string>>({});
   const held = field ? rows.map((row) => row[field]).filter((path): path is string => typeof path === "string" && path !== "") : [];
   useEffect(() => {
     for (const path of held) {
       if (addresses[path] || !store) continue;
-      store.address(path).then((address) => setAddresses((now) => ({ ...now, [path]: address })), () => {});
+      (longest && store.small ? store.small(path, longest) : store.address(path)).then((address) => {
+        if (!longest) {
+          addressesKnown.delete(path);
+          addressesKnown.set(path, address);
+          if (addressesKnown.size > 64) addressesKnown.delete(addressesKnown.keys().next().value!);
+        }
+        setAddresses((now) => ({ ...now, [path]: address }));
+      }, () => {});
     }
   }, [held.join("\n")]);
-  return addresses;
+  if (longest) return addresses;
+  const known: Record<string, string> = {};
+  for (const path of held) {
+    const address = addresses[path] ?? addressesKnown.get(path);
+    if (address) known[path] = address;
+  }
+  return known;
 }
 
+let lastAlone: string | undefined;
+
 // picture poster.preview fit: the file a value holds, as wide as its place and 320
-// tall, all of it fitted in or filling it.
-export function Picture({ source, fit = false }: { source: unknown; fit?: boolean }) {
+// tall, all of it fitted in or filling it; alone, all of its screen, zoomed by the
+// screen's zoom buttons, asked by `zoom`.
+export function Picture({ source, fit = false, alone = false, zoom = "" }: { source: unknown; fit?: boolean; alone?: boolean; zoom?: string }) {
   const ui = useUI();
   const path = typeof source === "string" ? source : "";
   const addresses = useAddresses(path ? [{ id: path, path }] : [], "path");
+  const { pathname, search } = useLocation();
+  if (alone) {
+    // Stepped to, the last picture shown stays until this one's read, so there's no
+    // black between them, for a moment at most.
+    const own = addresses[path];
+    if (own) lastAlone = own;
+    const stepped = lastStep.to === pathname + search && Date.now() - lastStep.at < 3000;
+    return <PictureAlone source={own ?? (stepped ? lastAlone : undefined)} zoom={zoom} />;
+  }
   return <ui.FilePicture source={addresses[path]} fit={fit} />;
 }
 
@@ -2749,6 +2940,10 @@ export function Cards({
   hideEmpty = false,
   picture,
   fit = false,
+  mosaic = false,
+  by,
+  paste,
+  name,
 }: {
   view: ViewState;
   list: string;
@@ -2765,14 +2960,31 @@ export function Cards({
   hideEmpty?: boolean; // not there at all while it has no cards, or can't be read, like a project's private boards
   picture?: string; // a file each row holds, shown on top of its card
   fit?: boolean; // all of it fitted in, or filling its place
+  mosaic?: boolean; // set as a mosaic of their pictures, each filling its tile
+  by?: { field: string; unit: TimeUnit }; // under a heading for each year, month or day of a date the list is ordered by
+  // Pictures dropped, pasted or chosen, each a record made by this command, given what's
+  // given besides, each of its parts, like picture and picture_width, in the field named.
+  paste?: { command: string; fields: Record<string, string>; given?: Record<string, unknown> };
+  name?: string; // what the screen's paste and add pictures buttons name them by, and its timeline
 }) {
   const ui = useUI();
   const links = useLinks();
   const params = useParams();
   const [title, ...rest] = Object.keys(columns);
   const counted = tally ? rowsOf(tally.view.data?.[tally.list]) : [];
-  const rows = rowsOf(view.data?.[list]);
-  const addresses = useAddresses(rows, picture);
+  const listed = view.data?.[list];
+  const rows = rowsOf(listed);
+  const addresses = useAddresses(rows, picture, 640);
+  const taking = useTakingPictures(paste, name, () => rowsOf(view.data?.[list]).map((row) => String((picture && row[picture]) ?? "")));
+  // What its cards open, in order, for a record's screen to step through.
+  useListOpens(
+    `cards ${list} ${link ?? ""}`,
+    link ? rows.map((row) => rowLink(link, row, params, keyed, named)) : undefined,
+    link && picture ? rows.map((row) => (typeof row[picture] === "string" ? (row[picture] as string) : "")) : undefined,
+  );
+  // Its headings, worked out once each time the list changes.
+  const groups = useMemo(() => (by ? timeGroups(rowsOf(listed), by.field, by.unit) : undefined), [listed, by?.field, by?.unit]);
+  useDatedInView(name ?? "", groups);
   // Hidden when empty is hidden until there's something to show, not drawn while it loads.
   if (hideEmpty && (view.status !== "live" || rows.length === 0)) return null;
   const sum = (card: Row) => {
@@ -2794,9 +3006,11 @@ export function Cards({
     }
     return [...groups.values()].sort((a, b) => a.order - b.order).map(({ label: name, count, state }) => ({ label: name, count, state }));
   };
-  return (
+  const shown = (
     <ui.Cards
       status={view.status}
+      mosaic={mosaic || undefined}
+      groups={groups?.map((g): CardGroup => ({ id: datedId(name ?? "", g.key), title: g.title, first: g.first, count: g.count }))}
       cards={rows.map((row) => {
         const to = link ? rowLink(link, row, params, keyed, named) : undefined;
         return {
@@ -2817,6 +3031,190 @@ export function Cards({
       })}
     />
   );
+  return taking ? taking(shown, rows.length === 0) : shown;
+}
+
+// What cards under headings by a date and their timeline share, by the cards' name: their
+// headings' keys, and the one at the top of what's in view as they're scrolled.
+interface Dated {
+  keys: string[];
+  inView: string;
+  listening: Set<() => void>;
+}
+const datedByName = new Map<string, Dated>();
+function datedOf(name: string): Dated {
+  let found = datedByName.get(name);
+  if (!found) datedByName.set(name, (found = { keys: [], inView: "", listening: new Set() }));
+  return found;
+}
+function datedId(name: string, key: string): string {
+  return `dated-${encodeURIComponent(name)}-${key}`;
+}
+function tellInView(dated: Dated, key: string) {
+  if (dated.inView === key) return;
+  dated.inView = key;
+  for (const changed of dated.listening) changed();
+}
+
+// Watches what scrolls the cards, and tells which heading reaches the top of it, a
+// little under it, at most once a frame.
+function useDatedInView(name: string, groups: { key: string }[] | undefined) {
+  useEffect(() => {
+    if (!groups || groups.length === 0) return;
+    const dated = datedOf(name);
+    dated.keys = groups.map((g) => g.key);
+    let asked = 0;
+    const look = () => {
+      asked = 0;
+      const first = document.getElementById(datedId(name, groups[0]!.key));
+      if (!first) return;
+      let scroller: HTMLElement | null = first.parentElement;
+      while (scroller && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement;
+      const top = scroller ? scroller.getBoundingClientRect().top : 0;
+      let seen = groups[0]!.key;
+      for (const g of groups) {
+        const heading = document.getElementById(datedId(name, g.key));
+        if (heading && heading.getBoundingClientRect().top <= top + 24) seen = g.key;
+      }
+      tellInView(dated, seen);
+    };
+    const soon = () => {
+      if (!asked) asked = requestAnimationFrame(look);
+    };
+    look();
+    document.addEventListener("scroll", soon, true);
+    window.addEventListener("resize", soon);
+    return () => {
+      if (asked) cancelAnimationFrame(asked);
+      document.removeEventListener("scroll", soon, true);
+      window.removeEventListener("resize", soon);
+    };
+  }, [name, groups]);
+}
+
+// timeline library.photos by picture_date: the years and months of the cards under
+// headings by that date on the same screen, named `cards`, each with how many it holds,
+// the one in view marked. One chosen scrolls the cards so its first heading is at the
+// top, placed from the counts above it, without what's above it drawn. The same as the
+// desktop's.
+export function DatedTimeline({ view, list, by, unit = "month", cards }: { view: ViewState; list: string; by: string; unit?: TimeUnit; cards: string }) {
+  const ui = useUI();
+  const listed = view.data?.[list];
+  const entries = useMemo(() => yearsOf(timeGroups(rowsOf(listed), by, unit), unit), [listed, by, unit]);
+  const dated = datedOf(cards);
+  const inView = useSyncExternalStore(
+    (changed) => {
+      dated.listening.add(changed);
+      return () => dated.listening.delete(changed);
+    },
+    () => dated.inView,
+  );
+  if (view.status !== "live" || entries.length === 0) return null;
+  const choose = (entry: string) => {
+    const key = dated.keys.find((k) => within(k, entry));
+    if (key === undefined) return;
+    document.getElementById(datedId(cards, key))?.scrollIntoView({ block: "start" });
+    tellInView(dated, key);
+  };
+  return (
+    <ui.DatedTimeline
+      entries={entries.map((entry, i) => ({
+        ...entry,
+        // A month, or a year when that's all it lists.
+        current: within(inView, entry.key) && (!entry.year || i + 1 === entries.length || entries[i + 1]!.year),
+        onChoose: () => choose(entry.key),
+      }))}
+    />
+  );
+}
+
+// Pictures dropped, pasted or chosen on cards, each a record made by their command, given
+// what the address names, its file in the picture, and its own size, its file's name,
+// bytes, date and camera where the cards keep them; all one step to undo. The same as the
+// desktop's. What it gives is the cards wrapped in what takes them, a drop target even
+// while there are none.
+function useTakingPictures(paste: { command: string; fields: Record<string, string>; given?: Record<string, unknown> } | undefined, name: string | undefined, held: () => string[]) {
+  const ui = useUI();
+  const files = useFiles();
+  const runner = useRunner();
+  const { say } = useSaying();
+  const [dropping, setDropping] = useState(false);
+  const latest = useRef(held);
+  latest.current = held;
+  const add = async (given: File[]) => {
+    if (!paste || !files || !paste.fields["picture"]) return;
+    let first = true;
+    // Each picture kept once: the hashes of the files the cards' records name, as a store
+    // that keeps files by their SHA-256 names them, and of those added since.
+    const kept = new Set(latest.current().map((path) => path.slice(path.lastIndexOf("/") + 1)).filter((hash) => /^[0-9a-f]{64}$/.test(hash)));
+    await takeInTurn(given, say, async (file) => {
+      const size = await pictureSize(file);
+      if (!size) return notAPicture(file);
+      const hash = await sha256(file);
+      if (kept.has(hash)) return alreadyIn;
+      kept.add(hash);
+      const made: CommandInput = { ...(paste.given ?? {}) };
+      const keep = (part: string, held: unknown) => {
+        const field = paste.fields[part];
+        if (field) made[field] = held;
+      };
+      keep("picture", await files.upload(file, () => {}));
+      keep("picture_width", size.w);
+      keep("picture_height", size.h);
+      const called = file.name.replace(/\.[^.]+$/, "");
+      keep("name", !called || called === "image" || called === "Pasted" ? "Pasted image" : called);
+      keep("picture_bytes", file.size);
+      // When it was taken, as its camera says, or else when its file last changed.
+      const facts = await factsOf(file);
+      keep("picture_date", takenAt(facts) ?? new Date(Math.floor(file.lastModified / 1000) * 1000).toISOString().replace(".000Z", "Z"));
+      keep("picture_camera", cameraOf(facts));
+      if (!first) made["one:history"] = "joined";
+      first = false;
+      await runner.run(paste.command, made);
+    });
+  };
+  usePicturesHanded(paste ? name : undefined, add);
+  if (!paste) return undefined;
+  return (shown: ReactNode, empty: boolean) => (
+    <div
+      className="one-cards-taking"
+      style={{ minHeight: empty ? 160 : undefined, outline: dropping ? "3px solid var(--color-accent, #2457d6)" : "none", outlineOffset: 4 }}
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes("Files")) return;
+        e.preventDefault();
+        setDropping(true);
+      }}
+      onDragLeave={() => setDropping(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDropping(false);
+        const pictures = [...e.dataTransfer.files].filter((f) => f.type.startsWith("image/"));
+        if (pictures.length === 0) {
+          if (e.dataTransfer.getData("text/uri-list")) say({ text: "That picture is on the web. Save it first, then drop it here." });
+          return;
+        }
+        void add(pictures);
+      }}
+    >
+      {shown}
+      {empty && <ui.Text>Nothing here yet. Drop pictures here to add them.</ui.Text>}
+    </div>
+  );
+}
+
+// A file's SHA-256, in hex, as a store keeping files by their content names it.
+async function sha256(file: File): Promise<string> {
+  const bytes =
+    typeof file.arrayBuffer === "function"
+      ? await file.arrayBuffer()
+      : await new Promise<ArrayBuffer>((done, failed) => {
+          const reader = new FileReader();
+          reader.onload = () => done(reader.result as ArrayBuffer);
+          reader.onerror = () => failed(reader.error);
+          reader.readAsArrayBuffer(file);
+        });
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  return [...digest].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 // A command a grid's cell runs: the form it asks with, and whether the person may.

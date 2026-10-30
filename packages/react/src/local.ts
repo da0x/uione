@@ -32,10 +32,14 @@ export interface LocalStore {
   // Keeps a file under what names it, files/<sha-256>.
   keep(path: string, file: Blob): Promise<void>;
   file(path: string): Promise<Blob | undefined>;
-  // Every kept file but those named let go of, as nothing names them any more; how
-  // many.
+  // Every kept file but those named let go of, as nothing names them any more, with
+  // the smaller copies kept beside them; how many.
   forgetFilesBut(named: Set<string>): Promise<number>;
 }
+
+// A picture's smaller copy is kept beside it, named for it and its size.
+const smallKey = (path: string, longest: number) => `${path} small ${longest}`;
+const namedOrBeside = (named: Set<string>, path: string) => named.has(path.split(" ")[0]!);
 
 // A store that keeps nothing once the page is gone, for tests.
 export function memoryStore(): LocalStore & { readonly events: LocalEvent[]; readonly files: Map<string, Blob> } {
@@ -55,7 +59,7 @@ export function memoryStore(): LocalStore & { readonly events: LocalEvent[]; rea
     async forgetFilesBut(named) {
       let forgotten = 0;
       for (const path of [...files.keys()]) {
-        if (named.has(path)) continue;
+        if (namedOrBeside(named, path)) continue;
         files.delete(path);
         forgotten++;
       }
@@ -121,7 +125,7 @@ export function indexedStore(name: string): LocalStore {
     file: (path) => transact<Blob | undefined>("files", "readonly", (s) => s.get(path)),
     async forgetFilesBut(named) {
       const kept = await transact<IDBValidKey[]>("files", "readonly", (s) => s.getAllKeys());
-      const gone = kept.map(String).filter((path) => !named.has(path));
+      const gone = kept.map(String).filter((path) => !namedOrBeside(named, path));
       if (gone.length > 0) await transact("files", "readwrite", (s) => gone.forEach((path) => s.delete(path)));
       return gone.length;
     },
@@ -418,6 +422,22 @@ export function localSource(options: LocalOptions): LocalSource {
       addresses.set(path, url);
       return url;
     },
+    async small(path, longest) {
+      const key = smallKey(path, longest);
+      const known = addresses.get(key);
+      if (known) return known;
+      let blob = await store.file(key);
+      if (!blob) {
+        const whole = await store.file(path);
+        if (!whole) throw new Error(`${path} isn't kept here`);
+        const made = await smallerCopy(whole, longest);
+        if (made) await store.keep(key, made);
+        blob = made ?? whole;
+      }
+      const url = URL.createObjectURL(blob);
+      addresses.set(key, url);
+      return url;
+    },
   };
 
   return {
@@ -445,6 +465,28 @@ export function localSource(options: LocalOptions): LocalSource {
         }),
       ),
   };
+}
+
+// A picture's copy no longer on its longer side than `longest`, decoded and drawn
+// smaller by the browser away from the page, the way up its camera says; nothing
+// where it's that small already, or the browser can't, as with an SVG some browsers
+// won't decode.
+async function smallerCopy(whole: Blob, longest: number): Promise<Blob | undefined> {
+  if (typeof createImageBitmap !== "function" || typeof OffscreenCanvas !== "function") return undefined;
+  try {
+    const size = await createImageBitmap(whole, { imageOrientation: "from-image" });
+    const scale = longest / Math.max(size.width, size.height);
+    const w = Math.max(1, Math.round(size.width * scale)), h = Math.max(1, Math.round(size.height * scale));
+    size.close();
+    if (scale >= 1) return undefined;
+    const small = await createImageBitmap(whole, { imageOrientation: "from-image", resizeWidth: w, resizeHeight: h, resizeQuality: "high" });
+    const canvas = new OffscreenCanvas(w, h);
+    canvas.getContext("2d")?.drawImage(small, 0, 0);
+    small.close();
+    return await canvas.convertToBlob({ type: "image/png" });
+  } catch {
+    return undefined;
+  }
 }
 
 // A file's bytes, where a Blob can't say them itself.

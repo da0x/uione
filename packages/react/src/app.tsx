@@ -4,10 +4,10 @@
 // An app is a list of screens. Each screen knows its own title and route, so the
 // app can build the routes and the navigation without anyone writing them twice.
 
-import { Component, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Component, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { CSSProperties, ComponentType, ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { BrowserRouter, MemoryRouter, Route, Routes, matchPath, useLocation, useParams } from "react-router";
+import { BrowserRouter, MemoryRouter, Route, Routes, matchPath, useLocation, useNavigationType, useParams } from "react-router";
 import type { Analytics, Build, ComponentSet } from "./contract.js";
 import { buildLinks } from "./contract.js";
 import { DataProvider, useAuth, useAuthorize, useShownOnce, useView } from "./data.js";
@@ -258,6 +258,7 @@ export function App({ name, icon, screens: given, ui, data, location, authentica
     <>
       {color && <style>{accentOf(color)}</style>}
       {analytics && <Counting analytics={analytics} />}
+      <Returning />
       <Routes>
       {screens.map((s) => (
         <Route key={s.info.route} path={routerPath(s.info.route, s.info.shown)} element={<Page name={name} icon={icon} screen={s} screens={screens} />} />
@@ -290,6 +291,147 @@ export function App({ name, icon, screens: given, ui, data, location, authentica
       </BadgeSpec.Provider>
     </UIContext.Provider>
   );
+}
+
+// Where each address was left, for as long as the page is open: how far down it was
+// scrolled, and what was last opened from it, like a card, or what has taken that
+// one's place. Going back to it, or opening it again, finds it as it was: scrolled
+// there once what it shows reaches that far, and what was opened from it given the
+// keyboard, in view. An address opened afresh starts at its top.
+const placesLeft = new Map<string, { scroll: number; opened?: string }>();
+
+// The addresses each list on a page opens, in its order, by the list, as it last showed
+// them; and, for each address opened, those of the page it was opened from, kept as it's
+// stepped on from, so a record's screen steps through the list it was opened from. The
+// same as the desktop's.
+type Opens = Map<string, string[]>;
+const listsShown = new Map<string, Opens>();
+const openedAmong = new Map<string, Opens | undefined>();
+const amongListening = new Set<() => void>();
+// And the picture each of those shows, where its cards show one, by the same list.
+const picturesShown = new Map<string, Opens>();
+const picturesAmong = new Map<string, Opens | undefined>();
+export function useListOpens(key: string, addresses: string[] | undefined, pictures?: string[]): void {
+  const { pathname, search } = useLocation();
+  const here = pathname + search;
+  const joined = addresses?.join("\n");
+  const shown = pictures?.join("\n");
+  useEffect(() => {
+    if (addresses === undefined) return;
+    let opens = listsShown.get(here);
+    if (!opens) listsShown.set(here, (opens = new Map()));
+    opens.set(key, addresses);
+    let held = picturesShown.get(here);
+    if (!held) picturesShown.set(here, (held = new Map()));
+    if (pictures?.length === addresses.length) held.set(key, pictures);
+    else held.delete(key);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [here, key, joined, shown]);
+}
+// The picture the list this address was opened from shows for the one a step goes to,
+// for it to be read ahead, or undefined.
+export function pictureShownFor(here: string, to: string): string | undefined {
+  const opens = openedAmong.get(here);
+  const pictures = picturesAmong.get(here);
+  for (const [key, addresses] of opens ?? []) {
+    if (!addresses.includes(here)) continue;
+    const at = addresses.indexOf(to);
+    const held = pictures?.get(key);
+    if (at >= 0 && held) return held[at];
+  }
+  return undefined;
+}
+// The address before or after this one in the list it was opened from, when one did,
+// or undefined; null at either end of it.
+export function useSteppedAmong(next: boolean): string | null | undefined {
+  const { pathname, search } = useLocation();
+  const here = pathname + search;
+  const opens = useSyncExternalStore(
+    (changed) => {
+      amongListening.add(changed);
+      return () => amongListening.delete(changed);
+    },
+    () => openedAmong.get(here),
+  );
+  for (const addresses of opens?.values() ?? []) {
+    const at = addresses.indexOf(here);
+    if (at < 0) continue;
+    return addresses[at + (next ? 1 : -1)] ?? null;
+  }
+  return undefined;
+}
+
+function Returning() {
+  const { pathname, search, hash } = useLocation();
+  const how = useNavigationType();
+  const here = pathname + search;
+  const was = useRef<string | undefined>(undefined);
+  useLayoutEffect(() => {
+    const before = was.current;
+    was.current = here;
+    if (before !== undefined && before !== here) {
+      if (how === "PUSH") placesLeft.set(before, { scroll: placesLeft.get(before)?.scroll ?? 0, opened: here });
+      if (how === "REPLACE") for (const place of placesLeft.values()) if (place.opened === before) place.opened = here;
+      openedAmong.set(here, how === "PUSH" ? listsShown.get(before) : how === "REPLACE" ? openedAmong.get(before) : openedAmong.get(here));
+      picturesAmong.set(here, how === "PUSH" ? picturesShown.get(before) : how === "REPLACE" ? picturesAmong.get(before) : picturesAmong.get(here));
+      amongListening.forEach((changed) => changed());
+    } else if (before === undefined) {
+      // The first page shown was opened from nothing.
+      openedAmong.delete(here);
+      picturesAmong.delete(here);
+      amongListening.forEach((changed) => changed());
+    }
+    const page = document.scrollingElement ?? document.documentElement;
+    const place = placesLeft.get(here);
+    let wanted = place?.scroll ?? 0;
+    let opened = place?.opened;
+    if (how === "PUSH" && before !== undefined && before.split("?")[0] !== pathname && !hash) page.scrollTop = 0;
+    const settle = () => {
+      if (wanted > 0 && page.scrollHeight - page.clientHeight >= wanted) {
+        page.scrollTop = wanted;
+        wanted = 0;
+      }
+      const found = wanted > 0 || !opened ? null : document.querySelector<HTMLElement>(`a[href="${opened.replace(/["\\]/g, "\\$&")}"]`);
+      if (found) {
+        opened = undefined;
+        found.focus({ preventScroll: true });
+        const at = found.getBoundingClientRect();
+        if (at.top < 0 || at.bottom > window.innerHeight) found.scrollIntoView?.({ block: "nearest" });
+      }
+      if (wanted === 0 && !opened) stop();
+    };
+    // Kept as it's scrolled, once it's where it was.
+    const scrolled = () => {
+      if (wanted === 0) placesLeft.set(here, { scroll: page.scrollTop, opened: placesLeft.get(here)?.opened });
+    };
+    // Scrolled or typed in first, it's left where the person put it.
+    const moved = () => {
+      wanted = 0;
+      opened = undefined;
+      stop();
+    };
+    const changes = new MutationObserver(settle);
+    const sizes = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(settle);
+    function stop() {
+      changes.disconnect();
+      sizes?.disconnect();
+      window.removeEventListener("wheel", moved);
+      window.removeEventListener("touchmove", moved);
+      window.removeEventListener("keydown", moved);
+    }
+    changes.observe(document.body, { childList: true, subtree: true });
+    sizes?.observe(document.body);
+    window.addEventListener("wheel", moved, { passive: true });
+    window.addEventListener("touchmove", moved, { passive: true });
+    window.addEventListener("keydown", moved);
+    window.addEventListener("scroll", scrolled, { passive: true });
+    settle();
+    return () => {
+      stop();
+      window.removeEventListener("scroll", scrolled);
+    };
+  }, [here]);
+  return null;
 }
 
 // A key a command's answer gave, like a service's new one: shown this once, to copy,

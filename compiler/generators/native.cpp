@@ -1159,13 +1159,9 @@ namespace one::generators {
             if (group_track_) out += ", .track = " + track_of(parts, ns, nullptr);
             // A pasted file makes a card as a create form here would, named from the file.
             if (c.paste && entity) {
-                std::string given, named;
+                std::string given = given_by_address(parts, ns, *entity, c.paste_into), named;
                 for (const auto& field : entity->fields) {
                     if ((field.name == "title" || field.name == "name") && named.empty() && field.type && field.type->text() == "text") named = field.name;
-                    if (!field.type || field.type->parts.size() != 1 || field.name == c.paste_into) continue;
-                    const std::string& points = field.type->parts[0];
-                    if (!screens::names_parameter(route_, points) || !model_.entity_named(ns, points)) continue;
-                    given += (given.empty() ? "" : ", ") + std::string("{") + str(field.name) + ", " + id_of(parts, points) + "}";
                 }
                 out += ", .paste = " + str(screens::full_command(ns, *c.paste)) + ", .paste_into = " + str(c.paste_into);
                 if (!named.empty()) out += ", .paste_named = " + str(named);
@@ -1198,7 +1194,7 @@ namespace one::generators {
                 for (const auto& field : (entity ? entity->fields : no_fields_)) {
                     if (!label && field.name == first && (rest.empty() || rest == "name" || rest == "title") && field.label) label = field.label;
                 }
-                fields += (fields.empty() ? "" : ", ") + std::string("{") + str(key) + ", " + str(label ? *label : screens::label(key)) + "}";
+                fields += (fields.empty() ? "" : ", ") + std::string("{") + str(key) + ", " + str(label ? *label : screens::label(key)) + (f.bytes ? ", true" : "") + "}";
                 if (!view || !entity) continue;
                 for (const auto& v : view->values) {
                     if ((v.name ? *v.name : screens::text_of(*v.value)) != key) continue;
@@ -1233,6 +1229,22 @@ namespace one::generators {
             if (!files.empty()) out += ", " + native_detail::strings(files);
             return out + ")";
         }
+
+        // What a record made on this screen is given as a create form here would be: each
+        // field pointing at what the address names, but the one a file goes in.
+        std::string given_by_address(screen_parts& parts, const std::string& ns, const language::entity_declaration& made, const std::string& into) {
+            std::string given;
+            for (const auto& field : made.fields) {
+                if (!field.type || field.type->parts.size() != 1 || field.name == into) continue;
+                const std::string& points = field.type->parts[0];
+                if (!screens::names_parameter(route_, points) || !model_.entity_named(ns, points)) continue;
+                given += (given.empty() ? "" : ", ") + std::string("{") + str(field.name) + ", " + id_of(parts, points) + "}";
+            }
+            return given;
+        }
+
+        // What a screen's paste and add pictures buttons name its cards by.
+        std::string cards_key(const language::cards_item& c) const { return route_ + " cards " + c.list.value_or(""); }
 
         std::string cards(screen_parts& parts, const std::string& ns, const language::cards_item& c) {
             const language::entity_declaration* entity = model_.listed(ns, c.view.text(), c.list);
@@ -1290,6 +1302,19 @@ namespace one::generators {
             if (!choices.empty()) out += ", .choices = {" + choices + "}";
             if (c.hide_empty) out += ", .hide_empty = true";
             if (c.picture) out += ", .picture = " + str(*c.picture) + (c.picture_sits == "fit" ? ", .fit = true" : "");
+            if (c.mosaic) out += ", .mosaic = true";
+            if (c.by) out += ", .by = " + str(*c.by) + ", .unit = time_unit::" + c.by_unit;
+            // Pictures dropped, pasted or chosen, each a record made by its add, given what the
+            // address names, each part in the field it's kept in.
+            if (c.paste && c.add && c.picture && entity) {
+                std::string fields, given = given_by_address(parts, ns, *entity, *c.picture);
+                for (const auto& [part, field] : language::cards_fields(c, *entity)) fields += (fields.empty() ? "" : ", ") + std::string("{") + str(part) + ", " + str(field) + "}";
+                out += ", .add = " + str(screens::full_command(ns, *c.add)) + ", .fields = {" + fields + "}";
+                if (!given.empty()) out += ", .given = {" + given + "}";
+                out += ", .key = " + str(cards_key(c)) + ", .paste = true";
+            } else if (c.by) {
+                out += ", .key = " + str(cards_key(c));
+            }
             return out + "})";
         }
 
@@ -1434,7 +1459,12 @@ namespace one::generators {
                    (c_list.empty() ? "" : ", {" + c_list + "}") + ")";
         }
 
-        std::string timeline(screen_parts& parts, const std::string& ns, const language::timeline_item& t) {
+        std::string timeline(screen_parts& parts, const std::string& ns, const language::timeline_item& t, const std::vector<language::screen_item>& screen) {
+            if (t.by) {
+                const language::cards_item* c = language::dated_cards(screen, t);
+                return "dated_timeline(p, {.view = " + view_variable(parts, screens::full_view(ns, t.view.text())) + ", .list = " + str(t.list) + ", .by = " + str(*t.by) +
+                       ", .unit = time_unit::" + (c ? c->by_unit : std::string("month")) + ", .cards = " + str(c ? cards_key(*c) : "") + "})";
+            }
             std::string out = "timeline(p, {.view = " + view_variable(parts, screens::full_view(ns, t.view.text())) + ", .list = " + str(t.list);
             std::vector<std::string> subject;
             auto columns = model_.listed_columns(ns, t.view.text(), t.list);
@@ -1524,8 +1554,9 @@ namespace one::generators {
         bool quiet_ = false;          // building a status line, its words said quietly
         std::optional<std::string> row_named_;  // the row an on open line's where reads, by what it's of
         std::string collage_key_;     // what its collage buttons name its collage by
+        std::string alone_field_;     // the field its picture alone shows, for its steps to read ahead
         std::string paper_key_;       // and its insert buttons its paper
-        bool screen_pastes_into_paper_ = false;  // its paste and add pictures buttons go into its paper, as it has no collage that pastes
+        std::optional<std::string> pictures_key_;  // and what its paste and add pictures buttons go into, a paper or cards that paste, as it has no collage that does
         std::optional<std::string> collage_over_;  // and the pick over it, which they may name
         const language::collage_item* collage_ = nullptr;  // and the collage itself, which its layers list
         bool at_end_said_ = false;    // a group at the toolbar's end has been written
@@ -1537,10 +1568,10 @@ namespace one::generators {
         };
         std::map<std::string, pick_of> picks_;
 
-        // A paste or add pictures button that goes into the screen's paper.
+        // A paste or add pictures button that goes into the screen's paper or cards.
         bool into_paper(const language::collage_button& b) const {
             using kind = language::collage_button::kind;
-            return screen_pastes_into_paper_ && (b.does == kind::paste || b.does == kind::add_pictures);
+            return pictures_key_ && (b.does == kind::paste || b.does == kind::add_pictures || b.does == kind::add_folder);
         }
 
         stream pages_file(const page_set& pages) const {
@@ -1792,6 +1823,18 @@ namespace one::generators {
                         code = "link(p, " + said_of(parts, ns, link->label) + ", \"https://github.com/da0x/uione/releases/tag/v\" + build_version)";
                     } else if (!link->built.empty()) {
                         code = "build_commit.empty() || build_repository.empty() ? view() : link(p, " + said_of(parts, ns, link->label) + ", build_repository + \"/commit/\" + build_commit)";
+                    } else if (!link->step.empty()) {
+                        // The record before or after this one, in a list's own order; with none
+                        // named, in the list it was opened from, or else the first that opens it.
+                        auto fallback = link->step_view ? std::nullopt : model_.first_opening(route_);
+                        std::string view = link->step_view ? view_variable(parts, screens::full_view(ns, link->step_view->text())) : fallback ? view_variable(parts, fallback->first) : "{}";
+                        std::string list = link->step_view ? link->step_list : fallback ? fallback->second : "";
+                        code = "step(p, {.view = " + view + ", .list = " + str(list) + ", .route = " + str(route_) + (link->step == "next" ? ", .next = true" : "") +
+                               (link->step_view ? "" : ", .opened = true") +
+                               (link->every_while.empty() ? "" : std::format(", .every = {}, .while_on = ", link->every) + str(route_ + " " + link->every_while)) +
+                               (alone_field_.empty() ? "" : ", .picture = " + str(alone_field_)) + "}, " +
+                               said_of(parts, ns, link->label) + ", " + str(link->icon.value_or("")) +
+                               (link->keys.empty() ? "" : ", " + keys_of(link->keys)) + ")";
                     } else {
                         std::string target = link->namespace_name ? model_.full_route(link->namespace_name->text(), "/") : link->target.starts_with("/") ? model_.full_route(ns, link->target) : link->target;
                         std::string keys = link->keys.empty() ? "" : keys_of(link->keys);
@@ -1820,7 +1863,7 @@ namespace one::generators {
                     }
                     code = "find(p, " + str(f->label) + ", {" + sources + "})";
                 } else if (auto* t = std::get_if<language::timeline_item>(&item.node)) {
-                    code = timeline(parts, ns, *t);
+                    code = timeline(parts, ns, *t, screen);
                 } else if (auto* t = std::get_if<language::table_item>(&item.node)) {
                     code = table(parts, ns, *t, screen);
                 } else if (auto* g = std::get_if<language::grid_item>(&item.node)) {
@@ -1856,9 +1899,12 @@ namespace one::generators {
                 } else if (auto* paper_item = std::get_if<language::paper_item>(&item.node)) {
                     code = paper(parts, ns, *paper_item);
                 } else if (auto* picture = std::get_if<language::picture_item>(&item.node)) {
-                    // picture poster.preview fit: as wide as its place, 320 tall.
+                    // picture poster.preview fit: as wide as its place, 320 tall; alone, all of
+                    // its screen, zoomed by the screen's zoom buttons.
                     std::set<std::string> read;
-                    code = "picture_of(p, " + condition_of(parts, ns, *picture->source, read) + ".as_string(), " + (picture->fit ? "true" : "false") + ", 320)";
+                    std::string source = condition_of(parts, ns, *picture->source, read) + ".as_string()";
+                    if (picture->alone) code = "picture_alone(p, " + source + ", " + str(collage_key_) + ")";
+                    else code = "picture_of(p, " + source + ", " + (picture->fit ? "true" : "false") + ", 320)";
                 } else if (auto* insert = std::get_if<language::paper_insert>(&item.node)) {
                     // A block made after the caret's, by the screen's paper.
                     std::string given;
@@ -1870,10 +1916,11 @@ namespace one::generators {
                            (insert->keys.empty() ? "" : ", .keys = " + keys_of(insert->keys)) + ", .fields = value(std::map<std::string, value>{" + given + "})" +
                            (insert->sizes ? ", .sizes = " + std::to_string(insert->sizes) : "") + "})";
                 } else if (auto* does = std::get_if<language::collage_button>(&item.node); does && into_paper(*does)) {
-                    // Paste into the screen's paper, or pictures chosen from files: after the caret.
-                    bool chooses = does->does == language::collage_button::kind::add_pictures;
-                    code = "paper_button(p, {.key = " + str(paper_key_) + ", .label = " + str(language::label_of(*does)) + ", .icon = " + str(does->icon.value_or("")) +
-                           (does->keys.empty() ? "" : ", .keys = " + keys_of(does->keys)) + (chooses ? ", .chooses = true})" : ", .pastes = true})");
+                    // Paste into the screen's paper or cards, or pictures chosen from files.
+                    bool folder = does->does == language::collage_button::kind::add_folder;
+                    bool chooses = does->does == language::collage_button::kind::add_pictures || folder;
+                    code = "paper_button(p, {.key = " + str(*pictures_key_) + ", .label = " + str(language::label_of(*does)) + ", .icon = " + str(does->icon.value_or("")) +
+                           (does->keys.empty() ? "" : ", .keys = " + keys_of(does->keys)) + (folder ? ", .chooses = true, .folder = true})" : chooses ? ", .chooses = true})" : ", .pastes = true})");
                 } else if (auto* does = std::get_if<language::collage_button>(&item.node)) {
                     std::string what = language::asked_of(*does, collage_over_), label = language::label_of(*does);
                     code = "collage_button(p, {.key = " + str(collage_key_) + ", .does = " + str(what) + ", .label = " + str(label) + ", .icon = " + str(does->icon.value_or("")) +
@@ -1989,13 +2036,18 @@ namespace one::generators {
                 choices_ = choices_in(s->items);
                 at_end_said_ = false;
                 collage_key_ = route_ + " collage";
+                alone_field_ = language::alone_field(s->items);
                 collage_over_.reset();
                 collage_ = nullptr;
                 paper_key_ = route_ + " paper";
-                screen_pastes_into_paper_ = false;
+                pictures_key_.reset();
                 std::function<void(const std::vector<language::screen_item>&)> papers = [&](const std::vector<language::screen_item>& inside) {
                     for (const auto& item : inside) {
-                        if (auto* paper = std::get_if<language::paper_item>(&item.node)) paper_key_ = route_ + " paper " + paper->list, screen_pastes_into_paper_ = paper->paste;
+                        if (auto* paper = std::get_if<language::paper_item>(&item.node)) {
+                            paper_key_ = route_ + " paper " + paper->list;
+                            if (paper->paste) pictures_key_ = paper_key_;
+                        }
+                        if (auto* cards = std::get_if<language::cards_item>(&item.node); cards && cards->paste && !pictures_key_) pictures_key_ = cards_key(*cards);
                         if (auto* block = std::get_if<language::content_block>(&item.node)) papers(block->items);
                     }
                 };
@@ -2104,7 +2156,7 @@ namespace one::generators {
                         quiet_ = quiet;
                         // side when layers: there only while it holds.
                         if (item->when) drawn = "[&] { if (" + condition(parts, ns, *item->when) + ") return " + drawn + "; return view(); }()";
-                        inside += (inside.empty() ? "" : ", ") + std::string("region{") + str(region.title) + ", " + drawn + "}";
+                        inside += (inside.empty() ? "" : ", ") + std::string("region{") + str(region.title) + ", " + drawn + (item->when ? ", true" : "") + "}";
                     }
                     if (layout == "workspace") shown.push_back({"workspace(p, " + inside + ")", where.line});
                     else shown.push_back({"layout(" + str(layout) + ", " + inside + ")", where.line});
@@ -2618,6 +2670,11 @@ namespace one::generators {
             out.line();
             out.line("set(CMAKE_CXX_STANDARD 26)");
             out.line("set(CMAKE_CXX_STANDARD_REQUIRED ON)");
+            out.line("# Built optimized unless another build is asked for, here or by CMAKE_BUILD_TYPE in");
+            out.line("# the environment: unoptimized, a camera's picture takes seconds to read.");
+            out.open("if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)");
+            out.line("set(CMAKE_BUILD_TYPE Release CACHE STRING \"how the app is built\" FORCE)");
+            out.close("endif()");
             out.line();
             out.line("# uione's libraries: a checkout of uione named by UIONE, or the release installed with");
             out.line("# the compiler, in ~/.local/share/uione/" + std::string(version) + ".");

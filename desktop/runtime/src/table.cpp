@@ -194,7 +194,7 @@ namespace one::desktop::runtime {
 				cells.push_back(tone ? desktop::edge(*tone) : desktop::spacer().grow(0).width(3));
 			}
 			// A small picture of its file, before its cells.
-			if (!spec.picture.empty()) cells.push_back(picture_of(p, row[spec.picture].as_string(), spec.fit, 40).width(40).grow(0));
+			if (!spec.picture.empty()) cells.push_back(picture_of(p, row[spec.picture].as_string(), spec.fit, 40, 640).width(40).grow(0));
 			for (std::size_t c = 0; c < spec.columns.size(); ++c) {
 				const auto& column = spec.columns[c].field;
 				// What a row opens is said in the table's color, when it has one, by its first column.
@@ -247,6 +247,14 @@ namespace one::desktop::runtime {
 			options.on_open = [&p, by_id, link = spec.link, keyed = spec.keyed, named = spec.named](const std::string& id) {
 				if (auto found = by_id.find(id); found != by_id.end()) p.open(row_link(link, found->second, p.params(), keyed, named));
 			};
+			// The row the page was left from, when it's back.
+			for (const auto& [id, row] : by_id) {
+				if (!p.where_left().opened.empty() && row_link(spec.link, row, p.params(), spec.keyed, spec.named) == p.where_left().opened) options.start = id;
+			}
+			// What its rows open, in the order they're shown, for a record opened from it to step through.
+			std::vector<std::string> addresses;
+			for (const auto& row : model.rows) addresses.push_back(row_link(spec.link, row, p.params(), spec.keyed, spec.named));
+			p.where_left().lists["table " + spec.list + " " + spec.link] = std::make_shared<const std::vector<std::string>>(std::move(addresses));
 		}
 		// Put in order with Alt and the arrows while nothing typed hides some of them.
 		if (model.arranging) {

@@ -76,6 +76,22 @@ namespace one::desktop::runtime {
 	// Whether there's a window for work handed back to reach: none while drawing to a
 	// file, or in a test, where what would be worked out away is worked out now.
 	bool posting();
+	// Work done away from the window's thread, like reading, keeping or making smaller
+	// a picture coming in, on the few threads every part of the app shares rather than
+	// one of its own; what it finds goes back by post. With no window to hand it back
+	// to, it's done now.
+	void in_background(std::function<void()> work);
+	// What that work found, handed back to the window's thread by post; or, with no
+	// window, done now, as the work was.
+	void handed_back(std::function<void()> task);
+	// The window drawn again, its view as it is, as what's drawn only once it's in view,
+	// like a mosaic's pictures, is when they're read.
+	void redraw();
+	// For a test of what's worked out away: while held, work is done in the background
+	// as in a window, and what's handed back waits until it's run, in turn, as the
+	// window's loop would run it, no more than `most` at a time; how many were.
+	void hold_posted(bool held);
+	std::size_t run_posted(std::size_t most = SIZE_MAX);
 
 	// Whether an address was handed to a copy of the app already running, as
 	// launching it again with one does when the first holds its data: that copy shows

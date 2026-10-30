@@ -177,6 +177,17 @@ export const buttonIcons: Record<string, ReactNode> = {
       <path d="M6 3l5 5-5 5" />
     </svg>
   ),
+  info: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="8" cy="8" r="6.5" />
+      <path d="M8 7.25V11.5M8 4.75v.5" />
+    </svg>
+  ),
+  play: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M5 3.5v9l7-4.5z" />
+    </svg>
+  ),
   // A table of contents: headings, and what's under them set in.
   contents: (
     <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -562,6 +573,11 @@ export const buttonIcons: Record<string, ReactNode> = {
       <rect x="2" y="3" width="12" height="10" rx="1.5" />
       <circle cx="5.5" cy="6.5" r="1.2" />
       <path d="M2.5 12l3.5-3.5 2.5 2.5 2-2 3 3" />
+    </svg>
+  ),
+  folder: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2 4.5a1 1 0 0 1 1-1h3.2l1.5 1.8H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z" />
     </svg>
   ),
   gallery: (

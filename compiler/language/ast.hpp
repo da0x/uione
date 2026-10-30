@@ -711,6 +711,18 @@ namespace one::language {
         std::string built;                             // link build.release: what the site was built from, release or source
         location built_where;
         std::vector<key_chord> keys;                   // key ctrl+o: opened by that key too
+        // link next in library.things "Next": the same screen for the record after the
+        // one its address names, or before it, in that list's own order. With no list,
+        // link next "Next", in the list the record was opened from, whichever it was.
+        std::string step;                              // previous or next
+        std::optional<qualified_name> step_view;
+        std::string step_list;
+        // every 4 seconds while slideshow: stepped by itself that often while the toggle's
+        // on, which goes off at the list's end, or as a key is pressed or a click made.
+        double every = 0;
+        location every_where;
+        std::string every_while;
+        location every_while_where;
     };
 
     struct table_column {
@@ -723,6 +735,7 @@ namespace one::language {
         std::string when_written;
         std::optional<std::string> icon;  // issue::create "New issue" icon add: a toolbar's button drawn as that
         location icon_where;
+        bool bytes = false;  // picture_bytes "Size" as bytes: a number of bytes, said as KB, MB or GB
     };
 
     // track milestone over board_page.milestones { due }: a list's records as cards in
@@ -971,7 +984,7 @@ namespace one::language {
     // crop "Crop" icon crop key c, edit words "Edit", add words "Text": what the screen's
     // collage does to its picked layer, or adds to it, from a toolbar or over the layer.
     struct collage_button {
-        enum class kind { crop, edit_words, add_words, add_pictures, paste, screenshot, copy, save, cut, ungroup, group_picked, raise, lower, zoom_in, zoom_out, zoom_fit };
+        enum class kind { crop, edit_words, add_words, add_pictures, add_folder, paste, screenshot, copy, save, cut, ungroup, group_picked, raise, lower, zoom_in, zoom_out, zoom_fit };
         kind does = kind::crop;
         // copy layer as picture, save poster_page as picture: the picked layer, or all of it.
         std::optional<std::string> of;
@@ -989,10 +1002,13 @@ namespace one::language {
     // row of a view's list the condition holds for, the row named by what it's of; the
     // other runs a command, as its button would.
     // picture poster.preview fit: the file a view's value, or a field of what's picked,
-    // holds, as wide as its place, all of it fitted in or filling it.
+    // holds, as wide as its place, all of it fitted in or filling it. Alone, it's all of
+    // a workspace's screen, its bars drawn over it, as a photo's own screen is.
     struct picture_item {
         expression_ptr source;
         bool fit = false;
+        bool alone = false;
+        location alone_where;
     };
 
     struct on_open_item {
@@ -1015,6 +1031,7 @@ namespace one::language {
             case kind::edit_words: return "edit";
             case kind::add_words: return "add";
             case kind::add_pictures: return "add pictures";
+            case kind::add_folder: return "add folder";
             case kind::paste: return "paste";
             case kind::screenshot: return "screenshot";
             case kind::copy: return std::string(b.svg ? "copy svg" : "copy") + (picked ? " picked" : "");
@@ -1038,6 +1055,7 @@ namespace one::language {
             case kind::edit_words: return "Edit";
             case kind::add_words: return "Text";
             case kind::add_pictures: return "Pictures";
+            case kind::add_folder: return "Folder";
             case kind::paste: return "Paste";
             case kind::screenshot: return "Screenshot";
             case kind::copy: return "Copy";
@@ -1255,6 +1273,20 @@ namespace one::language {
         std::optional<std::string> picture;
         std::string picture_sits = "fill";
         location picture_where;
+        // cards library.items mosaic: set as a mosaic of their pictures, each filling its
+        // tile, every eight two blocks of four, the second the first mirrored.
+        bool mosaic = false;
+        location mosaic_where;
+        // by picture_date month: under a heading for each year, month or day of a date
+        // field the list is ordered by, a mosaic's tiles starting again under each.
+        std::optional<std::string> by;
+        std::string by_unit = "month";
+        location by_where;
+        // add piece::create and paste: pictures dropped, pasted or chosen, each made a
+        // record by add, its file in the picture.
+        std::optional<qualified_name> add;
+        bool paste = false;
+        location paste_where;
     };
 
     // chart agent_page.stats.cpu "CPU" percent: a run of numbers, newest last, drawn
@@ -1341,6 +1373,10 @@ namespace one::language {
         location fresh_where;
         std::optional<qualified_name> opened;
         location opened_where;
+        // timeline library.photos by picture_date: instead, the years and months of cards
+        // under headings by that date on the same screen, each with how many it holds.
+        std::optional<std::string> by;
+        location by_where;
     };
 
     // copy issue_page "Copy issue": a button that copies everything a view holds, as
@@ -1573,6 +1609,27 @@ namespace one::language {
         return {};
     }
 
+    // size = sum(clippings).picture_bytes: what a number of a view's own list's rows adds
+    // up to, of the rows that pass, as a count's do. The list, its where, and the field.
+    struct row_sum : row_count {
+        std::string field;
+    };
+
+    inline row_sum summed_rows(const view_declaration& v, const view_value& value) {
+        auto* total = std::get_if<member_expression>(&value.value->node);
+        auto* call = total ? std::get_if<call_expression>(&total->object->node) : nullptr;
+        auto* callee = call ? std::get_if<name_expression>(&call->callee->node) : nullptr;
+        if (!callee || callee->name.text() != "sum" || call->arguments.size() != 1) return {};
+        const expression& argument = *call->arguments[0];
+        auto* w = std::get_if<where_expression>(&argument.node);
+        auto* source = std::get_if<name_expression>(&(w ? *w->source : argument).node);
+        if (!source || source->name.parts.size() != 1) return {};
+        for (const auto& each : v.each) {
+            if (each.name && *each.name == source->name.parts[0]) return {{&each, w}, total->member};
+        }
+        return {};
+    }
+
     // A collage's parts: what each is, the type it's kept as, and whether it's of the
     // view rather than its layers. A layer must have a place; every other part is drawn
     // when it's there.
@@ -1615,6 +1672,18 @@ namespace one::language {
         return all;
     }
 
+    // Cards': a picture made a record keeps its file, its own size, upright, its file's
+    // name, how many bytes it is, when it was taken, as its camera says, or else when its
+    // file was last changed, and the camera's make and model, each where the entity has
+    // a field for it.
+    inline const std::vector<collage_part>& cards_parts() {
+        static const std::vector<collage_part> all{
+            {"picture", "file"},          {"picture_width", "number"}, {"picture_height", "number"}, {"name", "text"},
+            {"picture_bytes", "number"}, {"picture_date", "date"},     {"picture_camera", "text"},
+        };
+        return all;
+    }
+
     // The field each part is kept in: the one the element names, or else the one named
     // like the part, when its rows hold it.
     inline std::map<std::string, std::string> parts_fields(const std::map<std::string, std::string>& said, const view_each* rows, const std::vector<collage_part>& parts) {
@@ -1634,6 +1703,57 @@ namespace one::language {
     }
 
     inline std::map<std::string, std::string> collage_fields(const collage_item& c, const view_each* layers) { return parts_fields(c.fields, layers, collage_parts()); }
+    // The lists on a screen whose rows each open a screen, like cards linking to
+    // /things/:thing: what a record's screen may have been opened from, in order.
+    struct opening_list {
+        qualified_name view;
+        std::string list;  // or none for the view's own rows
+        std::string link;
+    };
+    inline void lists_opening(const std::vector<screen_item>& items, std::vector<opening_list>& out) {
+        for (const auto& item : items) {
+            if (auto* c = std::get_if<cards_item>(&item.node); c && c->link) out.push_back({c->view, c->list.value_or(""), *c->link});
+            if (auto* t = std::get_if<table_item>(&item.node); t && t->link) out.push_back({t->view, t->list.value_or(""), *t->link});
+            if (auto* block = std::get_if<content_block>(&item.node)) lists_opening(block->items, out);
+        }
+    }
+
+    // The field a screen's picture alone shows, like image of picture clipping_page.image
+    // fit alone, for its steps to read the record they go to's picture ahead from the
+    // list's rows; or none.
+    inline std::string alone_field(const std::vector<screen_item>& items) {
+        for (const auto& item : items) {
+            if (auto* picture = std::get_if<picture_item>(&item.node); picture && picture->alone) {
+                if (auto* member = std::get_if<member_expression>(&picture->source->node)) return member->member;
+            }
+            if (auto* block = std::get_if<content_block>(&item.node)) {
+                if (std::string found = alone_field(block->items); !found.empty()) return found;
+            }
+        }
+        return "";
+    }
+
+    // The cards a timeline by a date goes with: of the same list, under headings by it.
+    inline const cards_item* dated_cards(const std::vector<screen_item>& items, const timeline_item& t) {
+        for (const auto& item : items) {
+            if (auto* c = std::get_if<cards_item>(&item.node); c && c->view.text() == t.view.text() && c->list.value_or("") == t.list && c->by == t.by) return c;
+            if (auto* block = std::get_if<content_block>(&item.node)) {
+                if (auto* found = dated_cards(block->items, t)) return found;
+            }
+        }
+        return nullptr;
+    }
+
+    // And cards': the picture in the field its picture line names, each other part in the
+    // entity's field named like it, when it has one.
+    inline std::map<std::string, std::string> cards_fields(const cards_item& c, const entity_declaration& rows) {
+        std::map<std::string, std::string> out;
+        if (c.picture) out["picture"] = *c.picture;
+        for (const auto& part : cards_parts()) {
+            if (part.name != std::string("picture") && std::ranges::any_of(rows.fields, [&](const field& f) { return f.name == part.name; })) out[part.name] = part.name;
+        }
+        return out;
+    }
     // And the one part of the page as a whole: its face, the type it's all set in, a value
     // of its view, kept on what the view is per.
     inline const collage_part& paper_face() {

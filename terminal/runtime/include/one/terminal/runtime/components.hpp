@@ -37,6 +37,9 @@ namespace one::terminal::runtime {
 	}
 	// A link to another screen, to a part of this one, like #projects, or out of the app.
 	terminal::view link(page& p, std::string words, std::string to, std::string icon = "", std::vector<std::string> keys = {});
+	// link next in library.things "Next": to the record after this one, or before it, in
+	// the record's place; only its words at either end.
+	terminal::view step(page& p, step_spec spec, std::string words, std::string icon = "", std::vector<std::string> keys = {});
 	// A part of the page a link names, like #projects, brought to the top when it's followed.
 	terminal::view anchored(page& p, std::string name, terminal::view part);
 	terminal::view hero(std::string title, std::vector<terminal::view> inside);
@@ -125,6 +128,8 @@ namespace one::terminal::runtime {
 	terminal::view collage_button(page& p, collage_ask ask);
 	// picture poster.preview fit: a terminal draws no pictures, so it shows none.
 	terminal::view picture_of(page& p, const std::string& kept, bool fit, float height);
+	// picture clipping_page.image fit alone: nor alone, so its screen is its bars.
+	terminal::view picture_alone(page& p, const std::string& kept, const std::string& key);
 	// on open: what the screen does as it's opened, and "Opening…" while it decides.
 	terminal::view on_open(page& p, bool ready, std::vector<opening> lines);
 	// A terminal has no screen of its own to measure, so screen.width and

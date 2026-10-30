@@ -195,6 +195,45 @@ TEST("keys open a row, type into a form and send it, and Esc goes back") {
 	CHECK(nav.depth() == 1);
 }
 
+TEST("a record's screen steps to the one before or after it in its list by its keys, in its place, only its words at either end") {
+	memory_source data;
+	list posters;
+	for (int i = 0; i < 3; ++i) posters.push_back(value(fields{{"id", std::format("p{}", i)}}));
+	data.set("studio::archive", "", value(fields{{"posters", posters}}));
+	site s{.name = "studio"};
+	s.screens.push_back({"Posters", "/posters", "", [](page&) { return items(); }});
+	s.screens.push_back({"Poster", "/posters/:poster", "", [](page& p) {
+		                     auto archive = p.view("studio::archive");
+		                     return items(step(p, {.view = archive, .list = "posters", .route = "/posters/:poster"}, "Previous", "", {"left"}),
+		                                  step(p, {.view = archive, .list = "posters", .route = "/posters/:poster", .next = true}, "Next", "", {"right"}));
+	                     }});
+	navigator nav(s, data);
+	nav.open("/posters");
+	nav.open("/posters/p0");
+	screen_at t(nav, 80, 12);
+	// Its keys, which are the page's, once what has the keyboard doesn't take them.
+	auto pressed = [&](int code) {
+		t.text();
+		return one::terminal::runtime::key(nav, key(code), false);
+	};
+	CHECK(pressed(terminal::keys::right));
+	CHECK(nav.current().address() == "/posters/p1");
+	CHECK(pressed(terminal::keys::right));
+	CHECK(nav.current().address() == "/posters/p2");
+	// At the last, Next is its words alone, and its key does nothing.
+	CHECK(!pressed(terminal::keys::right));
+	CHECK(nav.current().address() == "/posters/p2");
+	CHECK(pressed(terminal::keys::left));
+	CHECK(nav.current().address() == "/posters/p1");
+	CHECK(pressed(terminal::keys::left));
+	CHECK(nav.current().address() == "/posters/p0");
+	CHECK(!pressed(terminal::keys::left));
+	CHECK(t.text().find("Previous") != std::string::npos);
+	CHECK(nav.depth() == 2);
+	nav.back();
+	CHECK(nav.current().where_left().opened == "/posters/p0");
+}
+
 namespace {
 
 	site with_board() {
@@ -613,7 +652,7 @@ TEST("a monitor of agents, working and offline, and an agent's charts in braille
 	screen_at t(nav, 110, 12);
 	std::string drawn = t.text();
 	CHECK_SAYING(drawn.find("Working 1m") != std::string::npos && drawn.find("3/5") != std::string::npos && drawn.find("90%") == std::string::npos &&
-	                 drawn.find("64%") != std::string::npos && drawn.find("610 MiB") != std::string::npos,
+	                 drawn.find("64%") != std::string::npos && drawn.find("610 MB") != std::string::npos,
 	             drawn);
 	CHECK_SAYING(drawn.find("Offline") != std::string::npos, drawn);
 	CHECK_SAYING(drawn.find("⣷") != std::string::npos, drawn);  // the graph, its last samples near the top
@@ -621,7 +660,7 @@ TEST("a monitor of agents, working and offline, and an agent's charts in braille
 	nav.open("/atlas/agents/npm");
 	screen_at page(nav, 80, 30);
 	std::string large = page.text();
-	CHECK_SAYING(large.find("of 100%") != std::string::npos && large.find("of 1 GiB") != std::string::npos, large);
+	CHECK_SAYING(large.find("of 100%") != std::string::npos && large.find("of 1 GB") != std::string::npos, large);
 }
 
 // A card whose holder says how far it is shows it, in btop's squares, while they
