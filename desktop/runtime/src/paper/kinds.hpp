@@ -9,9 +9,11 @@
 #pragma once
 
 #include <any>
+#include <functional>
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "one/desktop/runtime/components.hpp"
 
@@ -56,6 +58,26 @@ namespace one::desktop::runtime::paper_kinds {
 	// its empty last line taken away, for a block after it.
 	enum class on_enter { split, new_line, leave };
 
+	// A kind written apart, in a dialog of its own over the page, as an equation is: what
+	// it's called, its keys a tab at a time, what its words are set from, and what's said
+	// of them as they're typed. Each key has its name, the notation its face is set from,
+	// what it puts at the caret, ‸ where the caret goes then, and what it puts around words
+	// chosen, § where they go.
+	struct key {
+		std::string name, face, put, around = "";
+	};
+	struct key_tab {
+		std::string name;
+		std::vector<key> keys;
+	};
+	struct written_apart {
+		std::string name;
+		std::vector<key_tab> tabs;
+		std::function<std::string(const std::string&)> written;
+		std::function<std::optional<std::string>(const std::string&)> note = {};
+		bool spaced = false;  // a name put after a letter is apart from it, where letters together are one name
+	};
+
 	class kind {
 	public:
 		virtual ~kind() = default;
@@ -85,6 +107,8 @@ namespace one::desktop::runtime::paper_kinds {
 		// The kind of a block made of its words after the caret, by Enter: its own, unless
 		// it says another, as a picture's caption goes on as text.
 		virtual std::optional<std::string> continues_as() const { return std::nullopt; }
+		// Written apart, when it is.
+		virtual const written_apart* apart() const { return nullptr; }
 	};
 
 	// The kind of that name, or text when there's none.

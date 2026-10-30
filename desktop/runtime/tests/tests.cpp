@@ -2123,6 +2123,65 @@ TEST("a paper's math block is its words while the caret's in it, in a well, and 
 	matches_golden("paper-math-written", {900, 420}, [&] { return drawn(nav); });
 }
 
+TEST("a paper's chemistry block is written apart, in a dialog over the page: its equation set as it's typed, keys put at the caret, and Enter keeps it") {
+	memory_source data;
+	data.set("studio::notes_page", "p1", value(fields{{"passages", list{value(fields{{"id", "b1"}, {"kind", "chem"}, {"words", "2H2 + O2 -> 2H2"}, {"position", 1}, {"align", "center"}})}}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Notes", "/", "", [](page& p) {
+		                     return workspace(p, region{"main", items(paper(p, {.view = p.view("studio::notes_page", "p1"), .list = "passages",
+		                                                                        .fields = {{"words", "words"}, {"kind", "kind"}, {"align", "align"}, {"position", "position"}},
+		                                                                        .write = "studio::passage::write", .key = "/ paper", .fills = true}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	auto root = built(nav);
+	std::function<void(one::desktop::element&, std::vector<one::desktop::element*>&)> entries = [&](one::desktop::element& e, std::vector<one::desktop::element*>& into) {
+		if (e.entry()) into.push_back(&e);
+		for (auto& child : e.children) entries(*child, into);
+	};
+	std::vector<one::desktop::element*> typed;
+	entries(*root, typed);
+	CHECK(typed.size() == 1);
+	if (typed.empty()) return;
+	// Pressed, its one block, near the top of the page, opens the dialog, with a field of its own.
+	auto* page = typed.front();
+	CHECK(page->press({page->frame.x + page->frame.width / 2, page->frame.y + 28 + 72 + 12}, 1));
+	root = built(nav);
+	typed.clear();
+	entries(*root, typed);
+	CHECK(typed.size() == 2);
+	if (typed.size() < 2) return;
+	matches_golden("paper-chem-apart", {900, 640}, [&] { return drawn(nav); });
+	// The Common tab's O key puts O at the caret, at the end.
+	std::function<one::desktop::element*(one::desktop::element&)> key = [&](one::desktop::element& e) -> one::desktop::element* {
+		if (e.key == "O" && e.on_click) return &e;
+		for (auto& child : e.children) {
+			if (auto* found = key(*child)) return found;
+		}
+		return nullptr;
+	};
+	auto* o = key(*root);
+	CHECK(o != nullptr);
+	if (!o) return;
+	CHECK(o->click({o->frame.x + 4, o->frame.y + 4}));
+	CHECK(data.runs().empty());
+	root = built(nav);
+	typed.clear();
+	entries(*root, typed);
+	CHECK(typed.size() == 2);
+	if (typed.size() < 2) return;
+	CHECK(typed[1]->handle_key(one::desktop::key_event{.symbol = one::desktop::keys::enter, .text = ""}));
+	CHECK(data.runs().size() == 1);
+	if (data.runs().empty()) return;
+	CHECK(data.runs()[0].command == "studio::passage::write");
+	CHECK(data.runs()[0].fields["words"].as_string() == "2H2 + O2 -> 2H2O");
+	root = built(nav);
+	typed.clear();
+	entries(*root, typed);
+	CHECK(typed.size() == 1);
+}
+
 TEST("a paper is pages, each numbered at its foot, a block that doesn't fit going to the next, and a heading with what it heads, warm when it says") {
 	memory_source data;
 	auto block = [](std::string id, std::string kind, std::string words, double position) {

@@ -26,6 +26,8 @@
 #include "one/desktop/runtime/components.hpp"
 #include "paper/kinds.hpp"
 
+#include <one/math.hpp>
+
 namespace one::desktop::runtime {
 
 	namespace {
@@ -66,6 +68,9 @@ namespace one::desktop::runtime {
 			std::string composing;
 			int composing_at = -1;
 			std::pair<double, std::optional<double>> taking{0, std::nullopt};  // where pictures coming in go: after this position, and before this one
+			// A block being written apart, in a dialog over the page, by its id, and its
+			// words as they were when it opened.
+			std::string apart, apart_was;
 		};
 
 		// The theme on warm paper, as under a reading lamp: a warm page, sheet, ink and
@@ -317,9 +322,14 @@ namespace one::desktop::runtime {
 				else if (clicks == 3) s_->edit.select_line(offset);
 				else s_->edit.move_to(offset, false);
 				s_->aim = -1;
+				// A block written apart, as an equation is, is written in its dialog.
+				if (clicks == 1 && writes_apart && !blocks_[i].id.empty() && kind_of(blocks_[i].kind).apart()) writes_apart(blocks_[i]);
 				tick_.set(tick_.peek() + 1);
 				return true;
 			}
+
+			// Told of a block pressed that's written apart.
+			std::function<void(const block&)> writes_apart;
 
 			void drag(point at) override {
 				auto [i, offset] = hit_block(at);
@@ -1244,6 +1254,102 @@ namespace one::desktop::runtime {
 		return desktop::tool_button(desktop::has_icon(ask.icon) ? ask.icon : "", hint_of(ask.label, ask.keys), std::move(press));
 	}
 
+	namespace {
+
+		using paper_kinds::written_apart;
+
+		// An equation set, as large as it's drawn.
+		desktop::view set_view(set_equation set) {
+			return desktop::row(desktop::drawing([set](desktop::canvas& c, desktop::rect area) { set.draw(c, {area.x, area.y}); }).width(set.width).height(set.ascent + set.descent));
+		}
+
+		// A block written apart, as an equation is: a dialog over the page, what its words
+		// make at the top, what's said of them under it, the words, and its keys a tab at a
+		// time, each put at the caret or around what's chosen. Accept or Enter keeps what's
+		// written, as if typed into the block; Cancel or Esc lets it go.
+		std::optional<desktop::view> written_apart(page& p, const paper_spec& spec, std::shared_ptr<paper_state> s, const std::vector<block>& blocks, state<std::string> words,
+		                                           state<std::pair<std::size_t, std::size_t>> chosen, state<int> tab, state<int> tick) {
+			if (s->apart.empty()) return std::nullopt;
+			auto b = std::ranges::find(blocks, s->apart, &block::id);
+			const paper_kinds::written_apart* apart = b == blocks.end() ? nullptr : kind_of(b->kind).apart();
+			if (!apart) {
+				s->apart.clear();
+				return std::nullopt;
+			}
+			const auto& t = current_theme();
+			auto keep = [s, &p, write = spec.write, parts = spec.fields, words, tick](bool kept) {
+				std::string id = std::exchange(s->apart, "");
+				std::string now = words.peek();
+				if (kept && !id.empty() && !write.empty() && now != s->apart_was) {
+					s->written[id] = now;
+					s->sent[id] = now;
+					if (s->at == id) {
+						s->edit.replace_all(now);
+						s->edit.end(false);
+					}
+					p.run(write, collage_fields_of(value(fields{{"id", id}, {"words", now}}), parts));
+				}
+				tick.set(tick.peek() + 1);
+			};
+			std::string now = words.get();
+			chosen.get();
+			std::vector<desktop::view> parts;
+			parts.push_back(desktop::row(desktop::button("Cancel", [keep] { keep(false); }), desktop::spacer(), desktop::text(apart->name, t.strong()), desktop::spacer(),
+			                             desktop::button("Accept", [keep] { keep(true); }, true))
+			                    .align(align::center));
+			// What it makes, or what's wrong with it, and what's said of it.
+			std::vector<desktop::view> made;
+			auto quiet = t.quiet();
+			if (auto read = one::math::parse(apart->written(now)); read && !now.empty()) {
+				made.push_back(set_view(equation_set(apart->written(now), t.text_size * 1.6f, true, t.ink)));
+				if (auto note = apart->note ? apart->note(now) : std::nullopt) made.push_back(desktop::text(*note, quiet));
+			} else {
+				made.push_back(desktop::text(now.empty() || read ? " " : read.error().says, quiet));
+			}
+			parts.push_back(desktop::column(std::move(made)).spacing(8).align(align::center).padding(edges(16, 0)));
+			auto put = [words, chosen, spaced = apart->spaced](const paper_kinds::key& k) {
+				std::string was = words.peek();
+				auto [anchor, caret] = chosen.peek();
+				std::size_t from = std::min({anchor, caret, was.size()}), to = std::min(std::max(anchor, caret), was.size());
+				std::string picked = was.substr(from, to - from);
+				std::string put = k.put;
+				if (!picked.empty() && !k.around.empty()) {
+					put = k.around;
+					put.replace(put.find("§"), std::string_view("§").size(), picked);
+				}
+				if (put.find("‸") == std::string::npos) put += "‸";
+				auto letter = [](char c) { return std::isalpha(static_cast<unsigned char>(c)) != 0; };
+				if (spaced && from > 0 && letter(was[from - 1]) && letter(put[0])) put = " " + put;
+				std::size_t at = put.find("‸");
+				put.erase(at, std::string_view("‸").size());
+				words.set(was.substr(0, from) + put + was.substr(to));
+				chosen.set({from + at, from + at});
+			};
+			parts.push_back(desktop::field(words, {.placeholder = "Type here, or press the keys below", .on_submit = [keep] { keep(true); }, .chosen = chosen}).autofocus());
+			if (!apart->tabs.empty()) {
+				int shown = std::clamp(tab.get(), 0, static_cast<int>(apart->tabs.size()) - 1);
+				std::vector<desktop::view> tabs;
+				for (int i = 0; i < static_cast<int>(apart->tabs.size()); ++i) {
+					tabs.push_back(desktop::tool_button("", apart->tabs[static_cast<std::size_t>(i)].name, [tab, i] { tab.set(i); }, {.on = i == shown}));
+				}
+				parts.push_back(desktop::row(std::move(tabs)).spacing(4));
+				std::vector<desktop::view> keys;
+				for (const auto& k : apart->tabs[static_cast<std::size_t>(shown)].keys) {
+					keys.push_back(desktop::column(desktop::spacer(), equation(k.face, false), desktop::spacer())
+					                   .align(align::center)
+					                   .height(44)
+					                   .padding(edges(0, 10))
+					                   .background({.fill = t.sunken, .border = t.line, .border_width = 1, .radius = 8})
+					                   .key(k.name)
+					                   .on_click([put, k] { put(k); }));
+				}
+				parts.push_back(desktop::scroll(desktop::flow(std::move(keys)).spacing(6)).height(220));
+			}
+			return desktop::dialog(desktop::column(std::move(parts)).spacing(12), [keep] { keep(false); });
+		}
+
+	}  // namespace
+
 	desktop::view paper(page& p, paper_spec spec) {
 		// Around the pages, and beside them, is the app's own theme; only the pages are warm.
 		const auto& t = current_theme();
@@ -1254,6 +1360,17 @@ namespace one::desktop::runtime {
 		auto tick = p.kept<int>("paper tick " + spec.key);
 		auto due = p.kept<int>("paper due " + spec.key);
 		tick.get();
+		// What's typed in a block written apart, where its selection is, and its tab of keys.
+		auto apart_words = p.kept<std::string>("paper apart words " + spec.key);
+		auto apart_chosen = p.kept<std::pair<std::size_t, std::size_t>>("paper apart chosen " + spec.key);
+		auto apart_tab = p.kept<int>("paper apart tab " + spec.key);
+		auto write_apart = [s, apart_words, apart_chosen, tick](const block& b) {
+			s->apart_was = b.words;
+			s->apart = b.id;
+			apart_words.set(b.words);
+			apart_chosen.set({b.words.size(), b.words.size()});
+			tick.set(tick.peek() + 1);
+		};
 		// Read as its parts, whichever of the app's fields keep them, in the order their
 		// positions say.
 		const value data = collage_parts_of(v.data, spec.list, spec.fields);
@@ -1295,6 +1412,8 @@ namespace one::desktop::runtime {
 				s->coming.reset();
 				s->coming_id.clear();
 				if (!spec.pick.empty()) p.pick(spec.pick, s->at);
+				// One written apart, as an inserted equation is, opens its dialog.
+				if (b.words.empty() && kind_of(b.kind).apart() && !spec.read_only) write_apart(b);
 				break;
 			}
 		}
@@ -1366,7 +1485,9 @@ namespace one::desktop::runtime {
 			if (spec.outline_drawer) outline = desktop::scroll(desktop::column(std::move(listed)).padding(edges(12, 12))).width(288).grow(0).background({.fill = t.surface});
 			else outline = desktop::column(std::move(listed)).padding(edges(around_sheet, 16, 16, 0)).width(232);
 		}
+		std::optional<desktop::view> apart = spec.read_only ? std::nullopt : written_apart(p, spec, s, blocks, apart_words, apart_chosen, apart_tab, tick);
 		auto made = std::make_unique<paper_element>(p, spec, s, std::move(blocks), tick, due);
+		if (!spec.read_only) made->writes_apart = write_apart;
 		// What a paste or add pictures button handed it, after the caret.
 		if (auto handed = pictures_handed(p, spec.key); !handed.empty()) made->take_pictures(std::move(handed));
 		// What an insert button asked of it.
@@ -1389,6 +1510,7 @@ namespace one::desktop::runtime {
 		desktop::view shown(std::move(made));
 		if (spec.paste) shown = pictures_target(p, std::move(shown), spec.key);
 		if (spec.fills) shown = desktop::scroll(std::move(shown)).grow();
+		if (apart) shown = desktop::column(std::move(shown), std::move(*apart)).grow(spec.fills ? 1 : 0);
 		if (!outline) return shown;
 		// A drawer takes its room from the page's, as the workspace's side does.
 		if (spec.outline_drawer) return desktop::row(std::move(shown).grow(), std::move(*outline)).align(align::stretch).grow();
