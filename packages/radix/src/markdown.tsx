@@ -10,7 +10,7 @@ import { useId, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Equation } from "@uione/react";
+import { ColoredCode, Equation } from "@uione/react";
 
 // Markdown's tree, as much of it as math needs.
 type MarkdownNode = { type: string; value?: string; lang?: string | null; children?: MarkdownNode[]; data?: object };
@@ -93,6 +93,15 @@ export function MarkdownText({ source }: { source: string }) {
               </div>
             ) : (
               <p {...props}>{children}</p>
+            );
+          },
+          // A fenced block's code colored as one::syntax reads its language, like ```cpp.
+          code: ({ node: _, className, children, ...props }) => {
+            const language = /\blanguage-(\S+)/.exec(className ?? "")?.[1];
+            return (
+              <code className={className} {...props}>
+                {language && typeof children === "string" ? <ColoredCode words={children} language={language} /> : children}
+              </code>
             );
           },
           // A link whose address was blocked arrives with none, and an empty href

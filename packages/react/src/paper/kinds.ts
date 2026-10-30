@@ -30,6 +30,7 @@ export interface Parts {
   pictureHeight?: number;
   width?: number; // how much of the page's width it runs, from 0 to 1
   corners?: number; // how round its corners are, a share of its shorter side
+  language?: string; // code's, as one::syntax names it, like cpp
 }
 
 export interface ShowingAsked {
@@ -65,12 +66,15 @@ export interface BlockKind {
   continuesAs?: string;
   // What it shows besides its words; its words alone when it doesn't say.
   showing?(asked: ShowingAsked): Showing;
-  // On a phone, written apart, on a sheet over the page: what it makes of its words
-  // shown above them as they're typed, then kept or let go. Its name, what's wrong
-  // with words it can't make anything of yet, what's worth saying of words it can, and
-  // the keys that write them; and whether a key's name is put apart from a letter
-  // before it, as letters together are one name in math, but not in a formula.
-  apart?: { name: string; problem?(words: string): string | undefined; note?(words: string): string | undefined; keys?: ApartKeys[]; apart?: boolean };
+  // Written apart, on a sheet over the page on a phone and in a dialog over it on a
+  // wider screen: what it makes of its words shown above them as they're typed, then
+  // kept or let go. Its name, what's wrong with words it can't make anything of yet,
+  // what's worth saying of words it can, and the keys that write them; whether a key's
+  // name is put apart from a letter before it, as letters together are one name in
+  // math, but not in a formula; whether its words run over several lines, Enter
+  // starting one and Control or Command and Enter keeping them; and whether it's
+  // written in a language chosen there.
+  apart?: { name: string; problem?(words: string): string | undefined; note?(words: string): string | undefined; keys?: ApartKeys[]; apart?: boolean; lines?: boolean; languages?: boolean };
 }
 
 // A row of keys on the sheet a block's written apart on, under a tab of its name. Each

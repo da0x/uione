@@ -220,6 +220,32 @@ describe("a paper", () => {
     }
   });
 
+  it("colors code as its language reads it, and writes it apart with its language chosen there, kept with its words", async () => {
+    const source = sourceWith([{ id: "b1", kind: "code", language: "cpp", words: "int main() { return 0; }", position: 1, align: "left" }]);
+    const drawn = renderPaper(source);
+    await waitFor(() => expect(blocks(drawn).length).toBe(1));
+    fireEvent.blur(blocks(drawn)[0]!);
+    const keyword = await waitFor(() => {
+      const found = [...drawn.container.querySelectorAll<HTMLElement>("span")].find((s) => s.textContent === "return");
+      expect(found).toBeDefined();
+      return found!;
+    });
+    expect(keyword.style.color).toBe("var(--syntax-keyword)");
+    // Pressed, it's written apart: Python chosen, a line added, and Control and Enter keep both.
+    fireEvent.mouseDown(keyword);
+    const dialog = await drawn.findByRole("dialog", { name: "Code" });
+    fireEvent.change(dialog.querySelector("select")!, { target: { value: "python" } });
+    const words = dialog.querySelector("textarea")!;
+    fireEvent.change(words, { target: { value: "def main():\n    return 0" } });
+    fireEvent.keyDown(words, { key: "Enter" });
+    expect(drawn.queryByRole("dialog")).not.toBeNull();
+    fireEvent.keyDown(words, { key: "Enter", ctrlKey: true });
+    await waitFor(() => expect(drawn.queryByRole("dialog")).toBeNull());
+    await waitFor(() => expect(source.runs).toHaveLength(2));
+    expect(source.runs[0]).toMatchObject({ command: "studio::passage::write", input: { id: "b1", words: "def main():\n    return 0" } });
+    expect(source.runs[1]).toMatchObject({ command: "studio::passage::write", input: { id: "b1", language: "python", "one:history": "joined" } });
+  });
+
   it("sets the face of every chemistry key, as ce( ) reads it", () => {
     const tabs = kindOf("chem").apart?.keys ?? [];
     expect(tabs.map((t) => t.name)).toEqual(["Common", "Arrows", "States", "Charges", "Elements"]);

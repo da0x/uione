@@ -19,6 +19,7 @@ import { chooseFolder, choosePictures, handPictures, hintOf, notAPicture, setPic
 import { useUI } from "./ui.js";
 import { kindOf } from "./paper/index.js";
 import type { Parts } from "./paper/index.js";
+import { languages } from "./syntax.js";
 
 type Row = Record<string, unknown>;
 interface Block {
@@ -197,6 +198,7 @@ function blocksOf(view: ViewState, list: string, fields: Record<string, string>)
         pictureHeight: num(r[field("picture_height")]),
         width: r[field("width")] === undefined || r[field("width")] === null ? 1 : num(r[field("width")]),
         corners: num(r[field("corners")]),
+        language: str(r[field("language")]) || undefined,
       },
     }))
     .sort((a, b) => a.position - b.position);
@@ -451,7 +453,7 @@ export function Paper({
   }, [view.status === "loading"]);
   const [writingIn, setWritingIn] = useState<string | undefined>(undefined);
   // A block being written apart, on a phone, and its words as they're typed there.
-  const [apart, setApart] = useState<{ id: string; words: string } | null>(null);
+  const [apart, setApart] = useState<{ id: string; words: string; language: string } | null>(null);
   const opening = useRef(false);
   const [, rebuilt] = useState(0);
 
@@ -1131,16 +1133,24 @@ export function Paper({
   const writeApart = (b: Block) => {
     const el = elements.current.get(b.id);
     if (readOnly || !b.id || !el || !kindOf(b.kind).apart) return;
-    setApart({ id: b.id, words: wordsOf(el) });
+    setApart({ id: b.id, words: wordsOf(el), language: b.parts?.language ?? "" });
     el.blur();
   };
   // What was written apart kept, as if typed into the block, or let go.
   const keep = (kept: boolean) => {
     const el = apart && elements.current.get(apart.id);
-    if (kept && apart && el && wordsOf(el) !== apart.words) {
-      el.textContent = apart.words;
-      el.dispatchEvent(new Event("input", { bubbles: true }));
-      send(apart.id);
+    const wrote = !!(kept && apart && el && wordsOf(el) !== apart.words);
+    if (wrote) {
+      el!.textContent = apart!.words;
+      el!.dispatchEvent(new Event("input", { bubbles: true }));
+      send(apart!.id);
+    }
+    // Its language, when it's another, one step with its words.
+    const was = shown.find((b) => b.id === apart?.id)?.parts?.language ?? "";
+    if (kept && apart && write && apart.language !== was) {
+      const sent: Row = { id: apart.id, language: apart.language };
+      if (wrote) sent["one:history"] = "joined";
+      void run(write, fieldsOf(sent, fields));
     }
     setApart(null);
   };
@@ -1248,7 +1258,18 @@ export function Paper({
           />
         ))}
       </div>
-      {apart && <Apart block={shown.find((b) => b.id === apart.id)} words={apart.words} zoom={size} narrow={narrow} retyped={(words) => setApart({ ...apart, words })} done={keep} />}
+      {apart && (
+        <Apart
+          block={shown.find((b) => b.id === apart.id)}
+          words={apart.words}
+          language={apart.language}
+          zoom={size}
+          narrow={narrow}
+          retyped={(words) => setApart({ ...apart, words })}
+          relanguaged={(language) => setApart({ ...apart, language })}
+          done={keep}
+        />
+      )}
     </div>
   );
   if (!rail) return page;
@@ -1276,10 +1297,28 @@ export function Paper({
 // wider screen a dialog in the middle of it; what its words make at the top, where the
 // keyboard leaves it in sight, the words under it, and Cancel and Accept, as Escape and
 // Enter do.
-function Apart({ block, words, zoom, narrow, retyped, done }: { block?: Block; words: string; zoom: number; narrow: boolean; retyped: (words: string) => void; done: (kept: boolean) => void }) {
+function Apart({
+  block,
+  words,
+  language,
+  zoom,
+  narrow,
+  retyped,
+  relanguaged,
+  done,
+}: {
+  block?: Block;
+  words: string;
+  language: string;
+  zoom: number;
+  narrow: boolean;
+  retyped: (words: string) => void;
+  relanguaged: (language: string) => void;
+  done: (kept: boolean) => void;
+}) {
   const kind = kindOf(block?.kind ?? "");
   const align = "center" as CSSProperties["textAlign"];
-  const made = kind.showing?.({ parts: block?.parts ?? {}, across: 320, tall: 320, words, focused: false, readOnly: true, zoom, align, toWords: () => {} });
+  const made = kind.showing?.({ parts: { ...(block?.parts ?? {}), language }, across: 320, tall: 320, words, focused: false, readOnly: true, zoom, align, toWords: () => {} });
   const wrong = kind.apart?.problem?.(words);
   const note = kind.apart?.note?.(words);
   // Its keys, a tab at a time: each put at the caret, or around what's chosen, the
@@ -1322,7 +1361,24 @@ function Apart({ block, words, zoom, narrow, retyped, done }: { block?: Block; w
           Accept
         </button>
       </div>
-      <div style={{ display: "grid", placeItems: "center", minHeight: 120, padding: 16, overflowX: "auto", textAlign: "center" }}>
+      {kind.apart?.languages && (
+        <label style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px 0", fontSize: 13, color: "var(--color-muted, #5b6577)" }}>
+          Language
+          <select
+            value={language}
+            onChange={(e) => relanguaged(e.currentTarget.value)}
+            style={{ font: "inherit", fontSize: 14, padding: "4px 8px", color: "var(--color-ink, #1b2230)", background: "var(--color-surface, #ffffff)", border: "1px solid var(--color-line, #dde2ea)", borderRadius: 6 }}
+          >
+            <option value="">Plain text</option>
+            {languages.map((l) => (
+              <option key={l.name} value={l.name}>
+                {l.title}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <div style={{ display: "grid", placeItems: kind.apart?.languages ? "start stretch" : "center", minHeight: kind.apart?.languages ? 0 : 120, padding: 16, overflowX: "auto", textAlign: kind.apart?.languages ? "left" : "center" }}>
         {made?.over && !wrong ? <div style={{ display: "grid" }}>{made.over}</div> : <span style={{ fontSize: 13, color: "var(--color-muted, #5b6577)" }}>{wrong ?? "\u00a0"}</span>}
         {made?.over && !wrong && note && <span style={{ marginTop: 8, fontSize: 13, color: "var(--color-muted, #5b6577)" }}>{note}</span>}
       </div>
@@ -1334,11 +1390,13 @@ function Apart({ block, words, zoom, narrow, retyped, done }: { block?: Block; w
         spellCheck={false}
         autoCorrect="off"
         autoCapitalize="off"
-        rows={3}
+        rows={kind.apart?.lines ? 8 : 3}
         onChange={(e) => retyped(e.currentTarget.value)}
         onKeyDown={(e) => {
           if (e.key === "Escape") return done(false);
-          if (e.key === "Enter" && !e.shiftKey) {
+          // Enter keeps the words, or, over several lines, starts another, Control or
+          // Command and Enter keeping them.
+          if (e.key === "Enter" && !e.shiftKey && (!kind.apart?.lines || e.ctrlKey || e.metaKey)) {
             e.preventDefault();
             done(true);
           }

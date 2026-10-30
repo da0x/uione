@@ -121,7 +121,7 @@ target_compile_options(one_desktop PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wext
 
 # The runtime a desktop app uione writes runs on: its screens, read live through
 # one::client from uione's client/ beside it, Markdown through one::markdown, and
-# equations through one::math.
+# equations through one::math, and code colored through one::syntax.
 option(ONE_DESKTOP_RUNTIME "Build one::desktop::runtime, which needs uione's client/" ON)
 if(ONE_DESKTOP_RUNTIME)
 	add_library(one_desktop_runtime
@@ -155,10 +155,13 @@ if(ONE_DESKTOP_RUNTIME)
 	if(NOT TARGET one_math)
 		add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../math ${CMAKE_CURRENT_BINARY_DIR}/math)
 	endif()
+	if(NOT TARGET one_syntax)
+		add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../syntax ${CMAKE_CURRENT_BINARY_DIR}/syntax)
+	endif()
 	if(NOT TARGET one_screens)
 		add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../screens ${CMAKE_CURRENT_BINARY_DIR}/screens)
 	endif()
-	target_link_libraries(one_desktop_runtime PUBLIC one_desktop one_screens PRIVATE one_markdown one_math)
+	target_link_libraries(one_desktop_runtime PUBLIC one_desktop one_screens PRIVATE one_markdown one_math one_syntax)
 	target_compile_options(one_desktop_runtime PRIVATE -Wall -Wextra -Werror -Wno-free-nonheap-object)
 
 endif()

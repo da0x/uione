@@ -48,6 +48,9 @@ namespace one::desktop::runtime {
 	// The pages above this one, nearest last, each followed back with a click.
 	desktop::view crumbs(page& p, std::vector<crumb> trail);
 	desktop::view code(std::string language, std::string source);
+	// Code's words colored as one::syntax reads their language, as code on GitHub is, dark
+	// when the theme's surface is; as they are in a language it doesn't know.
+	std::vector<text_span> colored_code(const std::string& words, const std::string& language, const text_style& look, const desktop::theme& t);
 	// An icon by its name, like edit, as the glyph drawn before what a button or a
 	// link says; nothing for one it doesn't know.
 	std::string glyph_of(const std::string& icon);

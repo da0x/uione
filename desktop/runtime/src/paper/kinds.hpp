@@ -23,6 +23,7 @@ namespace one::desktop::runtime::paper_kinds {
 	struct block {
 		std::string id, kind, align, words;
 		double position = 0;
+		std::string language = "";  // code's, as one::syntax names it, like cpp
 		// A picture's: its file, its own size, how much of the page's width it runs, and
 		// how round its corners are, a share of its shorter side.
 		std::string picture = "";
@@ -75,7 +76,9 @@ namespace one::desktop::runtime::paper_kinds {
 		std::vector<key_tab> tabs;
 		std::function<std::string(const std::string&)> written;
 		std::function<std::optional<std::string>(const std::string&)> note = {};
-		bool spaced = false;  // a name put after a letter is apart from it, where letters together are one name
+		bool spaced = false;     // a name put after a letter is apart from it, where letters together are one name
+		bool lines = false;      // its words run over several lines: Enter starts one, and Control+Enter keeps them
+		bool languages = false;  // written in a language chosen from one::syntax's, shown colored as it reads it
 	};
 
 	class kind {
@@ -91,6 +94,8 @@ namespace one::desktop::runtime::paper_kinds {
 		virtual int outlined() const { return 0; }
 		// How far in its words start, before the reader's size.
 		virtual float indent() const { return 0; }
+		// Its words as they're laid out, in their look, or colored as its kind reads them.
+		virtual std::vector<text_span> words_spans(const block&, const std::string& words, const text_style& look, const setting&) const { return {{words, look}}; }
 		// Laid out, once its words are: what else it has, and how tall it is all told.
 		// `here` is whether the caret's in it.
 		virtual void lay_out(laid&, const setting&, bool) const {}

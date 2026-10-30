@@ -2182,6 +2182,44 @@ TEST("a paper's chemistry block is written apart, in a dialog over the page: its
 	CHECK(typed.size() == 1);
 }
 
+TEST("a paper's code is colored as its language reads it, and written apart its language is chosen and kept with its words") {
+	memory_source data;
+	data.set("studio::notes_page", "p1",
+	         value(fields{{"passages", list{value(fields{{"id", "b1"}, {"kind", "code"}, {"language", "cpp"}, {"words", "#include <vector>\nint main() {\n\treturn 0; // done\n}"}, {"position", 1}, {"align", "left"}})}}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Notes", "/", "", [](page& p) {
+		                     return workspace(p, region{"main", items(paper(p, {.view = p.view("studio::notes_page", "p1"), .list = "passages",
+		                                                                        .fields = {{"words", "words"}, {"kind", "kind"}, {"language", "language"}, {"align", "align"}, {"position", "position"}},
+		                                                                        .write = "studio::passage::write", .key = "/ paper", .fills = true}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	auto root = built(nav);
+	std::function<void(one::desktop::element&, std::vector<one::desktop::element*>&)> entries = [&](one::desktop::element& e, std::vector<one::desktop::element*>& into) {
+		if (e.entry()) into.push_back(&e);
+		for (auto& child : e.children) entries(*child, into);
+	};
+	std::vector<one::desktop::element*> typed;
+	entries(*root, typed);
+	CHECK(typed.size() == 1);
+	if (typed.empty()) return;
+	auto* page = typed.front();
+	CHECK(page->press({page->frame.x + page->frame.width / 2, page->frame.y + 28 + 72 + 12}, 1));
+	matches_golden("paper-code-apart", {900, 640}, [&] { return drawn(nav); });
+	// Python chosen, and kept with Control+Enter, the words written in it.
+	nav.current().kept<std::string>("paper apart language / paper").set("python");
+	root = built(nav);
+	typed.clear();
+	entries(*root, typed);
+	CHECK(typed.size() == 2);
+	if (typed.size() < 2) return;
+	CHECK(typed[1]->handle_key(one::desktop::key_event{.symbol = one::desktop::keys::enter, .text = "", .control = true}));
+	CHECK(data.runs().size() == 1);
+	if (data.runs().empty()) return;
+	CHECK(data.runs()[0].fields["language"].as_string() == "python");
+}
+
 TEST("a paper is pages, each numbered at its foot, a block that doesn't fit going to the next, and a heading with what it heads, warm when it says") {
 	memory_source data;
 	auto block = [](std::string id, std::string kind, std::string words, double position) {

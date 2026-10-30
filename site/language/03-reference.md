@@ -2563,7 +2563,8 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   ([decision 0022](https://github.com/da0x/uione/blob/main/docs/decisions/0022-a-paper-is-a-page-written-in-place.md)).
   Each row is a block, in the order its `position` says, set as its `kind` says
   (`title`, `subtitle`, `heading`, `text`, `quote`, `math`, an equation set from its
-  words, `chem`, a chemical equation set from its words, `code`, kept as it's typed, or `picture`, with its words its caption) and
+  words, `chem`, a chemical equation set from its words, `code`, kept as it's typed and colored as its
+  `language` reads it, or `picture`, with its words its caption) and
   aligned as its `align` says (`left`, `center` or `right`). Its words
   are its `words`.
   - `write block::write`: what's typed in a block, sent once typing pauses or the
@@ -2591,8 +2592,12 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     written the same way, in what `ce( )` holds, like `2H2 + O2 -> 2H2O`. Its keys are
     Common, Arrows, States, Charges and Elements, all 118, and under its words it says
     as they're typed whether the reaction balances, or, one thing alone, its molar
-    mass, like `18.02 g/mol`. In a code block, Enter starts a new line, and Enter on an empty last
-    line leaves it for text after it. Words pasted over several lines are a block a
+    mass, like `18.02 g/mol`. A code block written apart has its words over several
+    lines, kept with Control and Enter, and its language chosen there, one of
+    one::syntax's, like C++, Python or SQL, or plain text. It's kept in the block's
+    `language`, like `cpp`, which `write` changes too, so it's in what the command
+    changes, as in `changes words kind language`. In a code block, Enter starts a new
+    line, and Enter on an empty last line leaves it for text after it. Words pasted over several lines are a block a
     paragraph, but in code, which keeps its lines.
   - `insert "Equation" icon equation { kind = kind::math }`, or `insert "Chemistry"
     icon flask { kind = kind::chem }`, a button anywhere on the
@@ -3053,7 +3058,9 @@ issue::verify "Verify" when {
   like a project's settings, General and Deployments, each a screen of its own.
 - `markdown "{book_page.summary}"` shows a view's Markdown field, rendered. What
   people write is drawn safely: it can't add markup or scripts to the page, and
-  images in it are shown as links.
+  images in it are shown as links. A fenced block's code is colored as its language
+  reads it, like ```` ```cpp ````, and a ```` ```math ```` or ```` ```chem ```` block is
+  set as an equation.
 
 ## notify
 

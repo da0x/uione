@@ -27,6 +27,7 @@
 #include "paper/kinds.hpp"
 
 #include <one/math.hpp>
+#include <one/syntax.hpp>
 
 namespace one::desktop::runtime {
 
@@ -69,8 +70,8 @@ namespace one::desktop::runtime {
 			int composing_at = -1;
 			std::pair<double, std::optional<double>> taking{0, std::nullopt};  // where pictures coming in go: after this position, and before this one
 			// A block being written apart, in a dialog over the page, by its id, and its
-			// words as they were when it opened.
-			std::string apart, apart_was;
+			// words and language as they were when it opened.
+			std::string apart, apart_was, language_was;
 		};
 
 		// The theme on warm paper, as under a reading lamp: a warm page, sheet, ink and
@@ -421,7 +422,7 @@ namespace one::desktop::runtime {
 							composed.underline = true;
 							spans = {{words.substr(0, s_->edit.caret()), l.look}, {s_->composing, composed}, {words.substr(s_->edit.caret()), l.look}};
 						} else {
-							spans = {{words, l.look}};
+							spans = kind.words_spans(l.b, words, l.look, at);
 						}
 						l.words = desktop::lay_out(spans, l.width, scale, align_of(l.b.align));
 						l.height = l.words->height();
@@ -1268,7 +1269,7 @@ namespace one::desktop::runtime {
 		// time, each put at the caret or around what's chosen. Accept or Enter keeps what's
 		// written, as if typed into the block; Cancel or Esc lets it go.
 		std::optional<desktop::view> written_apart(page& p, const paper_spec& spec, std::shared_ptr<paper_state> s, const std::vector<block>& blocks, state<std::string> words,
-		                                           state<std::pair<std::size_t, std::size_t>> chosen, state<int> tab, state<int> tick) {
+		                                           state<std::pair<std::size_t, std::size_t>> chosen, state<int> tab, state<std::string> language, state<int> tick) {
 			if (s->apart.empty()) return std::nullopt;
 			auto b = std::ranges::find(blocks, s->apart, &block::id);
 			const paper_kinds::written_apart* apart = b == blocks.end() ? nullptr : kind_of(b->kind).apart();
@@ -1277,17 +1278,19 @@ namespace one::desktop::runtime {
 				return std::nullopt;
 			}
 			const auto& t = current_theme();
-			auto keep = [s, &p, write = spec.write, parts = spec.fields, words, tick](bool kept) {
+			auto keep = [s, &p, write = spec.write, parts = spec.fields, words, language, tick](bool kept) {
 				std::string id = std::exchange(s->apart, "");
 				std::string now = words.peek();
-				if (kept && !id.empty() && !write.empty() && now != s->apart_was) {
+				if (kept && !id.empty() && !write.empty() && (now != s->apart_was || language.peek() != s->language_was)) {
 					s->written[id] = now;
 					s->sent[id] = now;
 					if (s->at == id) {
 						s->edit.replace_all(now);
 						s->edit.end(false);
 					}
-					p.run(write, collage_fields_of(value(fields{{"id", id}, {"words", now}}), parts));
+					value sent = value(fields{{"id", id}, {"words", now}});
+					if (language.peek() != s->language_was) sent.fields["language"] = value(language.peek());
+					p.run(write, collage_fields_of(sent, parts));
 				}
 				tick.set(tick.peek() + 1);
 			};
@@ -1297,16 +1300,29 @@ namespace one::desktop::runtime {
 			parts.push_back(desktop::row(desktop::button("Cancel", [keep] { keep(false); }), desktop::spacer(), desktop::text(apart->name, t.strong()), desktop::spacer(),
 			                             desktop::button("Accept", [keep] { keep(true); }, true))
 			                    .align(align::center));
-			// What it makes, or what's wrong with it, and what's said of it.
+			// Written in a language: which, chosen from one::syntax's.
+			if (apart->languages) {
+				std::vector<desktop::option> named{{"", "Plain text"}};
+				for (const auto& l : syntax::languages()) named.push_back({l.name, l.title});
+				auto open = p.kept<bool>("paper apart languages " + spec.key);
+				parts.push_back(desktop::row(desktop::text("Language", t.quiet()), desktop::picker(language, std::move(named), open, "Plain text")).spacing(10).align(align::center));
+			}
+			// What it makes, or what's wrong with it, and what's said of it; code, its words
+			// colored as its language reads them.
 			std::vector<desktop::view> made;
 			auto quiet = t.quiet();
-			if (auto read = one::math::parse(apart->written(now)); read && !now.empty()) {
+			if (apart->languages) {
+				block shown = *b;
+				shown.language = language.get();
+				paper_kinds::setting at{t, ""};
+				made.push_back(desktop::text(kind_of(b->kind).words_spans(shown, now.empty() ? " " : now, t.code(), at)));
+			} else if (auto read = one::math::parse(apart->written(now)); read && !now.empty()) {
 				made.push_back(set_view(equation_set(apart->written(now), t.text_size * 1.6f, true, t.ink)));
 				if (auto note = apart->note ? apart->note(now) : std::nullopt) made.push_back(desktop::text(*note, quiet));
 			} else {
 				made.push_back(desktop::text(now.empty() || read ? " " : read.error().says, quiet));
 			}
-			parts.push_back(desktop::column(std::move(made)).spacing(8).align(align::center).padding(edges(16, 0)));
+			parts.push_back(desktop::column(std::move(made)).spacing(8).align(apart->languages ? align::start : align::center).padding(edges(apart->languages ? 4 : 16, 0)));
 			auto put = [words, chosen, spaced = apart->spaced](const paper_kinds::key& k) {
 				std::string was = words.peek();
 				auto [anchor, caret] = chosen.peek();
@@ -1325,7 +1341,12 @@ namespace one::desktop::runtime {
 				words.set(was.substr(0, from) + put + was.substr(to));
 				chosen.set({from + at, from + at});
 			};
-			parts.push_back(desktop::field(words, {.placeholder = "Type here, or press the keys below", .on_submit = [keep] { keep(true); }, .chosen = chosen}).autofocus());
+			parts.push_back(desktop::field(words, {.placeholder = apart->tabs.empty() ? "Type here" : "Type here, or press the keys below",
+			                                       .multiline = apart->lines,
+			                                       .lines = 8,
+			                                       .on_submit = [keep] { keep(true); },
+			                                       .chosen = chosen})
+			                    .autofocus());
 			if (!apart->tabs.empty()) {
 				int shown = std::clamp(tab.get(), 0, static_cast<int>(apart->tabs.size()) - 1);
 				std::vector<desktop::view> tabs;
@@ -1364,10 +1385,13 @@ namespace one::desktop::runtime {
 		auto apart_words = p.kept<std::string>("paper apart words " + spec.key);
 		auto apart_chosen = p.kept<std::pair<std::size_t, std::size_t>>("paper apart chosen " + spec.key);
 		auto apart_tab = p.kept<int>("paper apart tab " + spec.key);
-		auto write_apart = [s, apart_words, apart_chosen, tick](const block& b) {
+		auto apart_language = p.kept<std::string>("paper apart language " + spec.key);
+		auto write_apart = [s, apart_words, apart_chosen, apart_language, tick](const block& b) {
 			s->apart_was = b.words;
+			s->language_was = b.language;
 			s->apart = b.id;
 			apart_words.set(b.words);
+			apart_language.set(b.language);
 			apart_chosen.set({b.words.size(), b.words.size()});
 			tick.set(tick.peek() + 1);
 		};
@@ -1380,6 +1404,7 @@ namespace one::desktop::runtime {
 		std::vector<block> blocks;
 		for (const auto& row : data[spec.list].as_array()) {
 			block b{row["id"].as_string(), row["kind"].as_string(), row["align"].as_string(), row["words"].as_string(), row["position"].as_double()};
+			b.language = row["language"].as_string();
 			b.picture = row["picture"].as_string();
 			if (!b.picture.empty()) (void)picture_kept(p, b.picture);  // read while it's built, so it's drawn once it is
 			b.picture_width = row["picture_width"].as_double(), b.picture_height = row["picture_height"].as_double();
@@ -1485,7 +1510,7 @@ namespace one::desktop::runtime {
 			if (spec.outline_drawer) outline = desktop::scroll(desktop::column(std::move(listed)).padding(edges(12, 12))).width(288).grow(0).background({.fill = t.surface});
 			else outline = desktop::column(std::move(listed)).padding(edges(around_sheet, 16, 16, 0)).width(232);
 		}
-		std::optional<desktop::view> apart = spec.read_only ? std::nullopt : written_apart(p, spec, s, blocks, apart_words, apart_chosen, apart_tab, tick);
+		std::optional<desktop::view> apart = spec.read_only ? std::nullopt : written_apart(p, spec, s, blocks, apart_words, apart_chosen, apart_tab, apart_language, tick);
 		auto made = std::make_unique<paper_element>(p, spec, s, std::move(blocks), tick, due);
 		if (!spec.read_only) made->writes_apart = write_apart;
 		// What a paste or add pictures button handed it, after the caret.

@@ -8,6 +8,8 @@
 #include "one/desktop/runtime/components.hpp"
 #include "one/desktop/runtime/markdown.hpp"
 
+#include <one/syntax.hpp>
+
 #include <spawn.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -570,12 +572,27 @@ namespace one::desktop::runtime {
 		return desktop::text(said(parts), current_theme().heading(26)).padding(edges(16, 0));
 	}
 
-	desktop::view code(std::string, std::string source) {
+	desktop::view code(std::string language, std::string source) {
 		const auto& t = current_theme();
-		// A tab as four spaces, as the web shows code.
-		std::string shown;
-		for (char c : without_license(std::move(source))) shown += c == '\t' ? std::string("    ") : std::string(1, c);
-		return desktop::text(std::move(shown), t.code()).padding(edges(12, 16)).background({.fill = t.sunken, .radius = std::min(t.corners, 8.f)});
+		return desktop::text(colored_code(without_license(std::move(source)), language, t.code(), t)).padding(edges(12, 16)).background({.fill = t.sunken, .radius = std::min(t.corners, 8.f)});
+	}
+
+	std::vector<text_span> colored_code(const std::string& words, const std::string& language, const text_style& look, const desktop::theme& t) {
+		const auto* read = language.empty() ? nullptr : syntax::find(language);
+		if (!read) return {{words, look}};
+		const auto& under = t.surface;
+		bool dark = under.red * 0.299f + under.green * 0.587f + under.blue * 0.114f < 0.5f;
+		std::vector<text_span> out;
+		std::size_t done = 0;
+		for (const auto& s : syntax::highlight(words, *read)) {
+			if (s.from > done) out.push_back({words.substr(done, s.from - done), look});
+			text_style colored = look;
+			colored.color = color::hex(syntax::color(s.kind, dark));
+			out.push_back({words.substr(s.from, s.to - s.from), colored});
+			done = s.to;
+		}
+		out.push_back({words.substr(done), look});
+		return out;
 	}
 
 	// The part of the page a link last brought into view, and how many times one has.

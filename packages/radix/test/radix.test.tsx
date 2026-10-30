@@ -481,6 +481,18 @@ describe("markdown someone wrote", () => {
     expect(container.querySelector("pre")).toBeNull();
   });
 
+  it("colors a fenced block's code as its language reads it, and leaves one in a language it doesn't know as it is", () => {
+    const { container } = render(<MarkdownText source={"```cpp\nint main() { return 0; }\n```\n\n```brainfuck\n+[-]\n```"} />);
+    const colored = [...container.querySelectorAll<HTMLElement>("pre code span")].map((s) => [s.textContent, s.style.color]);
+    expect(colored).toEqual([
+      ["int", "var(--syntax-type)"],
+      ["main", "var(--syntax-function)"],
+      ["return", "var(--syntax-keyword)"],
+      ["0", "var(--syntax-number)"],
+    ]);
+    expect(container.querySelectorAll("pre")[1]?.textContent).toBe("+[-]\n");
+  });
+
   it("is written in a form with a preview of how it will look", () => {
     renderScreen(() => <Form command="library::book::create" fields={[{ name: "summary", type: "markdown" }]} />);
     fireEvent.change(screen.getByRole("textbox", { name: "Summary" }), { target: { value: "A **classic**." } });
