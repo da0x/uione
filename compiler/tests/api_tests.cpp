@@ -158,6 +158,129 @@ function same_title(a text, b text) {
     CHECK(found->content.find("func SameTitle(a string, b string) bool {\n\treturn a == b\n}") != std::string::npos);
 }
 
+TEST_CASE("a function calls others and itself, works out sums and a match, and a command calls it, all as gofmt writes Go") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace clock {
+enum pace {
+	slow
+	fast
+}
+entity hand {
+	turns  number  = 0
+	way    pace    = pace::slow
+}
+function steps(n number, way pace) {
+	if n <= 0 { return 0 }
+	return walk(n, way)
+}
+function walk(n number, way pace) {
+	return match way {
+		slow 1 + steps(n - 1, way)
+		fast 2 + steps(n - 1, way)
+	}
+}
+function half(n number) {
+	return (n + 1) / 2 * 3 - -n
+}
+command hand::turn {
+	turns = half(steps(turns, pace::fast))
+}
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    for (const auto& d : generated.errors) FAIL_CHECK(language::format(d));
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "clock/clock.go"; });
+    REQUIRE(found != generated.files.end());
+    CAPTURE(found->content);
+    CHECK(found->content.find(R"(func Steps(n float64, way string) float64 {
+	if n <= 0 {
+		return 0
+	}
+	return Walk(n, way)
+}
+
+func Walk(n float64, way string) float64 {
+	switch way {
+	case "slow":
+		return 1 + Steps(n-1, way)
+	case "fast":
+		return 2 + Steps(n-1, way)
+	}
+	panic("no choice matched")
+}
+
+func Half(n float64) float64 {
+	return one.Divide(n+1, 2)*3 - -n
+}
+)") != std::string::npos);
+    CHECK(found->content.find("h.Turns = Half(Steps(h.Turns, \"fast\"))") != std::string::npos);
+}
+
+TEST_CASE("a list is read, joined and drawn from at random in Go, and an enum's input is one of its choices") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace stack {
+enum way {
+	top
+	bottom
+}
+entity item {
+	name  text  key
+}
+entity pile {
+	items  list of item
+	taken  list of item
+}
+function cut(items list of item, at number) {
+	return drop(items, at) + first(items, at)
+}
+function moved(items list of item, from way) {
+	return match from {
+		top cut(items, random(1, count(items) - 1))
+		bottom items + []
+	}
+}
+command pile::cut {
+	input from  way
+	items = moved(items, from)
+	taken = taken + first(items, 2)
+}
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    for (const auto& d : generated.errors) FAIL_CHECK(language::format(d));
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "stack/stack.go"; });
+    REQUIRE(found != generated.files.end());
+    CAPTURE(found->content);
+    // Called like the command, so it says it's a function.
+    CHECK(found->content.find(R"(func CutFunction(items []string, at float64) []string {
+	return one.Joined(one.DropOf(items, int(at)), one.FirstOf(items, int(at)))
+}
+
+func Moved(items []string, from string) []string {
+	switch from {
+	case "top":
+		return CutFunction(items, one.Random(1, float64(len(items))-1))
+	case "bottom":
+		return one.Joined(items, []string{})
+	}
+	panic("no choice matched")
+}
+)") != std::string::npos);
+    CHECK(found->content.find(R"(		from, _ := c.Input("from").(string)
+		if !one.Has([]string{"top", "bottom"}, from) {
+			return c.Fail("from is one of top or bottom")
+		}
+		p.Items = Moved(p.Items, from)
+		p.Taken = one.Joined(p.Taken, one.FirstOf(p.Items, 2))
+)") != std::string::npos);
+}
+
 TEST_CASE("a field can be worked out from what another points at, and a list can start with values") {
     language::diagnostics out;
     std::vector<language::file> files;

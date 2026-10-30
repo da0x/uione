@@ -12,6 +12,9 @@
 #include <cstdio>
 #include <ctime>
 #include <format>
+#include <functional>
+#include <memory>
+#include <random>
 #include <stdexcept>
 #include <unordered_set>
 
@@ -83,6 +86,47 @@ namespace one::local {
 	double divided(double x, double y) { return y == 0 ? 0 : x / y; }
 
 	double remainder(double x, double y) { return y == 0 ? 0 : x - y * std::floor(x / y); }
+
+	namespace {
+		std::size_t at_most(const value& list, double n) { return static_cast<std::size_t>(std::clamp(n, 0.0, static_cast<double>(list.as_array().size()))); }
+
+		std::function<std::int64_t(std::int64_t)>& draw() {
+			static std::function<std::int64_t(std::int64_t)> from_the_system = [](std::int64_t n) {
+				static std::random_device source;
+				return std::uniform_int_distribution<std::int64_t>(0, n - 1)(source);
+			};
+			return from_the_system;
+		}
+	}  // namespace
+
+	value first_of(const value& list, double n) {
+		const auto& items = list.as_array();
+		return value(std::vector<value>(items.begin(), items.begin() + static_cast<std::ptrdiff_t>(at_most(list, n))));
+	}
+
+	value drop_of(const value& list, double n) {
+		const auto& items = list.as_array();
+		return value(std::vector<value>(items.begin() + static_cast<std::ptrdiff_t>(at_most(list, n)), items.end()));
+	}
+
+	value joined(const value& a, const value& b) {
+		std::vector<value> both = a.as_array();
+		both.insert(both.end(), b.as_array().begin(), b.as_array().end());
+		return value(std::move(both));
+	}
+
+	double counted(const value& list) { return static_cast<double>(list.as_array().size()); }
+
+	double random(double low, double high) {
+		double from = std::ceil(low), to = std::floor(high);
+		if (to <= from) return from;
+		return from + static_cast<double>(draw()(static_cast<std::int64_t>(to - from) + 1));
+	}
+
+	std::shared_ptr<void> draw_with(std::function<std::int64_t(std::int64_t)> given) {
+		auto was = std::make_shared<std::function<std::int64_t(std::int64_t)>>(std::exchange(draw(), std::move(given)));
+		return std::shared_ptr<void>(nullptr, [was](void*) { draw() = *was; });
+	}
 
 	int compare(const value& a, const value& b) {
 		if (a.is_null()) return b.is_null() ? 0 : -1;

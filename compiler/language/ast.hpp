@@ -218,6 +218,10 @@ namespace one::language {
         std::string name;
         location name_where;
         qualified_name type;
+        // An enum's choices, given once the project is checked when its type is an
+        // enum, as a field's are: what it may be sent, and nothing else.
+        mutable std::vector<std::string> choices = {};
+        mutable std::string enum_name = {};
     };
 
     // each issue where stage == id { stage = into }: other entities changed with the

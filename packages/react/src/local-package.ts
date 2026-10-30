@@ -87,6 +87,50 @@ export function remainder(x: number, y: number): number {
   return y === 0 ? 0 : x - y * Math.floor(x / y);
 }
 
+// A list as a .one file works on it, each giving a list of its own, so the one it's
+// given is never changed: its first n, all of it after them, and two joined.
+export function firstOf(list: Value | undefined, n: number): Value[] {
+  return isArray(list) ? list.slice(0, Math.max(0, n)) : [];
+}
+
+export function dropOf(list: Value | undefined, n: number): Value[] {
+  return isArray(list) ? list.slice(Math.max(0, n)) : [];
+}
+
+export function joined(a: Value | undefined, b: Value | undefined): Value[] {
+  return [...(isArray(a) ? a : []), ...(isArray(b) ? b : [])];
+}
+
+// How many a list holds.
+export function counted(list: Value | undefined): number {
+  return isArray(list) ? list.length : 0;
+}
+
+// A number from 0 up to n, not included, from the browser's secure source, each as
+// likely as the next; tests draw in an order they know.
+let draw = (n: number): number => {
+  const most = 2 ** 32 - (2 ** 32 % n);
+  const got = new Uint32Array(1);
+  do crypto.getRandomValues(got);
+  while (got[0] >= most);
+  return got[0] % n;
+};
+
+export function drawWith(given: (n: number) => number): () => void {
+  const was = draw;
+  draw = given;
+  return () => {
+    draw = was;
+  };
+}
+
+// A whole number from low to high, both included, drawn where no one using the app
+// can see or steer it. With high below low, it's low.
+export function random(low: number, high: number): number {
+  const from = Math.ceil(low), to = Math.floor(high);
+  return to <= from ? from : from + draw(to - from + 1);
+}
+
 // Orders two values of the same kind: false before true, numbers and text in
 // their usual order, times as RFC 3339 text. Nothing comes first.
 export function compare(a: Value | undefined, b: Value | undefined): number {

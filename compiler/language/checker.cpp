@@ -142,6 +142,7 @@ namespace one::language {
             bool picked = false;                         // entity is a row an each or a once's step picked, changed only by dispatch
             // A command's inputs, like into in input into stage, named in its body.
             const std::map<std::string, field, std::less<>>* inputs = nullptr;
+            const std::vector<field>* parameter_types = nullptr;  // a function's parameters, each as a field, in its body
         };
 
         diagnostics& out_;
@@ -341,6 +342,16 @@ namespace one::language {
                     for (const auto& f : e->fields) give_enum(ns, f);
                 } else if (auto* function = std::get_if<function_declaration>(&d.node)) {
                     for (const auto& f : function->parameter_types) give_enum(ns, f);
+                } else if (auto* c = std::get_if<command_declaration>(&d.node)) {
+                    // input way  shuffle: one of an enum's choices.
+                    for (const auto& st : c->body) {
+                        auto* input = std::get_if<input_statement>(&st.node);
+                        const enum_declaration* en = input ? find(ns, input->type, &scope::enums) : nullptr;
+                        if (!en) continue;
+                        mean(input->type.where, input->type.text().size(), "enum " + input->type.text(), origin_of(en, &scope::enums));
+                        input->choices = en->choices;
+                        input->enum_name = en->name;
+                    }
                 }
             }
         }
@@ -1644,7 +1655,9 @@ namespace one::language {
                     field f;
                     f.name = i->name;
                     f.where = i->name_where;
-                    f.type = i->type;
+                    if (i->choices.empty()) f.type = i->type;
+                    f.choices = i->choices;
+                    f.enum_name = i->enum_name;
                     inputs.emplace(i->name, std::move(f));
                 }
             }
@@ -1785,7 +1798,7 @@ namespace one::language {
                     // A once may give what was made before a key existed its key, like the board
                     // a project's stages were in before it had boards.
                     if (target && fixed_once_made(*target) && !in.stored) error(a->target->where, why_fixed(*target));
-                    if (target && target->list && !std::holds_alternative<list_expression>(a->value->node)) {
+                    if (target && target->list && !gives_list(in, *a->value)) {
                         error(a->target->where, target->name + " is a list; add to it or remove from it, like add me to " + target->name +
                                                     ", or give it a whole list, like [a, b]");
                     }
@@ -1829,7 +1842,7 @@ namespace one::language {
                         error(s.where, "input goes in a command, naming what it's sent besides its entity's fields, like input into stage");
                     } else if (entity && find_field(*entity, input->name)) {
                         error(input->name_where, input->name + " is a field of entity " + entity->name + " already; an input is something else it's sent");
-                    } else {
+                    } else if (input->choices.empty()) {
                         verify_type(ns, input->type);
                     }
                 } else if (auto* each = std::get_if<each_statement>(&s.node)) {
@@ -2642,7 +2655,9 @@ namespace one::language {
                 }
                 verify_type(ns, *typed.type);
             }
-            statements(ns, f.body, nullptr, context{ns, nullptr, nullptr, f.parameters, false});
+            context in{ns, nullptr, nullptr, f.parameters, false};
+            in.parameter_types = &f.parameter_types;
+            statements(ns, f.body, nullptr, in);
         }
 
         // link next in library.things: a screen whose address names one record steps to
@@ -5274,8 +5289,8 @@ namespace one::language {
         // every one of them or an else, each value one the field it's given to holds,
         // with a choice of that field's enum written bare.
         void matched(const context& in, const expression& e, const match_expression& m, const field* beside) {
-            if (!in.command) {
-                error(e.where, "match is for a command's body for now; a view or a screen can't use it yet");
+            if (!in.command && !in.parameter_types) {
+                error(e.where, "match is for a command's or a function's body for now; a view or a screen can't use it yet");
                 return;
             }
             const field* subject = resolve(in, *m.subject);
@@ -5385,7 +5400,15 @@ namespace one::language {
                     mean(n->name.where, name.size(), "built-in value " + says.at(name), std::nullopt, "built-in-values");
                     return nullptr;
                 }
-                if (std::find(in.parameters.begin(), in.parameters.end(), name) != in.parameters.end()) return nullptr;
+                if (std::find(in.parameters.begin(), in.parameters.end(), name) != in.parameters.end()) {
+                    // A parameter that says its type reads as a field of it, its choices too.
+                    if (in.parameter_types) {
+                        for (const auto& typed : *in.parameter_types) {
+                            if (typed.name == name && (typed.type || !typed.choices.empty())) return &typed;
+                        }
+                    }
+                    return nullptr;
+                }
                 if (in.inputs) {
                     if (auto it = in.inputs->find(name); it != in.inputs->end()) return &it->second;
                 }
@@ -5562,6 +5585,71 @@ namespace one::language {
             return e;
         }
 
+        // Whether a value is a whole list, to give a list field: [a, b], two joined, a list's
+        // first so many or what's after them, a function's, or another list field.
+        bool gives_list(const context& in, const expression& e) {
+            if (std::holds_alternative<list_expression>(e.node)) return true;
+            if (auto* b = std::get_if<binary_expression>(&e.node)) return b->op == token_kind::plus;
+            if (auto* call = std::get_if<call_expression>(&e.node)) {
+                auto* callee = std::get_if<name_expression>(&call->callee->node);
+                std::string name = callee ? callee->name.text() : "";
+                if ((name == "first" || name == "drop") && call->arguments.size() == 2) return true;
+                return callee && find(in.ns, callee->name, &scope::functions);
+            }
+            const field* f = nullptr;
+            if (auto* n = std::get_if<name_expression>(&e.node); n && n->name.parts.size() == 1 && in.entity) f = find_field(*in.entity, n->name.parts[0]);
+            if (auto* m = std::get_if<member_expression>(&e.node); m && in.entity) {
+                auto* object = std::get_if<name_expression>(&m->object->node);
+                if (object && object->name.text() == in.entity->name) f = find_field(*in.entity, m->member);
+            }
+            return f && f->list;
+        }
+
+        // Whether what count is given is a list rather than an entity: a field, or a
+        // parameter, that holds several, or what's worked out, like first(deck, 3).
+        bool lists(const context& in, const expression& e) {
+            if (std::holds_alternative<where_expression>(e.node)) return false;
+            if (auto* n = std::get_if<name_expression>(&e.node); n && find_entity(in.ns, n->name)) return false;
+            return true;
+        }
+
+        // Whether a function draws at random, itself or through one it calls.
+        bool draws(const std::string& ns, const function_declaration& f) {
+            std::set<const function_declaration*> seen;
+            std::function<bool(const function_declaration&)> in_function;
+            std::function<bool(const expression&)> in_expression = [&](const expression& e) {
+                bool found = false;
+                std::visit(
+                    [&](const auto& node) {
+                        using T = std::decay_t<decltype(node)>;
+                        if constexpr (std::is_same_v<T, call_expression>) {
+                            auto* callee = std::get_if<name_expression>(&node.callee->node);
+                            if (callee && callee->name.text() == "random") found = true;
+                            if (const function_declaration* other = callee ? find(ns, callee->name, &scope::functions) : nullptr) found = found || in_function(*other);
+                            for (const auto& a : node.arguments) found = found || in_expression(*a);
+                        } else if constexpr (std::is_same_v<T, unary_expression>) {
+                            found = in_expression(*node.operand);
+                        } else if constexpr (std::is_same_v<T, binary_expression>) {
+                            found = in_expression(*node.left) || in_expression(*node.right);
+                        } else if constexpr (std::is_same_v<T, match_expression>) {
+                            for (const auto& arm : node.arms) found = found || in_expression(*arm.value);
+                            if (node.otherwise) found = found || in_expression(*node.otherwise);
+                        }
+                    },
+                    e.node);
+                return found;
+            };
+            std::function<bool(const std::vector<statement>&)> in_body = [&](const std::vector<statement>& body) {
+                for (const auto& st : body) {
+                    if (auto* r = std::get_if<return_statement>(&st.node); r && r->value && in_expression(*r->value)) return true;
+                    if (auto* i = std::get_if<if_statement>(&st.node); i && (in_expression(*i->condition) || in_body(i->then_body) || in_body(i->else_body))) return true;
+                }
+                return false;
+            };
+            in_function = [&](const function_declaration& g) { return seen.insert(&g).second && in_body(g.body); };
+            return in_function(f);
+        }
+
         // A call: count, first and sum of an entity, starts_with and drop on text, or a
         // function the file declares. Returns the entity count, first or sum is about.
         const entity_declaration* called(const context& in, const call_expression& call) {
@@ -5575,14 +5663,29 @@ namespace one::language {
                 }
                 return true;
             };
+            // first(deck, 13) and count(deck): of a list, its first so many and how many it holds.
+            if ((name == "first" && call.arguments.size() == 2) || (name == "count" && call.arguments.size() == 1 && lists(in, *call.arguments[0]))) {
+                const field* listed = resolve(in, *call.arguments[0]);
+                if (listed && !listed->list) error(call.arguments[0]->where, name + " takes a list, or an entity, and " + listed->name + " isn't a list");
+                if (call.arguments.size() == 2) resolve(in, *call.arguments[1]);
+                return nullptr;
+            }
             if (name == "count" || name == "first" || name == "sum") {
                 if (!arguments(1)) return nullptr;
                 const auto& argument = *call.arguments[0];
                 if (auto* w = std::get_if<where_expression>(&argument.node)) return where_of(in, *w, name == "first");
                 auto* entity = std::get_if<name_expression>(&argument.node);
                 const entity_declaration* e = entity ? find_entity(in.ns, entity->name) : nullptr;
-                if (!e) error(argument.where, name + " needs an entity, like " + name + "(loan)");
+                if (!e) error(argument.where, name + " needs an entity, like " + name + "(loan), or a list, like " + name + "(deck" + (name == "first" ? ", 13" : "") + ")");
                 return e;
+            }
+            // random(1, 6): a whole number from the first to the second, drawn as a command
+            // runs, so never in a view, which shows the same to everyone each time.
+            if (name == "random") {
+                if (!arguments(2)) return nullptr;
+                if (!in.command && !in.parameter_types) error(call.callee->where, "random is drawn as a command runs, so it goes in a command or a function, never a view");
+                for (const auto& a : call.arguments) resolve(in, *a);
+                return nullptr;
             }
             // min(a, b) and max(a, b): the smaller and the larger of two numbers.
             if (name == "min" || name == "max") {
@@ -5667,12 +5770,19 @@ namespace one::language {
                 return nullptr;
             }
             if (const function_declaration* function = callee ? find(in.ns, callee->name, &scope::functions) : nullptr) {
+                if (!in.command && !in.parameter_types && draws(in.ns, *function)) {
+                    error(call.callee->where, name + " draws at random, so it goes in a command or a function, never a view");
+                }
                 if (arguments(function->parameters.size())) {
-                    for (const auto& a : call.arguments) resolve(in, *a);
+                    // A parameter with choices is given one of them, by its enum: pace::fast.
+                    for (std::size_t i = 0; i < call.arguments.size(); ++i) {
+                        const field* typed = i < function->parameter_types.size() && !function->parameter_types[i].choices.empty() ? &function->parameter_types[i] : nullptr;
+                        resolve(in, *call.arguments[i], typed);
+                    }
                 }
                 return nullptr;
             }
-            std::vector<std::string> known{"count", "first", "min", "max", "exists", "waiting", "was", "held", "starts_with", "drop", "github_secret"};
+            std::vector<std::string> known{"count", "first", "min", "max", "exists", "waiting", "was", "held", "starts_with", "drop", "random", "github_secret"};
             for (const auto& candidate : candidates(in.ns, {})) {
                 auto s = scopes_.find(candidate);
                 if (s == scopes_.end()) continue;
