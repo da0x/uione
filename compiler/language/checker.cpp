@@ -5699,6 +5699,14 @@ namespace one::language {
                 if (call.arguments.size() == 2) resolve(in, *call.arguments[1]);
                 return nullptr;
             }
+            // item(hand, 1): a list's nth, counting from 1, nothing when it holds fewer.
+            if (name == "item") {
+                if (!arguments(2)) return nullptr;
+                const field* listed = resolve(in, *call.arguments[0]);
+                if (listed && !listed->list) error(call.arguments[0]->where, "item takes a list, and " + listed->name + " isn't one");
+                resolve(in, *call.arguments[1]);
+                return nullptr;
+            }
             if (name == "count" || name == "first" || name == "sum") {
                 if (!arguments(1)) return nullptr;
                 const auto& argument = *call.arguments[0];
@@ -5811,7 +5819,7 @@ namespace one::language {
                 }
                 return nullptr;
             }
-            std::vector<std::string> known{"count", "first", "min", "max", "exists", "waiting", "was", "held", "starts_with", "drop", "random", "github_secret"};
+            std::vector<std::string> known{"count", "first", "min", "max", "exists", "waiting", "was", "held", "starts_with", "drop", "random", "item", "github_secret"};
             for (const auto& candidate : candidates(in.ns, {})) {
                 auto s = scopes_.find(candidate);
                 if (s == scopes_.end()) continue;

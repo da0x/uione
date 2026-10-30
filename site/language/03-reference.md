@@ -1857,6 +1857,19 @@ A list, in a function or a command, is read and joined with what reads text:
 second's, and `[]` is one that holds nothing. Each gives a list of its own, so a
 list field changes only when it's given one: `deck = drop(deck, 13)`.
 
+`item(queue, 1)` is one thing a list holds, counting from 1, so `item(queue,
+count(queue))` is its last, and it's nothing past the end. `tags has "urgent"`
+asks whether a list holds something. With a function that calls itself, they ask
+anything of what a list holds:
+
+```one
+function any_starting(tags list of text, prefix text) {
+	if count(tags) == 0 { return false }
+	if starts_with(item(tags, 1), prefix) { return true }
+	return any_starting(drop(tags, 1), prefix)
+}
+```
+
 `random(1, 6)` is a whole number from the first to the second, both included. It's
 drawn as a command runs, from the operating system's secure source, on the backend
 for a project in the cloud, so no one using the app can see or steer it. What's

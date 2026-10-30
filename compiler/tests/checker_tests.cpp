@@ -781,6 +781,22 @@ TEST_CASE("a list is read, joined and drawn from at random in a command or a fun
           std::vector<std::string>{"'wey' isn't a type; use text, markdown, email, date, number, serial, boolean, user, file, a format, or an entity"});
 }
 
+TEST_CASE("item reads a list's nth, and a function asks what a list holds with has") {
+    const std::string read = "entity tile {\n\tname  text  key\n}\nentity pile {\n\ttiles  list of tile\n\ttop  text\n\theld  boolean\n}\n"
+                             "function holds(tiles list of tile, wanted text) {\n\treturn tiles has wanted\n}\n"
+                             "command pile::look {\n\tinput wanted  text\n\ttop = item(tiles, 1)\n\theld = holds(tiles, wanted)\n}\n";
+    CHECK(check_source(read).empty());
+    auto changed = [&](const std::string& from, const std::string& to) {
+        std::string source = read;
+        source.replace(source.find(from), from.size(), to);
+        std::vector<std::string> messages;
+        for (const auto& d : check_source(source)) messages.push_back(d.message);
+        return messages;
+    };
+    CHECK(changed("item(tiles, 1)", "item(top, 1)") == std::vector<std::string>{"item takes a list, and top isn't one"});
+    CHECK(changed("item(tiles, 1)", "item(tiles)") == std::vector<std::string>{"item takes 2 arguments, not 1"});
+}
+
 TEST_CASE("a wrong name is reported once, not again in what it's compared with or given") {
     auto e = only_error("entity book {\n\tstatus  enum on_shelf | lent\n}\ncommand book::lend {\n\tstatuss = status::lent\n}\n");
     CHECK(e.message == "entity book has no field statuss; did you mean status?");
