@@ -659,6 +659,9 @@ namespace one::language {
     struct function_declaration {
         std::string name;
         std::vector<std::string> parameters;
+        // Each parameter as a field, its type when it says one, like deck  list of card;
+        // one written bare, like title, has none, and takes it from where it's used.
+        std::vector<field> parameter_types;
         std::vector<statement> body;
     };
 

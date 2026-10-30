@@ -2474,10 +2474,18 @@ namespace one::generators {
 
         // functions
 
-        // A function's parameters take their Go types from where it's used: in
-        // order sort_title(title), title is a text field, so it's a string.
+        // A function's parameters take the Go types they say, like deck  list of card's
+        // []string, and one written bare takes its from where it's used: in order
+        // sort_title(title), title is a text field, so it's a string.
         std::optional<std::vector<std::string>> parameter_types(const package& pkg, const language::function_declaration& function) {
             std::vector<std::string> types(function.parameters.size());
+            for (std::size_t i = 0; i < types.size() && i < function.parameter_types.size(); ++i) {
+                const language::field& typed = function.parameter_types[i];
+                if (!typed.type && typed.choices.empty()) continue;
+                auto t = type_of(pkg, typed);
+                if (!t) return std::nullopt;
+                types[i] = t->name;
+            }
             for (const auto& [v, _] : pkg.views) {
                 for (const auto& each : v->each) {
                     auto* source = std::get_if<language::name_expression>(&each.source->node);
@@ -2488,6 +2496,7 @@ namespace one::generators {
                         auto* callee = call ? std::get_if<language::name_expression>(&call->callee->node) : nullptr;
                         if (!callee || callee->name.text() != function.name || call->arguments.size() != types.size()) continue;
                         for (std::size_t i = 0; i < types.size(); ++i) {
+                            if (!types[i].empty()) continue;
                             auto* arg = std::get_if<language::name_expression>(&call->arguments[i]->node);
                             const language::field* f = arg && arg->name.parts.size() == 1 ? field(*e, arg->name.parts[0]) : nullptr;
                             if (!f) continue;

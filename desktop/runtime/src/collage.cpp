@@ -1916,13 +1916,33 @@ namespace one::desktop::runtime {
 		for (const char* k : {"ctrl+equal", "ctrl+plus"}) p.on_key(k, [zoom] { zoom(1.25f); });
 		p.on_key("ctrl+minus", [zoom] { zoom(0.8f); });
 		p.on_key("ctrl+0", fit);
-		// What the screen's zoom buttons asked of it.
+		// What the screen's zoom buttons, or its copy, asked of it.
 		if (auto asked = p.kept<std::string>("collage do " + key); !asked.get().empty()) {
 			std::string does = asked.peek();
 			asked.set("");
 			if (does == "zoom in") zoomed(*l, 1.25f, middle(*l));
 			else if (does == "zoom out") zoomed(*l, 0.8f, middle(*l));
 			else if (does == "zoom to fit") fit();
+			else if (does == "copy") {
+				// All of it, as its file holds it, read away from the window's thread and put
+				// on the clipboard back on it.
+				auto file = kept.empty() ? std::nullopt : p.file_here(kept);
+				if (!file) p.told().set("There's no picture to copy yet.");
+				else {
+					p.told().set("Copying…");
+					in_background([told = p.told(), file = *file] {
+						auto read = desktop::picture::read(file);
+						post([told, read] {
+							if (!read) {
+								told.set(read.error());
+								return;
+							}
+							desktop::copy_picture(*read);
+							told.set("Copied the picture. Paste it anywhere.");
+						});
+					});
+				}
+			}
 		}
 		bool waiting = false;
 		if (!kept.empty()) pictures_near(p)[p.address()] = kept;

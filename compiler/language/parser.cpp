@@ -1492,11 +1492,28 @@ namespace one::language {
             function_declaration function;
             function.name = expect(token_kind::identifier, "the function's name").text;
             expect(token_kind::left_paren, "'('");
+            // deck  list of card, at  number: each parameter may say its type as a field does.
+            auto parameter = [&] {
+                const token& name = expect(token_kind::identifier, "a parameter's name");
+                field typed;
+                typed.name = name.text;
+                typed.where = name.where;
+                if (at(token_kind::identifier)) {
+                    typed.type = parse_qualified_name("the parameter's type");
+                    if (typed.type->text() == "list" && at_word("of")) {
+                        advance();
+                        typed.list = true;
+                        typed.type = parse_qualified_name("what the list holds, like card or text");
+                    }
+                }
+                function.parameters.push_back(name.text);
+                function.parameter_types.push_back(std::move(typed));
+            };
             if (!at(token_kind::right_paren)) {
-                function.parameters.push_back(expect(token_kind::identifier, "a parameter's name").text);
+                parameter();
                 while (at(token_kind::comma)) {
                     advance();
-                    function.parameters.push_back(expect(token_kind::identifier, "a parameter's name").text);
+                    parameter();
                 }
             }
             expect(token_kind::right_paren, "')'");
@@ -1768,7 +1785,8 @@ namespace one::language {
             bool zooms = at_word("zoom") && peek(1).kind == token_kind::identifier && (peek(1).text == "in" || peek(1).text == "out" || (peek(1).text == "to" && peek(2).text == "fit"));
             // group picked: what's picked, several at once, made one group.
             bool groups = at_word("group") && peek(1).kind == token_kind::identifier && peek(1).text == "picked";
-            bool collage_does = ((at_word("crop") || at_word("paste") || at_word("screenshot") || at_word("ungroup") || at_word("raise") || at_word("lower")) && alone) || as_picture || zooms || groups ||
+            // copy alone: the picture the screen shows alone, put on the clipboard.
+            bool collage_does = ((at_word("crop") || at_word("copy") || at_word("paste") || at_word("screenshot") || at_word("ungroup") || at_word("raise") || at_word("lower")) && alone) || as_picture || zooms || groups ||
                                 ((at_word("edit") || at_word("add")) && peek(1).kind == token_kind::identifier && peek(1).text == "words") ||
                                 (at_word("add") && peek(1).kind == token_kind::identifier && (peek(1).text == "pictures" || peek(1).text == "folder"));
             if (collage_does) {

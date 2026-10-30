@@ -1338,6 +1338,42 @@ TEST_CASE("a picture alone is all of a workspace's screen, its bars over it, zoo
                                                                             "30: this screen has no collage, nor a picture alone, for this button to zoom"});
 }
 
+TEST_CASE("a copy naming nothing puts the picture a screen shows alone on the clipboard") {
+    const std::string pieces = R"(namespace studio at / {
+	entity clipping {
+		name   text
+		image  file
+	}
+
+	view clipping_page per clipping {
+		name  image
+	}
+
+	screen "{clipping_page.name}" /clippings/:clipping {
+		layout workspace
+		toolbar {
+			copy "Copy" icon copy key ctrl+c
+		}
+		main {
+			picture clipping_page.image fit alone
+		}
+	}
+}
+)";
+    CHECK(messages(project + pieces).empty());
+    auto files = built(project + pieces);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    CHECK(native.find(R"(.does = "copy", .label = "Copy", .icon = "copy")") != std::string::npos);
+    CHECK(web.find(R"(<CollageButton collage="/clippings/:clipping collage" does="copy" label="Copy" icon="copy")") != std::string::npos);
+    // Without a picture alone, there's nothing for it to copy.
+    std::string shown = project + pieces;
+    shown.replace(shown.find("image fit alone"), std::string("image fit alone").size(), "image fit");
+    CHECK(messages(shown) == std::vector<std::string>{"21: this screen has no picture alone for this button to copy"});
+}
+
 TEST_CASE("a collage reads each part from the field named like it, or from the one it says, and hands its runtimes which") {
     const std::string noted = R"(namespace studio at / {
 	entity poster {

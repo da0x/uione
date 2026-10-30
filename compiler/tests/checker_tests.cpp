@@ -726,6 +726,15 @@ TEST_CASE("an unknown function is reported, with the nearest one suggested") {
     CHECK(e.where.line == 6);
 }
 
+TEST_CASE("a parameter's type is checked as a field's is") {
+    CHECK(only_error("function twice(n numbr) {\n\treturn n\n}\n").message ==
+          "'numbr' isn't a type; use text, markdown, email, date, number, serial, boolean, user, file, a format, or an entity");
+    CHECK(only_error("function twice(n serial) {\n\treturn n\n}\n").message ==
+          "a serial is counted as a record is made, so a parameter can't be one; say number");
+    CHECK(check_source("enum pace {\n\tslow\n\tfast\n}\nentity book {\n\ttitle  text\n}\n"
+                       "function first_of(books list of book, at number, way pace, title) {\n\treturn books\n}\n").empty());
+}
+
 TEST_CASE("a wrong name is reported once, not again in what it's compared with or given") {
     auto e = only_error("entity book {\n\tstatus  enum on_shelf | lent\n}\ncommand book::lend {\n\tstatuss = status::lent\n}\n");
     CHECK(e.message == "entity book has no field statuss; did you mean status?");

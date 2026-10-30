@@ -9,6 +9,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useAsked } from "./collage-view.js";
 import { useKeys } from "./workspace.js";
+import { useSaying } from "./said.js";
 
 // How it's looked at: how many times larger than fitted, and the point of it in the
 // middle of its place, in fractions of its width and height.
@@ -167,6 +168,19 @@ export function useAwakeOn(on: boolean): boolean {
   return useAwake();
 }
 
+// All of a picture, as a PNG, which is what other programs take a copied picture as.
+async function pngOf(source: string): Promise<Blob> {
+  const blob = await (await fetch(source)).blob();
+  if (blob.type === "image/png") return blob;
+  const bitmap = await createImageBitmap(blob, { imageOrientation: "from-image" });
+  const drawn = document.createElement("canvas");
+  drawn.width = bitmap.width;
+  drawn.height = bitmap.height;
+  drawn.getContext("2d")?.drawImage(bitmap, 0, 0);
+  bitmap.close();
+  return new Promise<Blob>((done, failed) => drawn.toBlob((b) => (b ? done(b) : failed(new Error("not drawn"))), "image/png"));
+}
+
 // picture clipping_page.image fit alone: all of its place, on black, zoomed by Ctrl and
 // =, - or 0, by the wheel with Ctrl or a touchpad's pinch, which a browser hands over
 // as one, about the pointer, and by the screen's zoom buttons, asked by `zoom`; to 100%
@@ -174,8 +188,9 @@ export function useAwakeOn(on: boolean): boolean {
 // than fits; pinched with two fingers. At fit, a swipe across steps to the record after,
 // to the left, or before, to the right, as a photo app's does: the picture follows the
 // finger, and goes back to its place when the swipe is too short. The picture's turned as
-// its camera says, as the browser does.
+// its camera says, as the browser does. Asked to copy, it puts all of it on the clipboard.
 export function PictureAlone({ source, zoom }: { source?: string; zoom: string }) {
+  const { say } = useSaying();
   const box = useRef<HTMLDivElement>(null);
   const [look, setLook] = useState<Looked>(fitted);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -216,6 +231,13 @@ export function PictureAlone({ source, zoom }: { source?: string; zoom: string }
     if (does === "zoom in") change((l, s, r) => zoomed(l, 1.25, middle(), s, r));
     else if (does === "zoom out") change((l, s, r) => zoomed(l, 0.8, middle(), s, r));
     else if (does === "zoom to fit") setLook(fitted);
+    else if (does === "copy") {
+      if (!source) return say({ text: "There's no picture to copy yet." });
+      navigator.clipboard
+        .write([new ClipboardItem({ "image/png": pngOf(source) })])
+        .then(() => say({ text: "Copied the picture. Paste it anywhere." }))
+        .catch(() => say({ text: "This browser didn't let the page copy a picture.", problem: true }));
+    }
   });
   // The wheel's taken from the page, so it doesn't scroll or zoom it as well.
   useEffect(() => {

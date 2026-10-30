@@ -223,7 +223,10 @@ define_service ::= "define" "service" NAME STRING ("in" NAME)? "{" NEWLINE? (qua
 
 /* function */
 
-function       ::= "function" NAME "(" (NAME ("," NAME)*)? ")" block END
+function       ::= "function" NAME "(" (parameter ("," parameter)*)? ")" block END
+/* a parameter's type as a field says it, deck list of card, though never a serial, which is counted as a
+   record is made; one written bare takes the type of where it's used */
+parameter      ::= NAME ("text" | "markdown" | "email" | "slug" | "date" | "number" | "boolean" | "user" | "file" | "data" | list | qualified)?
 
 /* screen */
 
@@ -299,9 +302,9 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? ("icon" NAME)? ("color" N
                  | ("larger" | "smaller") STRING ("icon" NAME)? key* ("when" expression)? END
                  /* what the screen's collage does: crops its picked picture, writes its picked words, adds words,
                     pastes what's on the clipboard, adds a screenshot or pictures chosen from the device's files, or copies
-                    or saves it, or its picked layer, as a picture; paste, add pictures and add folder go into a paper or cards that say paste;
+                    or saves it, or its picked layer, as a picture; copy alone puts a picture shown alone on the clipboard; paste, add pictures and add folder go into a paper or cards that say paste;
                     add folder takes every picture in a folder chosen and the folders in it, but hidden ones */
-                 | ("crop" | "edit" "words" | "add" "words" | "add" "pictures" | "add" "folder" | "paste" | "screenshot" | "ungroup" | "group" "picked" | "raise" | "lower" | "zoom" ("in" | "out" | "to" "fit") | ("copy" | "save" | "cut") NAME "as" ("picture" | "svg")) STRING? ("icon" NAME)? key* ("when" expression)? END
+                 | ("crop" | "copy" | "edit" "words" | "add" "words" | "add" "pictures" | "add" "folder" | "paste" | "screenshot" | "ungroup" | "group" "picked" | "raise" | "lower" | "zoom" ("in" | "out" | "to" "fit") | ("copy" | "save" | "cut") NAME "as" ("picture" | "svg")) STRING? ("icon" NAME)? key* ("when" expression)? END
                  /* what the screen does as it's opened, the first of its lines that applies: the first row of a
                     view's list the condition holds for opened, the row named by what it's of; or a command run */
                  | "on" "open" ("open" ROUTE "for" qualified ("." NAME)? ("where" expression)? ("when" expression)? END | screen_item)
