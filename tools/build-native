@@ -57,10 +57,10 @@ for part in $parts; do
 			{ printf 'import one\n\nproject tracker {\n\ttarget web desktop terminal\n\tsignin google\n}\n\n'; cat "$here/examples/tracker/main.one"; } > "$out/tracker-source/main.one"
 			"$one" build "$out/tracker-source" --out "$out/tracker" >/dev/null
 			{
-				for library in markdown math screens local desktop terminal; do
+				for library in markdown math syntax screens local desktop terminal; do
 					echo "set(ONE_$(echo $library | tr a-z A-Z)_EXAMPLES ON)"
 				done
-				for library in markdown math screens local desktop terminal; do echo "add_subdirectory($here/$library $library)"; done
+				for library in markdown math syntax screens local desktop terminal; do echo "add_subdirectory($here/$library $library)"; done
 				for target in desktop terminal; do
 					for app in site/build examples/gallery/build examples/print_shop/build; do
 						echo "add_subdirectory($here/$app/$target $(basename "$(dirname "$app")")-$target)"

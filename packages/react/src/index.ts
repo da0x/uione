@@ -9,6 +9,8 @@ export { useSaying } from "./said.js";
 export { Equation } from "./equation.js";
 export { layOutMath, mathFont, parseMath, writtenMath } from "./math.js";
 export type { MathLaidOut, MathNode, MathPlaced, MathProblem } from "./math.js";
+export { findLanguage, highlight as highlightSyntax, languages, syntaxColor } from "./syntax.js";
+export type { Language, SyntaxKind, SyntaxSpan } from "./syntax.js";
 export { Collage, CollageButton, Layers } from "./collage-view.js";
 export { Paper, PaperButton } from "./paper-view.js";
 export { OnOpen, screenSize } from "./opening.js";

@@ -1,0 +1,35 @@
+# one::syntax held to its cases: a language, what's written in it, and each thing colored in
+# it in turn, its kind and its words, between tabs; \n, \t and \\ as they're written in C.
+# A find line says the language a name gives, or - for none.
+cpp	#include <vector>\nint main() { return 0; } // done	directive:#include <vector>	type:int	function:main	keyword:return	number:0	comment:// done
+cpp	auto s = R"x(a "quoted" )x";	keyword:auto	string:R"x(a "quoted" )x"
+cpp	int n = 1'000'000;	type:int	number:1'000'000
+cpp	0x1F + 1.5e-3f + .5	number:0x1F	number:1.5e-3f	number:.5
+cpp	"a\"b" x	string:"a\"b"
+cpp	"abc\nint	string:"abc	type:int
+cpp	#define TWICE(x) \\\n  ((x) * 2)\nTWICE(1)	directive:#define TWICE(x) \\\n  ((x) * 2)	function:TWICE	number:1
+c	/* a\nb */ x	comment:/* a\nb */
+python	@cache\ndef f(x):\n    return f"{x}" if x else None  # no	directive:@cache	keyword:def	function:f	keyword:return	string:f"{x}"	keyword:if	keyword:else	constant:None	comment:# no
+python	s = '''a\n"b"'''	string:'''a\n"b"'''
+python	print(rb"\x00")	function:print	string:rb"\x00"
+rust	fn first<'a>(s: &'a str) -> Option<&'a str> { let c = 'x'; r#"raw "q""# }	keyword:fn	type:str	type:Option	type:str	keyword:let	string:'x'	string:r#"raw "q""#
+rust	let v: Vec<u8> = Vec::new(); println!("{}", v.len())	keyword:let	type:Vec	type:u8	type:Vec	function:new	string:"{}"	function:len
+javascript	const n = `a ${b}\nc`; console.log(n, null)	keyword:const	string:`a ${b}\nc`	function:log	constant:null
+typescript	interface A { x: number; y?: string }	keyword:interface	type:A	type:number	type:string
+go	func main() { var s string = `raw`; fmt.Println(nil) }	keyword:func	function:main	keyword:var	type:string	string:`raw`	function:Println	constant:nil
+java	@Override\npublic String name() { return MAX_SIZE; }	directive:@Override	keyword:public	type:String	function:name	keyword:return	constant:MAX_SIZE
+csharp	#region parts\nvar s = $"x";	directive:#region parts	keyword:var	string:"x"
+kotlin	val s = """a\n"b""""	keyword:val	string:"""a\n"b"""	string:"
+swift	let x: Int = nil	keyword:let	type:Int	constant:nil
+ruby	def ok?\n  defined? x\nend	keyword:def	keyword:defined?	keyword:end
+shell	if [ -f "$f" ]; then echo $HOME; fi # x	keyword:if	string:"$f"	keyword:then	keyword:fi	comment:# x
+sql	SELECT id FROM users WHERE name = 'it''s' -- who	keyword:SELECT	keyword:FROM	keyword:WHERE	string:'it'	string:'s'	comment:-- who
+sql	create table t (n integer default null)	keyword:create	keyword:table	type:integer	keyword:default	constant:null
+lua	--[[ long\n]] local x = [[s]] -- c	comment:--[[ long\n]]	keyword:local	string:[[s]]	comment:-- c
+json	{"a": [1, true, null], "b": -2.5e3}	string:"a"	number:1	constant:true	constant:null	string:"b"	number:2.5e3
+yaml	enabled: true # c	constant:true	comment:# c
+cpp	int café = 1; // ünïcode	type:int	number:1	comment:// ünïcode
+find	c++	cpp
+find	PY	python
+find	h	c
+find	brainfuck	-
