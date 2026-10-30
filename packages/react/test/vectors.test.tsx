@@ -24,6 +24,21 @@ describe("SVG coming in", () => {
     expect(await pictureSize(new File([red], "icon.svg"))).toEqual({ w: 24, h: 12 });
   });
 
+  it("leaves any other picture's size to the browser, the way up its camera says it was held", async () => {
+    const was = globalThis.createImageBitmap;
+    const asked: unknown[] = [];
+    globalThis.createImageBitmap = (async (_: Blob, options?: unknown) => {
+      asked.push(options);
+      return { width: 20, height: 40, close() {} };
+    }) as unknown as typeof createImageBitmap;
+    try {
+      expect(await pictureSize(new File(["\xff\xd8"], "harbor.jpg", { type: "image/jpeg" }))).toEqual({ w: 20, h: 40 });
+      expect(asked).toEqual([{ imageOrientation: "from-image" }]);
+    } finally {
+      globalThis.createImageBitmap = was;
+    }
+  });
+
   it("reads a path's commands as only M, L, C and Z, its points where they are", () => {
     // Relative moves and lines, across and down, and a close back to where it began.
     expect(absolutePath("m10 20 l5 0 h5 v5 H10 z m1 1")).toBe("M 10 20 L 15 20 L 20 20 L 20 25 L 10 25 Z M 11 21");

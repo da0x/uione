@@ -83,6 +83,10 @@ namespace one::desktop {
 			    {"inbox", {path("M2 9.5l2-6.5h8l2 6.5v3.5a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1zM2 9.5h3.5l1 1.5h3l1-1.5H14")}},
 			    {"previous", {path("M10 3L5 8l5 5")}},
 			    {"next", {path("M6 3l5 5-5 5")}},
+			    // About it: an i in a ring.
+			    {"info", {ring(8, 8, 6.5f), path("M8 7.25V11.5M8 4.75v.5")}},
+			    // Play: a triangle pointing on.
+			    {"play", {path("M5 3.5v9l7-4.5z")}},
 			    // A table of contents: headings, and what's under them set in.
 			    {"contents", {path("M2.5 3.5h11M5 6.5h8.5M5 9.5h8.5M2.5 12.5h11")}},
 			    // What a picture's toolbar does to it: crop or copy it, turn or flip it, raise
@@ -108,6 +112,8 @@ namespace one::desktop {
 			    {"text", {path("M3 3.5h10M8 3.5V13M6 13h4")}},
 			    {"screenshot", {box(1.5f, 4.5f, 13, 9.5f, 1.5f), ring(8, 9.25f, 2.6f), path("M5.5 4.5L6.75 2.5h2.5l1.25 2")}},
 			    {"picture", {box(2, 3, 12, 10, 1.5f), ring(5.5f, 6.5f, 1.2f), path("M2.5 12l3.5-3.5 2.5 2.5 2-2 3 3")}},
+			    // A folder: its tab at the top left.
+			    {"folder", {path("M2 4.5a1 1 0 0 1 1-1h3.2l1.5 1.8H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z")}},
 			    {"gallery", {box(2, 2, 5, 5, 1), box(9, 2, 5, 5, 1), box(2, 9, 5, 5, 1), box(9, 9, 5, 5, 1)}},
 			    {"fullscreen", {path("M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4")}},
 			    {"sun", {ring(8, 8, 3), path("M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3.05 3.05l1.06 1.06M11.89 11.89l1.06 1.06M3.05 12.95l1.06-1.06M11.89 4.11l1.06-1.06")}},

@@ -17,8 +17,8 @@ describe("a run of numbers", () => {
 
   it("reads in its unit, and its scale tops at a round number", () => {
     expect(readValue(42.4, "percent")).toBe("42%");
-    expect(readValue(1536 * 1024 * 1024, "bytes")).toBe("1.5 GiB");
-    expect(readValue(3 * 1024 * 1024, "rate")).toBe("3 MiB/s");
+    expect(readValue(1536 * 1024 * 1024, "bytes")).toBe("1.5 GB");
+    expect(readValue(3 * 1024 * 1024, "rate")).toBe("3 MB/s");
     expect(scaleTop([12, 70], "percent")).toBe(100);
     expect(scaleTop([700 * 1024 * 1024], "bytes")).toBe(1024 * 1024 * 1024);
     expect(scaleTop([37], "")).toBe(50);
@@ -78,6 +78,6 @@ describe("a monitor", () => {
     expect(tiles[0]!.textContent).toContain("CPU: 64%");
     expect(tiles[1]!.textContent).toContain("Offline");
     expect(tiles[1]!.textContent).toContain("CPU: –");
-    expect(screen.getByText("Memory: 2 KiB (of 2 KiB)")).toBeTruthy();
+    expect(screen.getByText("Memory: 2 KB (of 2 KB)")).toBeTruthy();
   });
 });

@@ -11,6 +11,7 @@ import type { ReactNode } from "react";
 import { useRunner, useView } from "./data.js";
 import type { ViewState } from "./data.js";
 import { useSaying } from "./said.js";
+import type { Said } from "./said.js";
 import { useUI } from "./ui.js";
 
 // A toolbar's group its buttons are in, which draws them as tools.
@@ -182,6 +183,20 @@ function stored(name: string): boolean {
   return toggled.get(name)!;
 }
 
+// The toggle of a slideshow the key or click being heard stopped, which that same key
+// or click doesn't start again, as it would if it was the toggle's own.
+let stoppedNow = "";
+export function stoppedJustNow(name: string): boolean {
+  return stoppedNow !== "" && stoppedNow === name;
+}
+export function stoppedBy(name: string, click: boolean): void {
+  stoppedNow = name;
+  const over = () => window.setTimeout(() => (stoppedNow = ""), 0);
+  // A press is heard again as its click, once it's let go.
+  if (click) window.addEventListener("click", over, { capture: true, once: true });
+  else over();
+}
+
 export function setToggled(name: string, on: boolean): void {
   toggled.set(name, on);
   try {
@@ -210,7 +225,10 @@ export function Toggle({ name, label, icon, keys }: { name: string; label: strin
   const tool = useTool() ?? "small";
   const on = useToggled(name);
   const off = useOff();
-  const flip = useCallback(() => setToggled(name, !stored(name)), [name]);
+  // A slideshow's toggle pressed while it plays stops it, and stays off.
+  const flip = useCallback(() => {
+    if (!stoppedJustNow(name)) setToggled(name, !stored(name));
+  }, [name]);
   useKeys(keys, flip, !off);
   return (
     <ui.Button kind="secondary" icon={icon} tool={tool} pressed={on && !off} disabled={off} hint={hintOf(label, keys)} onClick={flip}>
@@ -436,4 +454,114 @@ export function choosePictures(chosen: (files: File[]) => void): void {
   input.addEventListener("cancel", () => input.remove());
   document.body.appendChild(input);
   input.click();
+}
+
+// add folder "Add folder": a folder chosen in the device's own chooser, and every picture
+// in it and in the folders in it, but hidden ones, which the browser lists whole as
+// handles, read one at a time as they're taken. What isn't a picture, by what's in it, is
+// passed over, not said to be wrong. The same as the desktop's.
+const folderOf = new WeakMap<object, string>();
+export function chooseFolder(chosen: (files: File[]) => void): void {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.setAttribute("webkitdirectory", "");
+  input.hidden = true;
+  input.addEventListener("change", () => {
+    const files = [...(input.files ?? [])].filter((file) => !(file.webkitRelativePath || file.name).split("/").some((part) => part.startsWith(".")));
+    input.remove();
+    const name = (input.files?.[0]?.webkitRelativePath ?? "").split("/")[0] ?? "";
+    for (const file of files) folderOf.set(file, name);
+    chosen(files);
+  });
+  input.addEventListener("cancel", () => input.remove());
+  document.body.appendChild(input);
+  input.click();
+}
+// What a taker says of a file that isn't a picture: passed over, when it's from a folder,
+// or why it couldn't be taken.
+export const passedOver = Symbol("passed over");
+export function notAPicture(file: File): string | typeof passedOver {
+  return folderOf.has(file) ? passedOver : `${file.name} isn't a picture this can read.`;
+}
+
+// What a screen's paste and add pictures buttons hand what they go into, a paper or
+// cards, by what names it: the pictures chosen, or a paste, which reads the clipboard
+// as the browser lets it be read.
+const handed = new Map<string, File[] | "paste">();
+const handedListeners = new Set<() => void>();
+export function handPictures(name: string, files: File[] | "paste"): void {
+  handed.set(name, files);
+  handedListeners.forEach((changed) => changed());
+}
+
+// Pictures taken one at a time, the page given back to the browser before each, so it
+// draws and can be worked in while many come in; the workspace saying how far they've
+// got while there are several, and, once they're in, what couldn't be taken, as
+// `take` says why, and how many were already in, when `take` says one was. The same
+// as the desktop's.
+export const alreadyIn = Symbol("already in");
+export async function takeInTurn<T>(given: T[], say: (said: Said | undefined) => void, take: (item: T, index: number) => Promise<string | typeof alreadyIn | typeof passedOver | void>): Promise<void> {
+  let wrong: string | undefined;
+  let already = 0;
+  let failed = 0;
+  let over = 0;
+  // A folder's, said by its name.
+  const folder = given.length > 0 && typeof given[0] === "object" && given[0] !== null ? folderOf.get(given[0]) : undefined;
+  for (const [i, item] of given.entries()) {
+    await givenBack();
+    if (folder !== undefined) say({ text: `Adding pictures from ${folder}, ${i + 1 - over} so far…` });
+    else if (given.length > 1) say({ text: `Adding ${i + 1} of ${given.length} pictures…` });
+    const taken = await take(item, i);
+    if (taken === alreadyIn) already += 1;
+    else if (taken === passedOver) over += 1;
+    else if (taken) (wrong = taken), (failed += 1);
+  }
+  const added = given.length - already - failed - over;
+  const said =
+    already > 0 ? alreadySaid(added, already) : folder === undefined ? "" : added === 0 ? `There are no pictures in ${folder}.` : `Added ${added} picture${added === 1 ? "" : "s"}.`;
+  if (wrong) say({ text: said ? `${said} ${wrong}` : wrong, problem: true });
+  else if (said) say({ text: said });
+  else if (given.length > 1) say(undefined);
+}
+
+// What's said once they're in, when some were already: "Added 31 pictures, 9 were
+// already in." The same as the desktop's.
+export function alreadySaid(added: number, already: number): string {
+  if (added <= 0) return already === 1 ? "That picture was already in." : `All ${already} pictures were already in.`;
+  return `Added ${added} picture${added === 1 ? "" : "s"}, ${already} ${already === 1 ? "was" : "were"} already in.`;
+}
+
+// The page given back to the browser for a moment, to draw and take what's pressed.
+export const givenBack = (): Promise<void> => new Promise((done) => setTimeout(done, 0));
+
+// And what it's handed taken, by what names it.
+export function usePicturesHanded(name: string | undefined, take: (files: File[]) => void | Promise<void>): void {
+  const { say } = useSaying();
+  const asked = useSyncExternalStore(
+    (changed) => {
+      handedListeners.add(changed);
+      return () => handedListeners.delete(changed);
+    },
+    () => (name ? handed.get(name) : undefined),
+    () => undefined,
+  );
+  useEffect(() => {
+    if (!asked || !name) return;
+    handed.delete(name);
+    if (asked !== "paste") return void take(asked);
+    void (async () => {
+      try {
+        const items = await navigator.clipboard.read();
+        const pictures: File[] = [];
+        for (const item of items) {
+          const kind = item.types.find((t) => t.startsWith("image/"));
+          if (kind) pictures.push(new File([await item.getType(kind)], `Pasted.${kind.slice(6)}`, { type: kind }));
+        }
+        if (pictures.length === 0) return say({ text: "There's no picture on the clipboard to paste." });
+        await take(pictures);
+      } catch {
+        say({ text: "This browser didn't let the page read the clipboard. Press Ctrl+V instead.", problem: true });
+      }
+    })();
+  }, [asked]);
 }

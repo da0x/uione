@@ -90,6 +90,11 @@ namespace one::screens {
 		// Where a file a field names, like files/<sha-256>, is on this machine, for what
 		// draws it; a source that keeps none here says nowhere.
 		virtual std::optional<std::filesystem::path> file_here(const std::string&) const { return std::nullopt; }
+		// A file kept for a command's file field ahead of the command, away from the app's
+		// loop, so a large one doesn't hold it up: what the field then names it by, or why
+		// it couldn't be kept. Nothing from a source that takes files only with a command,
+		// as run with files given does.
+		virtual std::optional<std::expected<std::string, std::string>> keep(const std::filesystem::path&) { return std::nullopt; }
 	};
 
 	// Views and commands kept in memory: set a view and its listeners are told; a

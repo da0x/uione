@@ -19,6 +19,7 @@
 #include <cmath>
 #include <cstdio>
 #include <format>
+#include <functional>
 #include <map>
 #include <memory>
 #include <limits>
@@ -108,20 +109,30 @@ namespace one::desktop::runtime {
 			std::optional<T> peek(const std::string& key) {
 				std::lock_guard hold(lock_);
 				auto found = made_.find(key);
-				return found == made_.end() ? std::nullopt : std::optional<T>(found->second);
+				if (found == made_.end()) return std::nullopt;
+				found->second.second = ++used_;
+				return found->second.first;
 			}
 			template <class Make>
 			T get(const std::string& key, Make make) {
 				if (auto known = peek(key)) return *known;
 				T fresh = make();
 				std::lock_guard hold(lock_);
-				if (made_.size() >= most_) made_.clear();
-				return made_.emplace(key, std::move(fresh)).first->second;
+				// Full, the one used longest ago goes.
+				if (made_.size() >= most_ && !made_.contains(key)) {
+					made_.erase(std::ranges::min_element(made_, {}, [](const auto& kept) { return kept.second.second; }));
+				}
+				return made_.insert_or_assign(key, std::pair{std::move(fresh), ++used_}).first->second.first;
+			}
+			void let_go(const std::string& key) {
+				std::lock_guard hold(lock_);
+				made_.erase(key);
 			}
 
 		private:
 			std::mutex lock_;
-			std::map<std::string, T> made_;
+			std::map<std::string, std::pair<T, std::uint64_t>> made_;  // each, and when it was last used
+			std::uint64_t used_ = 0;
 			std::size_t most_;
 		};
 
@@ -149,6 +160,112 @@ namespace one::desktop::runtime {
 				auto p = desktop::picture::read(file);
 				return p ? *p : desktop::picture();
 			});
+		}
+
+		// What's drawn in the window from a picture kept at `file`: the whole of it, or a
+		// copy no longer on its longer side than `longest`, made once and kept beside it,
+		// by its hash and that size, where it's named by its hash. Read away from the
+		// window's thread, and nothing until it is; the window built again then. With no
+		// window to build again, it's read now.
+		state<int> pictures_read{0};
+		kept_by<desktop::picture>& pictures_kept(int longest) {
+			static kept_by<desktop::picture> whole(8), small(512);
+			return longest > 0 ? small : whole;
+		}
+		// The whole of one `wanted` only while something holds it, like the page it's on, is
+		// read in turn with the others wanted so, one at a time, the last asked for first,
+		// and not at all once nothing holds it: so stepping on through records faster than
+		// their pictures can be read reads the one shown, not each one passed.
+		struct waiting_read {
+			std::string key;
+			std::function<desktop::picture()> make;
+			std::weak_ptr<void> wanted;
+		};
+		std::mutex reading;
+		std::set<std::string> working;
+		std::vector<waiting_read> waiting;
+		bool reading_in_turn = false;
+		void read_in_turn() {
+			for (;;) {
+				waiting_read next;
+				{
+					std::lock_guard hold(reading);
+					std::erase_if(waiting, [](const waiting_read& w) { return w.wanted.expired() && working.erase(w.key); });
+					if (waiting.empty()) {
+						reading_in_turn = false;
+						break;
+					}
+					next = std::move(waiting.back());
+					waiting.pop_back();
+				}
+				pictures_kept(0).get(next.key, next.make);
+				{
+					std::lock_guard hold(reading);
+					working.erase(next.key);
+				}
+				post([] {
+					pictures_read.set(pictures_read.peek() + 1);
+					redraw();
+				});
+			}
+		}
+		std::optional<desktop::picture> read_soon(const std::filesystem::path& file, int longest, std::optional<std::weak_ptr<void>> wanted = std::nullopt, bool ahead = false) {
+			auto& kept = pictures_kept(longest);
+			std::string key = std::format("{} {}", file.string(), longest);
+			auto make = [file, longest] {
+				if (longest <= 0) return desktop::picture::read(file).value_or(desktop::picture());
+				std::string name = file.filename().string();
+				bool hashed = name.size() == 64 && name.find_first_not_of("0123456789abcdef") == std::string::npos;
+				// One turned by its camera is kept by another name, so a copy made before
+				// pictures were turned upright isn't drawn on its side.
+				bool turned = hashed && desktop::facts_of(file).orientation != 1;
+				std::filesystem::path beside = file.parent_path() / "small" / std::format("{}-{}{}.png", name, longest, turned ? "-upright" : "");
+				if (hashed) {
+					if (auto read = desktop::picture::read(beside)) return *read;
+				}
+				auto read = desktop::picture::read(file);
+				if (!read) return desktop::picture();
+				desktop::picture made = read->smaller(longest);
+				std::error_code failed;
+				if (hashed && made.width() < read->width() && (std::filesystem::create_directories(beside.parent_path(), failed), !failed)) {
+					std::filesystem::path writing = beside;
+					writing += std::format(".{}", ::getpid());
+					if (made.write_png(writing)) std::filesystem::rename(writing, beside, failed);
+				}
+				return made;
+			};
+			if (!posting()) return kept.get(key, make);
+			if (auto known = kept.peek(key)) return known;
+			pictures_read.get();
+			std::lock_guard hold(reading);
+			if (longest <= 0 && wanted) {
+				// Asked for again, it's the last asked for, by what asked. One read ahead, for
+				// a step that may come, waits behind any that's to be shown now.
+				auto found = std::ranges::find(waiting, key, &waiting_read::key);
+				if (found != waiting.end()) {
+					found->wanted = *wanted;
+					if (!ahead) std::rotate(found, found + 1, waiting.end());
+				} else if (working.insert(key).second) {
+					if (ahead) waiting.insert(waiting.begin(), {key, make, *wanted});
+					else waiting.push_back({key, make, *wanted});
+				}
+				if (!std::exchange(reading_in_turn, true)) in_background(read_in_turn);
+				return std::nullopt;
+			}
+			if (working.insert(key).second) {
+				in_background([key, make, &kept] {
+					kept.get(key, make);
+					{
+						std::lock_guard hold(reading);
+						working.erase(key);
+					}
+					post([] {
+						pictures_read.set(pictures_read.peek() + 1);
+						redraw();
+					});
+				});
+			}
+			return std::nullopt;
 		}
 
 		// A picture mirrored, then turned a quarter clockwise as many times as `turns`.
@@ -911,60 +1028,56 @@ namespace one::desktop::runtime {
 			});
 		}
 
-		// Pictures dropped or pasted: the first on a collage with nothing on it covers it,
-		// and the rest, and every SVG, are as big as they are, smaller where they wouldn't
-		// fit, centered where they were let go, each a little further along; all one step
-		// to undo. The last of them is picked once it's made, so it's ready to be worked
-		// on.
-		void add_pictures(page& p, const collage_spec& spec, const value& layers, double width, double height, const std::vector<std::filesystem::path>& files,
-		                  std::optional<model::point> on) {
+		// Pictures dropped or pasted, to come in where they were let go, or in the middle.
+		void take_pictures(page& p, const collage_spec& spec, std::vector<std::filesystem::path> files, std::optional<model::point> on) {
 			if (spec.add.empty() || !spec.paste || !spec.fields.contains("picture")) return;
+			p.kept<std::optional<model::point>>("collage pictures at " + spec.key).set(on);
+			pictures_coming(p, spec.key, std::move(files));
+		}
+
+		// Those come in: the first on a collage with nothing on it covers it, and the rest,
+		// and every SVG, are as big as they are, smaller where they wouldn't fit, centered
+		// where they were let go, each a little further along; all one step to undo. The
+		// last of them is picked once it's made, so it's ready to be worked on.
+		void add_pictures(page& p, const collage_spec& spec, const value& layers, double width, double height, const std::vector<coming_picture>& pictures,
+		                  std::optional<model::point> on) {
 			// The layer pictures go in, made first when there's none; an SVG makes its own.
-			bool pictures = std::ranges::any_of(files, [&](const auto& f) { return vector_of(f).empty() || !keeps_shapes(spec); });
-			if (pictures && !layer_ready(p, spec, [&p, spec, layers, width, height, files, on] { add_pictures(p, spec, layers, width, height, files, on); })) return;
+			bool any = std::ranges::any_of(pictures, [&](const auto& c) { return c.svg.empty() || !keeps_shapes(spec); });
+			if (any && !layer_ready(p, spec, [&p, spec, layers, width, height, pictures, on] { add_pictures(p, spec, layers, width, height, pictures, on); })) return;
 			const auto& all = layers.as_array();
 			double depth = !all.empty() && !all.back()["depth"].is_null() ? all.back()["depth"].as_double() + 1 : 0;
-			bool first = true, covered = !all.empty();
-			int at = 0;
-			for (const auto& file : files) {
+			bool covered = !all.empty();
+			for (const auto& picture : pictures) {
+				double at = static_cast<double>(picture.index);
 				// An SVG, where the collage keeps shapes, comes in as its own shapes.
-				if (std::string svg = vector_of(file); !svg.empty() && keeps_shapes(spec)) {
-					std::string name = file.stem().string().starts_with("one-picture-") ? "Pasted" : file.stem().string();
+				if (!picture.svg.empty() && keeps_shapes(spec)) {
+					std::string name = picture.file.stem().string().starts_with("one-picture-") ? "Pasted" : picture.file.stem().string();
 					std::optional<model::point> where = on;
 					if (where && at) where = model::point{where->x + 40.0 * at, where->y + 40.0 * at};
-					++at;
-					add_shapes(p, spec, layers, width, height, svg, name, where);
+					add_shapes(p, spec, layers, width, height, picture.svg, name, where);
 					continue;
 				}
-				auto read = desktop::picture::read(file);
-				if (!read || !*read) {
-					p.told().set(std::format("{} isn't a picture this can read.", file.filename().string()));
-					continue;
-				}
-				double pw = read->width(), ph = read->height();
+				double pw = picture.width, ph = picture.height;
 				model::box b;
 				// An SVG is drawing, not a photograph: it comes in at its own size, fitted,
 				// never covering the collage.
-				if (!covered && vector_of(file).empty()) {
+				if (!covered && picture.svg.empty()) {
 					b = model::sitting("fill", pw, ph, width, height);
 					covered = true;
 				} else {
 					double s = std::min({1.0, width / pw, height / ph});
 					double cx = on ? on->x : width / 2, cy = on ? on->y : height / 2;
 					b = {cx - pw * s / 2 + 40.0 * at, cy - ph * s / 2 + 40.0 * at, pw * s, ph * s};
-					++at;
 				}
 				value made = value(fields{{"x", b.x}, {"y", b.y}, {"w", b.w}, {"h", b.h}});
 				if (!spec.parent.empty()) made.fields[spec.parent] = value(spec.subject);
 				in_layer(p, spec, made);
 				if (!all.empty() && !all.back()["depth"].is_null()) made.fields["depth"] = value(depth++);
 				if (spec.fields.contains("picture_width")) made.fields["picture_width"] = value(pw), made.fields["picture_height"] = value(ph);
-				if (!std::exchange(first, false)) made.fields["one:history"] = value("joined");
-				p.run(spec.add, collage_fields_of(made, spec.fields), attached_files{{spec.fields.at("picture"), {file.string()}}},
-				      [&p, pick = spec.pick](const answer& a) {
-					      if (a && !pick.empty()) p.pick(pick, *a);
-				      },
-				      false);
+				if (picture.joined) made.fields["one:history"] = value("joined");
+				run_with_picture(p, spec.add, collage_fields_of(made, spec.fields), spec.fields.at("picture"), picture, [&p, pick = spec.pick](const answer& a) {
+					if (a && !pick.empty()) p.pick(pick, *a);
+				});
 			}
 		}
 
@@ -1061,12 +1174,12 @@ namespace one::desktop::runtime {
 		void paste(page& p, const collage_spec& spec, const value& layers, double width, double height) {
 			// What this copied, still on the clipboard, comes back as itself.
 			if (auto words = desktop::clipboard_text(); words && !copied().rows.empty() && *words == copied().svg) return paste_objects(p, spec, layers);
-			if (auto files = desktop::clipboard_files(); !files.empty()) add_pictures(p, spec, layers, width, height, files, std::nullopt);
-			else if (auto bytes = desktop::clipboard_picture()) add_pictures(p, spec, layers, width, height, {kept_for_now(*bytes)}, std::nullopt);
+			if (auto files = desktop::clipboard_files(); !files.empty()) take_pictures(p, spec, files, std::nullopt);
+			else if (auto bytes = desktop::clipboard_picture()) take_pictures(p, spec, {kept_for_now(*bytes)}, std::nullopt);
 			else if (auto words = desktop::clipboard_text(); words && words->find_first_not_of(" \n\t") != std::string::npos) {
 				// An SVG's text, as a drawing program copies one, is that SVG, as one dropped is.
 				std::vector<std::uint8_t> bytes(words->begin(), words->end());
-				if (desktop::picture::is_svg(bytes)) add_pictures(p, spec, layers, width, height, {kept_for_now(bytes)}, std::nullopt);
+				if (desktop::picture::is_svg(bytes)) take_pictures(p, spec, {kept_for_now(bytes)}, std::nullopt);
 				else add_words(p, spec, layers, width, height, *words);
 			}
 			else p.told().set("There's nothing to paste. Copy a picture or some words first.");
@@ -1168,14 +1281,14 @@ namespace one::desktop::runtime {
 				std::string key = kept_key(file, layer);
 				std::lock_guard hold(measuring);
 				if (working.insert(key).second) {
-					std::thread([file, layer, key, woken] {
+					in_background([file, layer, key, woken] {
 						(void)measured_now(file, layer, 1);
 						{
 							std::lock_guard hold(measuring);
 							working.erase(key);
 						}
 						post([woken] { woken.set(woken.peek() + 1); });
-					}).detach();
+					});
 				}
 				return known;
 			};
@@ -1232,7 +1345,7 @@ namespace one::desktop::runtime {
 			{
 				std::lock_guard hold(preparing);
 				if (!last_only && working.insert(key).second) {
-					std::thread([key, id, file = *file, layer, shift, width, height, woken] {
+					in_background([key, id, file = *file, layer, shift, width, height, woken] {
 						ready_layer made = made_ready(file, layer, shift, shown_largest);
 						readied.get(key, [&] { return made; });
 						{
@@ -1241,7 +1354,7 @@ namespace one::desktop::runtime {
 							last[id] = key;
 						}
 						post([woken] { woken.set(woken.peek() + 1); });
-					}).detach();
+					});
 				}
 				if (auto found = last.find(id); found != last.end()) shown = found->second;
 			}
@@ -1440,17 +1553,17 @@ namespace one::desktop::runtime {
 			std::filesystem::path file = folder / (stem + ".png");
 			for (int n = 2; std::filesystem::exists(file); ++n) file = folder / std::format("{}-{}.png", stem, n);
 			p.told().set("Saving…");
-			std::thread([told = p.told(), problem = p.problem(), about = p.kept<std::pair<std::string, std::string>>("said of a file"), all = std::move(all), folder, file] {
+			in_background([told = p.told(), problem = p.problem(), about = p.kept<std::pair<std::string, std::string>>("said of a file"), all = std::move(all), folder, file] {
 				std::error_code error;
 				std::filesystem::create_directories(folder, error);
 				auto written = drawn_whole(all).write_png(file);
-				post([told, problem, about, file, written] {
+				handed_back([told, problem, about, file, written] {
 					if (!written) return told.set(""), problem.set(written.error());
 					std::string said = std::format("Saved {} in {}.", file.filename().string(), file.parent_path().string());
 					about.set({said, file.string()});
 					told.set(said);
 				});
-			}).detach();
+			});
 		}
 
 		// Bytes as base64, as a data: address holds them.
@@ -1485,7 +1598,11 @@ namespace one::desktop::runtime {
 
 		// The drawing as a saved SVG, from its vectors: all of it, or only one layer, as
 		// big as that layer, a group's all it holds.
-		std::string svg_of(page& p, const value& layers, double width, double height, const std::vector<std::string>& only) {
+		struct svg_parts {
+			model::box area;
+			std::vector<model::saved_layer> saved;  // each picture's address, until it's written, its file
+		};
+		svg_parts svg_of(page& p, const value& layers, double width, double height, const std::vector<std::string>& only) {
 			std::vector<model::saved_layer> saved;
 			model::box area{0, 0, width, height};
 			placed groups;
@@ -1513,31 +1630,45 @@ namespace one::desktop::runtime {
 					one.kind = "svg", one.svg = svg;
 					if (auto size = desktop::picture::svg_size(svg)) one.natural = {0, 0, size->first, size->second};
 				} else if (auto file = p.file_here(l["picture"].as_string())) {
-					one.kind = "picture", one.href = data_address(*file), one.crop = crop_of(l);
+					one.kind = "picture", one.href = file->string(), one.crop = crop_of(l);
 					one.turns = static_cast<int>(l["turns"].as_double()), one.mirrored = l["mirrored"].as_double() != 0, one.corners = l["corners"].as_double();
 				} else {
 					continue;
 				}
 				saved.push_back(std::move(one));
 			}
-			return model::svg_document(area.w, area.h, saved);
+			return {area, std::move(saved)};
+		}
+
+		// Those parts written, each picture's file read into its address: on any thread.
+		std::string svg_written(svg_parts parts) {
+			for (auto& one : parts.saved) {
+				if (one.kind == "picture") one.href = data_address(one.href);
+			}
+			return model::svg_document(parts.area.w, parts.area.h, parts.saved);
 		}
 
 		// A drawing saved as an SVG in the app's folder in Pictures, as a picture is.
-		void save_svg(page& p, std::string svg, const std::string& name) {
+		void save_svg(page& p, svg_parts parts, const std::string& name) {
 			std::filesystem::path folder = saving_folder();
 			std::string stem = std::format("{}-{:%Y-%m-%d-%H%M}", file_name_of(name),
 			                               std::chrono::zoned_time(std::chrono::current_zone(), std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now())));
 			std::filesystem::path file = folder / (stem + ".svg");
 			for (int n = 2; std::filesystem::exists(file); ++n) file = folder / std::format("{}-{}.svg", stem, n);
-			std::error_code error;
-			std::filesystem::create_directories(folder, error);
-			std::ofstream out(file, std::ios::binary);
-			out << svg;
-			if (!out) return p.problem().set("The drawing couldn't be saved in " + folder.string() + ".");
-			std::string said = std::format("Saved {} in {}.", file.filename().string(), file.parent_path().string());
-			p.kept<std::pair<std::string, std::string>>("said of a file").set({said, file.string()});
-			p.told().set(said);
+			p.told().set("Saving…");
+			in_background([told = p.told(), problem = p.problem(), about = p.kept<std::pair<std::string, std::string>>("said of a file"), parts = std::move(parts), folder, file] {
+				std::error_code error;
+				std::filesystem::create_directories(folder, error);
+				std::ofstream out(file, std::ios::binary);
+				out << svg_written(parts);
+				bool written = static_cast<bool>(out);
+				handed_back([told, problem, about, folder, file, written] {
+					if (!written) return told.set(""), problem.set("The drawing couldn't be saved in " + folder.string() + ".");
+					std::string said = std::format("Saved {} in {}.", file.filename().string(), file.parent_path().string());
+					about.set({said, file.string()});
+					told.set(said);
+				});
+			});
 		}
 
 		// What a collage's preview is drawn from, apart from the preview itself.
@@ -1561,9 +1692,264 @@ namespace one::desktop::runtime {
 		return file;
 	}
 
-	desktop::view picture_of(page& p, const std::string& kept, bool fit, float height) {
+	std::string picture_name(const std::filesystem::path& file) {
+		std::string name = file.stem().string();
+		return name.empty() || name.starts_with("one-picture-") ? "Pasted image" : name;
+	}
+
+	std::optional<desktop::picture> picture_soon(page& p, const std::string& kept, int longest) {
 		auto file = kept.empty() ? std::nullopt : p.file_here(kept);
-		desktop::picture shown = file ? picture_kept(*file) : desktop::picture();
+		return file ? read_soon(*file, longest) : std::optional(desktop::picture());
+	}
+
+	namespace {
+		// The whole pictures near a page: its own and those of the records its steps go to,
+		// by their addresses.
+		std::map<std::string, std::string>& pictures_near(page& p) {
+			return *p.kept<std::shared_ptr<std::map<std::string, std::string>>>("pictures near", std::make_shared<std::map<std::string, std::string>>()).peek();
+		}
+	}  // namespace
+
+	void read_ahead(page& p, const std::string& address, const std::string& kept) {
+		auto file = kept.empty() ? std::nullopt : p.file_here(kept);
+		if (!file) return;
+		pictures_near(p)[address] = kept;
+		(void)read_soon(*file, 0, p.kept<std::shared_ptr<void>>("pictures wanted", std::make_shared<bool>()).peek(), true);
+	}
+
+	void stepping(page& p, const std::string& to) {
+		// Those of the records stepped away from, which aren't next to where it goes, go.
+		for (const auto& [address, kept] : pictures_near(p)) {
+			if (address == p.address() || address == to) continue;
+			if (auto file = p.file_here(kept)) pictures_kept(0).let_go(std::format("{} {}", file->string(), 0));
+		}
+		last_stepped_to() = to;
+	}
+
+	bool read_whole(page& p, const std::string& kept) {
+		auto file = kept.empty() ? std::nullopt : p.file_here(kept);
+		return file && pictures_kept(0).peek(std::format("{} {}", file->string(), 0)).has_value();
+	}
+
+	std::string& last_stepped_to() {
+		static std::string to;
+		return to;
+	}
+
+	namespace {
+		// A file's picture to draw now: the whole of it, wanted for as long as the page
+		// is open, or a copy no longer than `longest`; until it's read, the copy a card
+		// drew of it, when there's one.
+		desktop::picture shown_now(page& p, const std::string& kept, int longest, bool* waiting = nullptr) {
+			auto file = kept.empty() ? std::nullopt : p.file_here(kept);
+			std::optional<std::weak_ptr<void>> wanted;
+			if (longest <= 0) wanted = p.kept<std::shared_ptr<void>>("pictures wanted", std::make_shared<bool>()).peek();
+			auto read = file ? read_soon(*file, longest, wanted) : std::optional(desktop::picture());
+			if (!read && longest <= 0) read = pictures_kept(640).peek(std::format("{} {}", file->string(), 640));
+			if (waiting) *waiting = !read;
+			return read.value_or(desktop::picture());
+		}
+
+		// How a picture alone is looked at: how many times larger than fitted, the point
+		// of it in the middle of the screen, in fractions of its width and height, and
+		// where it was last drawn, as large as it was then, for what the pointer does.
+		struct looked_at {
+			float times = 1;
+			float x = 0.5f, y = 0.5f;
+			desktop::rect area;
+			float wide = 0, high = 0;
+			double scale = 1;
+			std::optional<desktop::point> held;  // where a drag is, while one is
+			// A swipe across it at fit: where it began, and how far across it's gone,
+			// which it's drawn moved by.
+			std::optional<desktop::point> swiping;
+			float swiped = 0;
+		};
+
+		// Whether a swipe across goes far enough to step: an eighth of the picture's
+		// place, or 60 pixels on a narrow one.
+		bool far_enough(const looked_at& l, float dx) { return std::abs(dx) >= std::max(60.f, l.area.width / 8); }
+
+		// Where it's drawn: fitted, then as many times larger as it's zoomed, its point in
+		// the middle, but never past its edges once it's larger than the screen.
+		desktop::rect drawn_at(const looked_at& l) {
+			const desktop::rect& a = l.area;
+			if (l.wide <= 0 || l.high <= 0) return a;
+			float s = std::min(a.width / l.wide, a.height / l.high) * l.times;
+			float w = l.wide * s, h = l.high * s;
+			float x = a.x + a.width / 2 - l.x * w, y = a.y + a.height / 2 - l.y * h;
+			x = w <= a.width ? a.x + (a.width - w) / 2 + l.swiped : std::clamp(x, a.x + a.width - w, a.x);
+			y = h <= a.height ? a.y + (a.height - h) / 2 : std::clamp(y, a.y + a.height - h, a.y);
+			return {x, y, w, h};
+		}
+
+		// Its point in the middle, as it's drawn, so a drag past an edge doesn't build up.
+		void settled(looked_at& l) {
+			desktop::rect r = drawn_at(l);
+			if (r.width <= 0 || r.height <= 0) return;
+			l.x = (l.area.x + l.area.width / 2 - r.x) / r.width;
+			l.y = (l.area.y + l.area.height / 2 - r.y) / r.height;
+		}
+
+		// How many times larger than fitted it's drawn at 100%, a pixel of it a pixel of
+		// the screen's.
+		float actual(const looked_at& l) {
+			if (l.wide <= 0 || l.high <= 0 || l.area.width <= 0 || l.area.height <= 0) return 1;
+			return static_cast<float>(1 / (std::min(l.area.width / l.wide, l.area.height / l.high) * l.scale));
+		}
+
+		// Zoomed by `by` about a point, which stays where it is: never smaller than fitted,
+		// nor larger than eight times 100%.
+		void zoomed(looked_at& l, float by, desktop::point at) {
+			desktop::rect before = drawn_at(l);
+			if (before.width <= 0 || before.height <= 0) return;
+			float fx = (at.x - before.x) / before.width, fy = (at.y - before.y) / before.height;
+			l.times = std::clamp(l.times * by, 1.f, std::max(4.f, 8 * actual(l)));
+			if (l.times <= 1.0001f) {
+				l.times = 1, l.x = l.y = 0.5f;
+				return;
+			}
+			float s = std::min(l.area.width / l.wide, l.area.height / l.high) * l.times;
+			l.x = fx + (l.area.x + l.area.width / 2 - at.x) / (l.wide * s);
+			l.y = fy + (l.area.y + l.area.height / 2 - at.y) / (l.high * s);
+			settled(l);
+		}
+
+		void moved(looked_at& l, float dx, float dy) {
+			desktop::rect r = drawn_at(l);
+			if (r.width <= 0 || r.height <= 0) return;
+			l.x += dx / r.width, l.y += dy / r.height;
+			settled(l);
+		}
+
+		desktop::point middle(const looked_at& l) { return {l.area.x + l.area.width / 2, l.area.y + l.area.height / 2}; }
+	}  // namespace
+
+	desktop::view picture_alone(page& p, const std::string& kept, const std::string& key) {
+		p.alone();
+		// Kept per page, so the next picture stepped to is fitted again; what's done to
+		// it is drawn as the window is next, which what's done asks for.
+		auto l = p.kept<std::shared_ptr<looked_at>>("alone " + key, std::make_shared<looked_at>()).peek();
+		auto zoom = [l](float by) { zoomed(*l, by, middle(*l)); };
+		auto fit = [l] { l->times = 1, l->x = l->y = 0.5f; };
+		for (const char* k : {"ctrl+equal", "ctrl+plus"}) p.on_key(k, [zoom] { zoom(1.25f); });
+		p.on_key("ctrl+minus", [zoom] { zoom(0.8f); });
+		p.on_key("ctrl+0", fit);
+		// What the screen's zoom buttons asked of it.
+		if (auto asked = p.kept<std::string>("collage do " + key); !asked.get().empty()) {
+			std::string does = asked.peek();
+			asked.set("");
+			if (does == "zoom in") zoomed(*l, 1.25f, middle(*l));
+			else if (does == "zoom out") zoomed(*l, 0.8f, middle(*l));
+			else if (does == "zoom to fit") fit();
+		}
+		bool waiting = false;
+		if (!kept.empty()) pictures_near(p)[p.address()] = kept;
+		desktop::picture shown = shown_now(p, kept, 0, &waiting);
+		// Stepped to, the last picture shown stays until this one's read, so there's no
+		// black between them.
+		static desktop::picture last_shown;
+		if (shown) last_shown = shown;
+		else if (waiting && last_stepped_to() == p.address()) shown = last_shown;
+		bool shows_pointer = awake();
+		// To the record after, swiped to the left, as a photo app does, or the one before;
+		// where the screen's steps say, as they're built.
+		auto step = [&p](float dx) {
+			auto to = *p.kept<std::shared_ptr<std::string>>(dx < 0 ? "step next" : "step previous", std::make_shared<std::string>()).peek();
+			if (to.empty()) return;
+			stepping(p, to);
+			p.open_instead(to);
+		};
+		return desktop::drawing(
+		           [shown, l](desktop::canvas& c, desktop::rect area) {
+			           // On black, as a photo is looked at, whatever the theme.
+			           c.box(area, {.fill = desktop::color::hex(0x000000)});
+			           l->area = area;
+			           l->scale = c.scale();
+			           if (!shown || area.width <= 0 || area.height <= 0) return;
+			           l->wide = static_cast<float>(shown.width()), l->high = static_cast<float>(shown.height());
+			           auto inside = c.clip(area);
+			           c.picture(shown, drawn_at(*l));
+		           },
+		           {.on_press =
+		                [l](desktop::point at, int clicks) {
+			                // Twice, to 100% about where it's pressed, or back to fitted.
+			                if (clicks == 2) {
+				                if (l->times > 1.0001f) {
+					                l->times = 1, l->x = l->y = 0.5f;
+				                } else {
+					                float to = actual(*l);
+					                zoomed(*l, to > 1.01f ? to : 2.f, at);
+				                }
+				                return true;
+			                }
+			                // At fit, a drag across is a swipe, as a finger's is; larger, it moves it about.
+			                if (l->times <= 1.0001f) {
+				                l->swiping = at, l->swiped = 0;
+				                return true;
+			                }
+			                l->held = at;
+			                return true;
+		                },
+		            .on_drag =
+		                [l](desktop::point at) {
+			                if (l->swiping) {
+				                l->swiped = at.x - l->swiping->x;
+				                desktop::runtime::redraw();
+				                return;
+			                }
+			                if (!l->held) return;
+			                moved(*l, l->held->x - at.x, l->held->y - at.y);
+			                l->held = at;
+			                desktop::runtime::redraw();
+		                },
+		            .on_release =
+		                [l, step](desktop::point at) {
+			                l->held.reset();
+			                if (!l->swiping) return;
+			                float dx = at.x - l->swiping->x;
+			                l->swiping.reset();
+			                l->swiped = 0;
+			                // Too short, it goes back to its place.
+			                if (far_enough(*l, dx)) step(dx);
+		                },
+		            // With Ctrl, the wheel zooms about the pointer, as a collage's does; without,
+		            // it moves about a picture larger than fits, as a touchpad's two fingers do.
+		            .on_wheel =
+		                [l](desktop::point at, float dx, float dy) {
+			                if (desktop::held().control) {
+				                zoomed(*l, std::exp(-dy * 0.01f), at);
+				                return true;
+			                }
+			                if (l->times <= 1.0001f) return false;
+			                if (desktop::held().shift) std::swap(dx, dy);
+			                moved(*l, dx, dy);
+			                return true;
+		                },
+		            .on_pinch =
+		                [l](desktop::point at, float by) {
+			                zoomed(*l, by, at);
+			                return true;
+		                },
+		            // Three fingers across a touchpad, the same as a swipe, at fit.
+		            .on_swipe =
+		                [l, step](desktop::point, float dx, float, bool ended) {
+			                if (l->times > 1.0001f) return false;
+			                l->swiped = ended ? 0 : dx;
+			                if (ended && far_enough(*l, dx)) step(dx);
+			                return true;
+		                },
+		            .cursor =
+		                [l, shows_pointer](desktop::point) {
+			                if (!shows_pointer) return desktop::cursor::hidden;
+			                if (l->held) return desktop::cursor::grabbing;
+			                return l->times > 1.0001f ? desktop::cursor::grab : desktop::cursor::normal;
+		                }})
+		    .grow();
+	}
+
+	desktop::view picture_of(page& p, const std::string& kept, bool fit, float height, int longest) {
+		desktop::picture shown = shown_now(p, kept, longest);
 		return desktop::drawing([shown, fit](desktop::canvas& c, desktop::rect area) {
 			       const auto& t = current_theme();
 			       c.box(area, {.fill = t.sunken});
@@ -1655,10 +2041,13 @@ namespace one::desktop::runtime {
 			auto asked = p.kept<std::shared_ptr<std::set<std::string>>>("collage sized " + spec.key, std::make_shared<std::set<std::string>>()).peek();
 			for (const auto& l : layers.as_array()) {
 				if (!l.fields.contains("picture_width") || l["picture_width"].as_double() > 0 || asked->contains(l["id"].as_string())) continue;
-				desktop::picture shown = l["picture"].as_string().empty() ? desktop::picture() : layer_picture(p, l);
-				if (!shown) continue;
+				auto file = l["picture"].as_string().empty() ? std::nullopt : p.file_here(l["picture"].as_string());
+				auto size = file ? desktop::picture::size_of(*file) : std::nullopt;
+				if (!size) continue;
+				auto [sw, sh] = *size;
+				if ((static_cast<int>(l["turns"].as_double()) % 2 + 2) % 2 == 1) std::swap(sw, sh);
 				asked->insert(l["id"].as_string());
-				p.run(spec.update, collage_fields_of(value(fields{{"id", l["id"]}, {"picture_width", shown.width()}, {"picture_height", shown.height()}, {"one:history", "apart"}}), spec.fields));
+				p.run(spec.update, collage_fields_of(value(fields{{"id", l["id"]}, {"picture_width", sw}, {"picture_height", sh}, {"one:history", "apart"}}), spec.fields));
 			}
 		}
 		// Its preview, drawn once changes have settled for a moment and nothing's being
@@ -1675,10 +2064,12 @@ namespace one::desktop::runtime {
 				drawn_from.set(now);
 				auto kept = gathered(p, layers, width, height, spec.preview_wide / width, spec.match_colors);
 				kept.clear = spec.clear;
-				auto small = drawn_whole(kept);
-				std::filesystem::path file = kept_for_now(small.png());
-				p.run(spec.preview, value(fields{{"id", spec.subject}, {"one:history", "apart"}}), attached_files{{spec.preview_into, {file.string()}}},
-				      [file](const answer&) { std::filesystem::remove(file); }, true);
+				// Drawn away from the window's thread, and sent once it's back.
+				in_background([kept = std::move(kept), drawn = p.kept<coming_picture>("collage preview drawn " + spec.key), from = &p.source()] {
+					coming_picture made{.file = kept_for_now(drawn_whole(kept).png())};
+					if (auto k = from->keep(made.file); k && *k) made.kept = **k;
+					handed_back([drawn, made] { drawn.set(made); });
+				});
 			} else if (now != drawn_from.peek() && waiting.peek() != now) {
 				waiting.set(now);
 				std::thread([settled, now] {
@@ -1686,6 +2077,13 @@ namespace one::desktop::runtime {
 					post([settled, now] { settled.set(now); });
 				}).detach();
 			}
+		}
+		if (auto drawn = p.kept<coming_picture>("collage preview drawn " + spec.key); !drawn.get().file.empty() && !spec.preview.empty()) {
+			coming_picture made = drawn.peek();
+			drawn.set({});
+			value sent = value(fields{{"id", spec.subject}, {"one:history", "apart"}});
+			if (!made.kept.empty()) p.run(spec.preview, with_uploaded(std::move(sent), spec.preview_into, {made.kept}), {}, [file = made.file](const answer&) { std::filesystem::remove(file); }, true);
+			else p.run(spec.preview, std::move(sent), attached_files{{spec.preview_into, {made.file.string()}}}, [file = made.file](const answer&) { std::filesystem::remove(file); }, true);
 		}
 		// A crop or words are only of the picked layer; picking another puts them away.
 		if (w->crop && w->crop->id != picked) w->crop.reset();
@@ -1695,14 +2093,15 @@ namespace one::desktop::runtime {
 		if (auto shot = p.kept<std::string>("collage screenshot " + spec.key); !shot.get().empty()) {
 			std::filesystem::path taken = shot.peek();
 			shot.set("");
-			add_pictures(p, spec, layers, width, height, {taken}, std::nullopt);
+			take_pictures(p, spec, {taken}, std::nullopt);
 		}
 		// Pictures chosen from files, added like any dropped.
 		if (auto chosen = p.kept<std::vector<std::string>>("collage chosen " + spec.key); !chosen.get().empty()) {
 			std::vector<std::filesystem::path> files(chosen.peek().begin(), chosen.peek().end());
 			chosen.set({});
-			add_pictures(p, spec, layers, width, height, files, std::nullopt);
+			take_pictures(p, spec, files, std::nullopt);
 		}
+		if (auto come = pictures_come(p, spec.key); !come.empty()) add_pictures(p, spec, layers, width, height, come, p.kept<std::optional<model::point>>("collage pictures at " + spec.key).peek());
 		// What its buttons asked of it: a crop begun, words written, or words added.
 		if (auto asked = p.kept<std::string>("collage do " + spec.key); !asked.get().empty()) {
 			std::string does = asked.peek();
@@ -1772,11 +2171,12 @@ namespace one::desktop::runtime {
 						shot.set(taken->string());
 					});
 				}).detach();
-			} else if (does == "add pictures" && spec.paste) {
+			} else if ((does == "add pictures" || does == "add folder") && spec.paste) {
 				// The desktop's own file chooser, which waits on the person, away from the
-				// window's thread, handed back as the screenshot is.
-				std::thread([told = p.told(), chosen = p.kept<std::vector<std::string>>("collage chosen " + spec.key)] {
-					auto files = desktop::chosen_files({.title = "Add pictures", .pictures = true, .several = true});
+				// window's thread, handed back as the screenshot is; or a folder, gone
+				// through as its pictures are kept.
+				std::thread([told = p.told(), chosen = p.kept<std::vector<std::string>>("collage chosen " + spec.key), folder = does == "add folder"] {
+					auto files = desktop::chosen_files({.title = folder ? "Add folder" : "Add pictures", .pictures = true, .several = !folder, .folder = folder});
 					post([told, chosen, files] {
 						if (!files) return told.set(files.error());
 						chosen.set(std::vector<std::string>(files->begin(), files->end()));
@@ -1790,11 +2190,19 @@ namespace one::desktop::runtime {
 				if (one && picks.empty()) p.told().set("Pick something first.");
 				else if (layers.as_array().empty() || width <= 0 || height <= 0) p.told().set(copying ? "There's nothing to copy yet." : "There's nothing to save yet.");
 				else if (copying) {
-					std::string svg = svg_of(p, layers, width, height, one ? picks : std::vector<std::string>{});
-					desktop::copy_text(svg);
+					// Written away from the window's thread, as pictures' files are read into it,
+					// and put on the clipboard back on it.
 					copied() = {};
+					p.told().set("Copying…");
+					in_background([told = p.told(), parts = svg_of(p, layers, width, height, one ? picks : std::vector<std::string>{}), one, cutting] {
+						std::string svg = svg_written(parts);
+						handed_back([told, svg, one, cutting] {
+							desktop::copy_text(svg);
+							if (one) copied().svg = svg;
+							told.set(!one ? "Copied the drawing as SVG. Paste it anywhere." : cutting ? "Cut. Paste it into any layer, or anywhere as SVG." : "Copied. Paste it into any layer, or anywhere as SVG.");
+						});
+					});
 					if (one) {
-						copied().svg = svg;
 						for (const auto& l : layers.as_array()) {
 							std::string id = l["id"].as_string();
 							if (std::ranges::any_of(picks, [&](const std::string& o) { return o == id || w->inside(id, o); })) copied().rows.push_back(l);
@@ -1811,7 +2219,6 @@ namespace one::desktop::runtime {
 						w->chosen.clear();
 						if (!spec.pick.empty()) p.pick(spec.pick, "");
 					}
-					p.told().set(!one ? "Copied the drawing as SVG. Paste it anywhere." : cutting ? "Cut. Paste it into any layer, or anywhere as SVG." : "Copied. Paste it into any layer, or anywhere as SVG.");
 				} else {
 					std::string name = data["title"].as_string().empty() ? data["name"].as_string() : data["title"].as_string();
 					if (name.empty()) name = app_name();
@@ -1828,13 +2235,13 @@ namespace one::desktop::runtime {
 					if (copying) {
 						// Drawn away from the window's thread, and put on the clipboard back on it.
 						p.told().set("Copying…");
-						std::thread([told = p.told(), all = std::move(all), one] {
+						in_background([told = p.told(), all = std::move(all), one] {
 							auto drawn = drawn_whole(all);
 							post([told, drawn, one] {
 								desktop::copy_picture(drawn);
 								told.set(one ? "Copied the layer. Paste it anywhere." : "Copied the picture. Paste it anywhere.");
 							});
-						}).detach();
+						});
 					} else {
 						// Named for what the view calls it, or for the app when it calls it nothing.
 						std::string name = data["title"].as_string().empty() ? data["name"].as_string() : data["title"].as_string();
@@ -2632,7 +3039,7 @@ namespace one::desktop::runtime {
 		if (spec.paste) {
 			drawn = desktop::file_target(
 			    std::move(drawn),
-			    [&p, w, spec, layers, width, height](desktop::dropped what, desktop::point at) {
+			    [&p, w, spec](desktop::dropped what, desktop::point at) {
 				    std::optional<model::point> on;
 				    if (w->scale > 0 && w->board.contains(at)) on = w->on_collage(at);
 				    if (!what.picture.empty()) what.files.push_back(kept_for_now(what.picture));
@@ -2640,7 +3047,7 @@ namespace one::desktop::runtime {
 					    p.told().set("That picture is on the web. Save it first, then drop it here.");
 					    return;
 				    }
-				    add_pictures(p, spec, layers, width, height, what.files, on);
+				    take_pictures(p, spec, what.files, on);
 			    },
 			    {.border = current_theme().accent, .border_width = 3});
 		}

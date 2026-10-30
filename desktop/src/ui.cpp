@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <map>
 #include <typeinfo>
+#include <utility>
 #include <vector>
 
 #include "one/desktop/ui.hpp"
@@ -394,6 +395,7 @@ namespace one::desktop {
 				if (across_) {
 					extent e = content.measure(1e7f);
 					length_ = e.width;
+					restore(area.width);
 					offset_ = std::clamp(offset_, 0.f, std::max(0.f, length_ - area.width));
 					content.place({area.x - offset_, area.y, std::max(length_, area.width), area.height});
 				} else {
@@ -403,9 +405,18 @@ namespace one::desktop {
 					float x = cross == align::center ? area.x + (area.width - width) / 2 : area.x;
 					extent e = content.measure(width);
 					length_ = e.height;
+					restore(area.height);
 					offset_ = std::clamp(offset_, 0.f, std::max(0.f, length_ - area.height));
 					content.place({x, area.y - offset_, width, std::max(length_, area.height)});
 				}
+				if (kept_ && wanted_ < 0 && kept_->peek() != offset_) kept_->set(offset_);
+			}
+
+			// Where it was left, kept, and where it's yet to go back to, until what it holds
+			// reaches that far or it's scrolled first.
+			void keep_at(state<float> at) {
+				wanted_ = at.peek() > 0 ? at.peek() : -1;
+				kept_ = std::move(at);
 			}
 
 			void paint_content(canvas& c) override {
@@ -444,6 +455,7 @@ namespace one::desktop {
 			}
 
 			bool wheel(point, float dx, float dy) override {
+				wanted_ = -1;
 				float delta = across_ ? (dx != 0 ? dx : dy) : dy;
 				float limit = std::max(0.f, length_ - (across_ ? viewport_.width : viewport_.height));
 				float moved = std::clamp(offset_ + delta, 0.f, limit);
@@ -455,7 +467,9 @@ namespace one::desktop {
 
 			void adopt(element& before) override {
 				element::adopt(before);
-				offset_ = static_cast<scroll_element&>(before).offset_;
+				auto& was = static_cast<scroll_element&>(before);
+				offset_ = was.offset_;
+				wanted_ = was.wanted_;
 			}
 
 		protected:
@@ -480,9 +494,42 @@ namespace one::desktop {
 			}
 
 		private:
+			void restore(float visible) {
+				if (wanted_ < 0 || length_ - visible < wanted_) return;
+				offset_ = std::exchange(wanted_, -1.f);
+			}
+
 			bool across_;
 			rect viewport_;
 			float offset_ = 0, length_ = 0;
+			std::optional<state<float>> kept_;
+			float wanted_ = -1;
+		};
+
+		class pressable_element : public element {
+		public:
+			explicit pressable_element(std::function<void()> pressed) : pressed_(std::move(pressed)) {}
+
+			bool focusable() const override { return true; }
+			one::desktop::cursor cursor() const override { return cursor::pointer; }
+			void paint_content(canvas& c) override {
+				element::paint_content(c);
+				if (!shows_focus()) return;
+				float radius = children.empty() ? 3 : children.front()->background.radius;
+				c.box(frame.inset(-2), {.border = current_theme().accent, .border_width = 2, .radius = radius + 2});
+			}
+			bool handle_key(const key_event& e) override {
+				if (!e.is(keys::enter) && !e.is(keys::keypad_enter)) return false;
+				if (pressed_) pressed_();
+				return true;
+			}
+			bool click(point) override {
+				if (pressed_) pressed_();
+				return true;
+			}
+
+		private:
+			std::function<void()> pressed_;
 		};
 
 		// lists
@@ -605,8 +652,11 @@ namespace one::desktop {
 			const std::string& chosen() const { return chosen_; }
 			// The row shown as chosen: the first, until one's chosen.
 			std::string shown_chosen() const { return keys_.empty() ? "" : keys_[index_of(chosen_)]; }
+			// Brought into view as it's first placed, as the row a page was left from is.
 			void start_at(const std::string& key) {
-				if (std::ranges::contains(keys_, key)) chosen_ = key;
+				if (!std::ranges::contains(keys_, key)) return;
+				chosen_ = key;
+				moved_ = true;
 			}
 
 		private:
@@ -960,6 +1010,8 @@ namespace one::desktop {
 				if (pointer_.on_release) pointer_.on_release(at);
 			}
 			bool wheel(point at, float dx, float dy) override { return pointer_.on_wheel ? pointer_.on_wheel(at, dx, dy) : element::wheel(at, dx, dy); }
+			bool pinch(point at, float by) override { return pointer_.on_pinch && pointer_.on_pinch(at, by); }
+			bool swipe(point at, float dx, float dy, bool ended) override { return pointer_.on_swipe && pointer_.on_swipe(at, dx, dy, ended); }
 			// Where the pointer is, as it's found over this, for the cursor it shows there.
 			element* hit(point at) override {
 				element* found = element::hit(at);
@@ -1136,6 +1188,21 @@ namespace one::desktop {
 
 	view scroll(view content) {
 		auto e = std::make_unique<scroll_element>(false);
+		if (content.get()) e->children.push_back(std::move(content).take());
+		adopt_children(*e);
+		return view(std::move(e));
+	}
+
+	view scroll(view content, state<float> at) {
+		auto e = std::make_unique<scroll_element>(false);
+		e->keep_at(std::move(at));
+		if (content.get()) e->children.push_back(std::move(content).take());
+		adopt_children(*e);
+		return view(std::move(e));
+	}
+
+	view pressable(view content, std::function<void()> pressed) {
+		auto e = std::make_unique<pressable_element>(std::move(pressed));
 		if (content.get()) e->children.push_back(std::move(content).take());
 		adopt_children(*e);
 		return view(std::move(e));

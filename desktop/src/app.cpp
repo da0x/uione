@@ -82,6 +82,8 @@ namespace one::desktop {
 				        s->viewporter = static_cast<wp_viewporter*>(wl_registry_bind(registry, name, &wp_viewporter_interface, 1));
 			        } else if (is(wp_cursor_shape_manager_v1_interface)) {
 				        s->cursors = static_cast<wp_cursor_shape_manager_v1*>(wl_registry_bind(registry, name, &wp_cursor_shape_manager_v1_interface, 1));
+			        } else if (is(zwp_pointer_gestures_v1_interface)) {
+				        s->gestures = static_cast<zwp_pointer_gestures_v1*>(wl_registry_bind(registry, name, &zwp_pointer_gestures_v1_interface, 1));
 			        } else if (is(wl_data_device_manager_interface)) {
 				        s->data_devices = static_cast<wl_data_device_manager*>(wl_registry_bind(registry, name, &wl_data_device_manager_interface, std::min(version, 3u)));
 				        connect_clipboard(*s);

@@ -144,17 +144,31 @@ namespace one::local {
 			std::vector<std::string> fields;
 			std::vector<value_of> values;
 		};
+		// A row of one of its lists compared with another of its values, by ==, !=, <,
+		// <=, > or >=, as in {"created_at", ">", "seen"}.
+		struct row_test {
+			std::string field, op, other;
+		};
+		// How many rows of one of its lists pass every test, or, with a field, what that
+		// field of theirs adds up to: what its list holds, after its limit.
+		struct tallied {
+			std::string name, list, field;
+			std::vector<row_test> tests;
+		};
 		std::string name;
 		std::string per_kind;  // the entity it has a document per, if any
 		std::vector<std::pair<std::string, std::string>> copies;
 		std::vector<std::pair<std::string, query>> counts;
 		std::vector<listing> lists;
+		std::vector<tallied> tallies;
 
 		view_description& each(query rows) { return this->list("rows", std::move(rows)); }
 		view_description& list(std::string name, query rows);
 		view_description& per(std::string entity);
 		view_description& copy(std::string name, std::string field);
 		view_description& count(std::string name, query rows);
+		view_description& tally(std::string name, std::string list, std::vector<row_test> tests = {});
+		view_description& total(std::string name, std::string list, std::string field, std::vector<row_test> tests = {});
 		view_description& order(std::vector<by> keys);
 		view_description& order(by key) { return order(std::vector<by>{std::move(key)}); }
 		view_description& limit(int rows);

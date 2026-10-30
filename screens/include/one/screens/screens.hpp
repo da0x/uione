@@ -46,6 +46,8 @@ namespace one::screens {
 	// A value as a person reads it: a number without needless decimals, a list
 	// joined, a time as a date or, today, as its time, and nothing for nothing.
 	std::string show(const value& v);
+	// A moment as a record's details say it: its day and its time of day, like Mar 4, 2025, 14:32.
+	std::string said_with_time(const value& v);
 
 	// A time a screen names, worked out as it's read: counted from now, like +10m or
 	// -7d; or by the calendar, d for a day, w for a week from Monday and M for a month,
@@ -110,6 +112,19 @@ namespace one::screens {
 
 	// Pages
 
+	// Where a page was left, kept by its address for as long as the app runs, so going
+	// back to it, or opening it again, finds it as it was: how far down it was scrolled,
+	// and what was last opened from it, like a card, or what has taken that one's place.
+	struct place {
+		state<float> scroll;
+		std::string opened;
+		// The addresses each of its lists opens, in the order it shows them, as it was last
+		// built, by the list: for a record opened from one to step through.
+		std::map<std::string, std::shared_ptr<const std::vector<std::string>>> lists = {};
+		// And the picture each of those shows, where its cards show one, by the same list.
+		std::map<std::string, std::shared_ptr<const std::vector<std::string>>> pictures = {};
+	};
+
 	// A page that's open: the screen it shows, what its address said, and the views
 	// it reads, listened to from when it first reads them until it's left.
 	class page_base {
@@ -123,6 +138,10 @@ namespace one::screens {
 
 		std::size_t screen() const { return screen_; }
 		const std::string& address() const { return address_; }
+		screens::place& where_left() { return *place_; }
+		// Where the page it was opened from was left, while there was one: kept as it's
+		// stepped on from, so its record steps through the list it was opened from.
+		const screens::place* opened_from() const { return from_.get(); }
 		const std::map<std::string, std::string>& params() const { return params_; }
 		std::string param(const std::string& name) const;
 		// What its address's query says, like ?is=Assigned to me&assignees=me.
@@ -173,6 +192,9 @@ namespace one::screens {
 		std::optional<person> reader() const { return source_.reader(); }
 		// Where a file a field names is on this machine, when the source keeps it here.
 		std::optional<std::filesystem::path> file_here(const std::string& kept) const { return source_.file_here(kept); }
+		// What it reads from and runs on, which outlives it: for work done away from the
+		// app's loop, like keeping a file, that may finish after it's left.
+		screens::source& source() const { return source_; }
 		std::string me() const { return reader() ? reader()->uid : ""; }
 
 		// What's being worked on now in what the page reads: each record someone holds
@@ -194,6 +216,9 @@ namespace one::screens {
 		// margin, only what the page is made of.
 		void fill() { fill_ = true; }
 		bool take_fill() { return std::exchange(fill_, false); }
+		// Only its picture, edge to edge, its bars drawn over it, as a photo's own screen is.
+		void alone() { alone_ = true; }
+		bool take_alone() { return std::exchange(alone_, false); }
 
 		// The keys its lines are run by, like ctrl+z, gathered each time it's built,
 		// while they're shown: the first said for a key takes it.
@@ -245,7 +270,10 @@ namespace one::screens {
 		}
 
 	private:
+		friend class navigator_base;
 		screens::source& source_;
+		std::shared_ptr<screens::place> place_ = std::make_shared<screens::place>();
+		std::shared_ptr<screens::place> from_;
 		std::optional<state<std::chrono::sys_seconds>> clock_;
 		listening ticking_;
 		std::size_t screen_;
@@ -264,6 +292,7 @@ namespace one::screens {
 		std::vector<part> title_;
 		bool wide_ = false;
 		bool fill_ = false;
+		bool alone_ = false;
 		std::vector<std::pair<std::string, std::function<void()>>> keys_;
 		std::optional<bool> in_group_;
 		std::optional<state<bool>> in_options_;
@@ -432,6 +461,7 @@ namespace one::screens {
 		std::vector<std::string> routes_;
 		std::vector<std::unique_ptr<page_base>> trail_;
 		std::unique_ptr<page_base> retired_;  // the page last replaced, kept until the next
+		std::map<std::string, std::shared_ptr<place>> places_;  // where each address was left
 		state<int> changed_ = 0;
 		std::map<std::string, std::pair<state<view_state>, listening>> views_;
 	};

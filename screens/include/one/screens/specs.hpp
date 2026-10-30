@@ -27,6 +27,9 @@ namespace one::screens {
 	struct basic_region {
 		std::string name;
 		View inside;
+		// side when about: a drawer, opened and closed by what it's shown while, which
+		// stays over a picture alone as long as it's open, its bars resting or not.
+		bool drawer = false;
 	};
 
 	// The pages above this one, nearest last, each followed back with a click. A
@@ -124,6 +127,7 @@ namespace one::screens {
 	struct column {
 		std::string field;
 		std::string label;
+		bool bytes = false;  // a number of bytes, said as KB, MB or GB
 	};
 
 	// A form for a command: each field asked for as its kind is, and a button that
@@ -483,6 +487,7 @@ namespace one::screens {
 		int sizes = 0;  // or, larger or smaller, the reader's page made a step larger, 1, or smaller, -1
 		bool pastes = false;  // or what's on the clipboard pasted into the paper
 		bool chooses = false;  // or pictures chosen from the device's files
+		bool folder = false;   // a folder of them, chosen, every picture in it and the folders in it
 	};
 
 	struct paper_spec {
@@ -724,6 +729,8 @@ namespace one::screens {
 		std::vector<std::pair<std::string, std::string>> query;
 		std::string color = "";
 	};
+	// What a list ordered by a date is set under a heading for: each year, month or day.
+	enum class time_unit { year, month, day };
 	struct cards_spec {
 		state<view_state> view;
 		std::string list;
@@ -737,6 +744,50 @@ namespace one::screens {
 		bool hide_empty = false;                                  // not there while it has no cards, or can't be read
 		std::string picture = "";                                 // a file field's picture on top of each card
 		bool fit = false;                                         // all of it fitted in, or filling its place
+		bool mosaic = false;                                      // set as a mosaic of pictures, each filling its tile (see mosaic_tile)
+		// Under a heading for each year, month or day of a date field the list is ordered by.
+		std::string by = "";
+		time_unit unit = time_unit::month;
+		// Pictures dropped, pasted or chosen, each a record made by `add`, given what's
+		// `given` besides, its file in the picture and the rest of its parts, its own size,
+		// its file's name, bytes and date, each in the field `fields` says.
+		std::string add = "";
+		std::map<std::string, std::string> fields = {};
+		std::map<std::string, std::string> given = {};
+		std::string key = "";  // what the screen's paste and add pictures buttons name them by, and its timeline
+		bool paste = false;
+	};
+
+	// The years and months of cards set under headings by a date, each with how many it
+	// holds: the one in view marked, and one chosen scrolled to the top of the cards.
+	struct dated_timeline_spec {
+		state<view_state> view;
+		std::string list;
+		std::string by;
+		time_unit unit = time_unit::month;
+		std::string cards;  // the key of the cards it goes with
+	};
+
+	// Stepping from a record's screen to the one before or after it in a list of them,
+	// as link next in library.things does: the list, in its own order, and the screen's
+	// route, whose last parameter names the record shown.
+	struct step_spec {
+		state<view_state> view;
+		std::string list;
+		std::string route;  // like /things/:thing
+		bool next = false;
+		// Or through the list the record was opened from, whichever it was, when one was;
+		// the view's list only when it wasn't.
+		bool opened = false;
+		// every 4 seconds while slideshow: stepped by itself that often while the toggle
+		// named is on, the picture it goes to read ahead; the toggle goes off at the
+		// list's end, and as a key is pressed or a click made.
+		double every = 0;
+		std::string while_on = "";
+		// The field the screen's picture alone shows, read from the list's rows for the
+		// record it goes to, so its picture's read ahead, where the list it was opened
+		// from doesn't show one.
+		std::string picture = "";
 	};
 
 	// A chart's run of numbers: by its field and a name in it, like stats.cpu; its

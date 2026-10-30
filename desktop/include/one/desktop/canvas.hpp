@@ -8,6 +8,7 @@
 #pragma once
 
 #include <functional>
+#include <optional>
 #include <vector>
 
 #include "one/desktop/app.hpp"
@@ -80,6 +81,9 @@ namespace one::desktop {
 			canvas& owner_;
 		};
 		[[nodiscard]] clip_scope clip(const rect& area);
+		// Where what's drawn shows now: the clip in force, or nothing while there's none,
+		// as what draws only what's in view asks.
+		std::optional<rect> clipped() const { return clips_.empty() ? std::nullopt : std::optional(clips_.back()); }
 
 		// Draws pictures and text turned by `degrees` clockwise about `about` until the
 		// scope ends; boxes, lines and fills stay as they are.

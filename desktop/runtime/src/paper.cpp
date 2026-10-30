@@ -9,6 +9,10 @@
 
 #include <algorithm>
 #include <chrono>
+#include <expected>
+#include <format>
+#include <fstream>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <optional>
@@ -18,6 +22,7 @@
 
 #include "one/desktop/editing.hpp"
 #include "one/desktop/files.hpp"
+#include "one/desktop/picture.hpp"
 #include "one/desktop/runtime/components.hpp"
 #include "paper/kinds.hpp"
 
@@ -60,6 +65,7 @@ namespace one::desktop::runtime {
 			bool placed = false;  // the caret put somewhere once, when the page first opens
 			std::string composing;
 			int composing_at = -1;
+			std::pair<double, std::optional<double>> taking{0, std::nullopt};  // where pictures coming in go: after this position, and before this one
 		};
 
 		// The theme on warm paper, as under a reading lamp: a warm page, sheet, ink and
@@ -104,18 +110,16 @@ namespace one::desktop::runtime {
 		// A place between two blocks' positions, or after the last.
 		double between(double before, std::optional<double> after) { return after ? (before + *after) / 2 : before + 1; }
 
-		// A picture a block keeps, read from its file once and kept while the app runs.
+		// A picture a block keeps, read from its file away from the window's thread, once,
+		// no larger than a page shows it, and kept while the app runs; nothing until it's
+		// read.
 		const desktop::picture* picture_kept(page& p, const std::string& kept) {
-			static std::map<std::string, std::optional<desktop::picture>> read;
-			auto found = read.find(kept);
-			if (found == read.end()) {
-				std::optional<desktop::picture> shown;
-				if (auto file = p.file_here(kept)) {
-					if (auto made = desktop::picture::read(*file)) shown = std::move(*made);
-				}
-				found = read.emplace(kept, std::move(shown)).first;
-			}
-			return found->second ? &*found->second : nullptr;
+			static std::map<std::string, desktop::picture> read;
+			if (auto found = read.find(kept); found != read.end()) return found->second ? &found->second : nullptr;
+			auto shown = picture_soon(p, kept, 2048);
+			if (!shown) return nullptr;
+			auto& made = read.emplace(kept, std::move(*shown)).first->second;
+			return made ? &made : nullptr;
 		}
 
 		class paper_element : public element, public text_entry {
@@ -797,43 +801,42 @@ namespace one::desktop::runtime {
 			// Pictures on the clipboard, as files or a picture's bytes, made blocks after the
 			// caret's; whether there were any.
 			bool pasted_pictures() {
-				std::vector<std::filesystem::path> files = desktop::clipboard_files();
-				if (files.empty()) {
-					if (auto bytes = desktop::clipboard_picture()) files.push_back(kept_for_now(*bytes));
-				}
+				std::vector<std::filesystem::path> files = clipboard_pictures();
 				if (files.empty()) return false;
-				add_pictures(files);
+				take_pictures(std::move(files));
 				return true;
 			}
 
-			// Pictures, each a block after the caret's, in turn, the caret then in the first's
-			// caption; all one step to undo.
-			void add_pictures(const std::vector<std::filesystem::path>& files) {
+			// Pictures, each to be a block after the caret's, in turn, the caret then in the
+			// first's caption: where they'll go, worked out now, while they come in.
+			void take_pictures(std::vector<std::filesystem::path> files) {
 				if (spec_.add.empty() || !spec_.fields.contains("picture")) return;
 				if (block* here = current()) send(here->id);
 				std::size_t i = index();
 				double from = i < blocks_.size() && !s_->first ? blocks_[i].position : 0;
 				std::optional<double> to = i + 1 < blocks_.size() ? std::optional(blocks_[i + 1].position) : std::nullopt;
 				if (s_->first) from = 0, to = std::nullopt;
-				bool first = true;
-				s_->known.clear();
-				for (const auto& b : blocks_) s_->known.insert(b.id);
-				int n = 0, count = static_cast<int>(files.size());
-				for (const auto& file : files) {
-					auto read = desktop::picture::read(file);
-					if (!read) {
-						p_.told().set(file.filename().string() + " isn't a picture this can read.");
-						continue;
-					}
+				s_->taking = {from, to};
+				pictures_coming(p_, spec_.key, std::move(files));
+			}
+
+			// Those come in, each a block where it was to go; all one step to undo.
+			void add_pictures(const std::vector<coming_picture>& pictures) {
+				auto [from, to] = s_->taking;
+				for (const auto& picture : pictures) {
 					// Spread evenly between this block and the next, or one after another.
-					double position = to ? from + (*to - from) * (n + 1) / (count + 1) : from + n + 1;
-					++n;
+					double n = static_cast<double>(picture.index);
+					double position = to ? from + (*to - from) * (n + 1) / (static_cast<double>(picture.count) + 1) : from + n + 1;
 					value made = value(fields{{"position", position}, {"words", ""}, {"kind", "picture"}, {"align", "center"}});
-					if (spec_.fields.contains("picture_width")) made.fields["picture_width"] = value(read->width()), made.fields["picture_height"] = value(read->height());
+					if (spec_.fields.contains("picture_width")) made.fields["picture_width"] = value(picture.width), made.fields["picture_height"] = value(picture.height);
 					if (!spec_.parent.empty()) made.fields[spec_.parent] = value(spec_.subject);
-					if (!std::exchange(first, false)) made.fields["one:history"] = value("joined");
-					else s_->coming = position, s_->coming_id.clear(), s_->coming_caret = 0, s_->first = false;
-					p_.run(spec_.add, collage_fields_of(made, spec_.fields), attached_files{{spec_.fields.at("picture"), {file.string()}}}, [](const answer&) {}, false);
+					if (picture.joined) made.fields["one:history"] = value("joined");
+					else {
+						s_->known.clear();
+						for (const auto& b : blocks_) s_->known.insert(b.id);
+						s_->coming = position, s_->coming_id.clear(), s_->coming_caret = 0, s_->first = false;
+					}
+					run_with_picture(p_, spec_.add, collage_fields_of(made, spec_.fields), spec_.fields.at("picture"), picture, [](const answer&) {});
 				}
 				tick_.set(tick_.peek() + 1);
 			}
@@ -988,17 +991,215 @@ namespace one::desktop::runtime {
 		return desktop::tool_button(icon, hint_of(ask.label, ask.keys), std::move(press), {.off = off});
 	}
 
+	std::vector<std::filesystem::path> clipboard_pictures() {
+		std::vector<std::filesystem::path> files = desktop::clipboard_files();
+		if (files.empty()) {
+			if (auto bytes = desktop::clipboard_picture()) files.push_back(kept_for_now(*bytes));
+		}
+		return files;
+	}
+
+	std::vector<std::filesystem::path> pictures_handed(page& p, const std::string& key) {
+		// What a paste button asked: the clipboard's pictures.
+		if (auto asked = p.kept<bool>("pictures paste " + key); asked.get()) {
+			asked.set(false);
+			auto files = clipboard_pictures();
+			if (files.empty()) p.told().set("There's no picture on the clipboard to paste.");
+			return files;
+		}
+		// Pictures chosen by a button.
+		if (auto chosen = p.kept<std::vector<std::string>>("pictures chosen " + key); !chosen.get().empty()) {
+			std::vector<std::filesystem::path> files(chosen.peek().begin(), chosen.peek().end());
+			chosen.set({});
+			return files;
+		}
+		return {};
+	}
+
+	desktop::view pictures_target(page& p, desktop::view shown, const std::string& key) {
+		auto tick = p.kept<int>("pictures tick " + key);
+		tick.get();
+		auto dropped = p.kept<std::shared_ptr<std::vector<std::filesystem::path>>>("pictures dropped " + key, std::make_shared<std::vector<std::filesystem::path>>()).peek();
+		return desktop::file_target(
+		    std::move(shown),
+		    [&p, dropped, tick](desktop::dropped what, desktop::point) {
+			    if (!what.picture.empty()) what.files.push_back(kept_for_now(what.picture));
+			    if (what.files.empty() && !what.elsewhere.empty()) {
+				    p.told().set("That picture is on the web. Save it first, then drop it here.");
+				    return;
+			    }
+			    *dropped = what.files;
+			    tick.set(tick.peek() + 1);
+		    },
+		    {.border = current_theme().accent, .border_width = 3});
+	}
+
+	std::vector<std::filesystem::path> pictures_dropped(page& p, const std::string& key) {
+		auto dropped = p.kept<std::shared_ptr<std::vector<std::filesystem::path>>>("pictures dropped " + key, std::make_shared<std::vector<std::filesystem::path>>()).peek();
+		return std::exchange(*dropped, {});
+	}
+
+	namespace {
+		// Pictures handed together, measured and kept one after another, each handed back
+		// to the window's thread as it's ready.
+		struct coming_batch {
+			std::vector<std::filesystem::path> files;
+			state<std::vector<coming_picture>> come;
+			state<std::string> told;
+			screens::source* from;
+			std::optional<std::set<std::string>> held = {};  // the files already in, when each is kept once
+			std::size_t next = 0;
+			std::size_t added = 0, already = 0;
+			bool any = false;
+			std::string wrong = {};  // why the last that couldn't be taken wasn't, said once they're all in
+			// A folder handed, gone through a picture at a time as they're kept, never listed
+			// whole: where it is, and how far through it, its own folders in turn.
+			std::optional<std::filesystem::path> walked = {};
+			std::filesystem::recursive_directory_iterator walking = {};
+			std::string folder_name = {};
+		};
+
+		// The next file to take: one handed, or the next in a folder being gone through,
+		// past hidden folders and files and what links out of it, and none once all are.
+		std::optional<std::filesystem::path> next_file(coming_batch& b) {
+			std::error_code failed;
+			while (true) {
+				if (b.walked) {
+					auto& at = b.walking;
+					if (at == std::filesystem::recursive_directory_iterator()) {
+						b.walked.reset();
+						continue;
+					}
+					std::filesystem::directory_entry entry = *at;
+					bool hidden = entry.path().filename().string().starts_with(".");
+					if (hidden && entry.is_directory(failed) && !entry.is_symlink(failed)) at.disable_recursion_pending();
+					at.increment(failed);
+					if (failed) {
+						b.walked.reset();
+						continue;
+					}
+					if (hidden || !entry.is_regular_file(failed)) continue;
+					if (entry.is_symlink(failed)) {
+						auto to = std::filesystem::canonical(entry.path(), failed);
+						auto [end, inside] = std::ranges::mismatch(*b.walked, to);
+						if (failed || end != b.walked->end()) continue;
+					}
+					return entry.path();
+				}
+				if (b.next == b.files.size()) return std::nullopt;
+				const auto& file = b.files[b.next++];
+				if (!std::filesystem::is_directory(file, failed)) return file;
+				auto root = std::filesystem::canonical(file, failed);
+				if (failed) continue;
+				b.walking = std::filesystem::recursive_directory_iterator(root, std::filesystem::directory_options::skip_permission_denied, failed);
+				if (failed) continue;
+				b.walked = root;
+				b.folder_name = root.filename().string();
+			}
+		}
+
+		void come_in(std::shared_ptr<coming_batch> b) {
+			auto next = next_file(*b);
+			bool in_folder = b->walked.has_value();
+			// In a folder, how many there are isn't known until it's gone through, so each is
+			// placed after the last as if there were many.
+			std::size_t i = in_folder ? b->added + b->already : b->next - 1, n = in_folder ? std::size_t{1'000'000} : b->files.size();
+			if (!next) {
+				std::string said = b->already > 0       ? pictures_already_said(b->added, b->already)
+				                   : b->folder_name.empty() ? ""
+				                   : b->added == 0         ? "There are no pictures in " + b->folder_name + "."
+				                                           : std::format("Added {} picture{}.", b->added, b->added == 1 ? "" : "s");
+				return handed_back([told = b->told, wrong = b->wrong, said] {
+					if (!said.empty() || !wrong.empty()) told.set(said.empty() ? wrong : wrong.empty() ? said : said + " " + wrong);
+					else if (told.peek().starts_with("Adding ")) told.set("");
+				});
+			}
+			const auto& file = *next;
+			if (in_folder) handed_back([told = b->told, i, name = b->folder_name] { told.set(std::format("Adding pictures from {}, {} so far…", name, i + 1)); });
+			else if (n > 1) handed_back([told = b->told, i, n] { told.set(std::format("Adding {} of {} pictures…", i + 1, n)); });
+			coming_picture c{.file = file, .index = i, .count = n};
+			auto size = desktop::picture::size_of(file);
+			// What isn't a picture, by what's in it, is passed over in a folder.
+			if (!size && in_folder) return in_background([b] { come_in(b); });
+			std::optional<std::expected<std::string, std::string>> kept;
+			if (size) kept = b->from->keep(file);
+			if (!size || (kept && !*kept)) {
+				b->wrong = !size ? file.filename().string() + " isn't a picture this can read." : kept->error();
+				return in_background([b] { come_in(b); });
+			}
+			// The same picture as one already in, by its content, isn't another.
+			if (kept && b->held && !b->held->insert(**kept).second) {
+				++b->already;
+				return in_background([b] { come_in(b); });
+			}
+			++b->added;
+			std::tie(c.width, c.height) = *size;
+			if (kept) c.kept = **kept;
+			std::error_code failed;
+			if (auto bytes = std::filesystem::file_size(file, failed); !failed) c.bytes = static_cast<long long>(bytes);
+			// When it was taken and with what, as its camera wrote, read without decoding it;
+			// or when its file was last changed.
+			auto facts = desktop::facts_of(file);
+			c.camera = facts.camera();
+			if (auto taken = facts.when()) {
+				c.date = std::format("{:%FT%T}Z", *taken);
+			} else if (auto changed = std::filesystem::last_write_time(file, failed); !failed) {
+				auto at = std::chrono::floor<std::chrono::seconds>(std::chrono::clock_cast<std::chrono::system_clock>(changed));
+				c.date = std::format("{:%FT%T}Z", at);
+			}
+			// Read whole only when it starts as an SVG does.
+			if (std::ifstream in(file, std::ios::binary); in) {
+				std::string start(512, '\0');
+				in.read(start.data(), static_cast<std::streamsize>(start.size()));
+				start.resize(static_cast<std::size_t>(in.gcount()));
+				if (desktop::picture::is_svg({reinterpret_cast<const std::uint8_t*>(start.data()), start.size()})) {
+					in.clear();
+					in.seekg(0);
+					c.svg.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+				}
+			}
+			c.joined = std::exchange(b->any, true);
+			handed_back([come = b->come, c] { come.change([&](auto& now) { now.push_back(c); }); });
+			in_background([b] { come_in(b); });
+		}
+	}  // namespace
+
+	std::string pictures_already_said(std::size_t added, std::size_t already) {
+		if (added == 0) return already == 1 ? "That picture was already in." : std::format("All {} pictures were already in.", already);
+		return std::format("Added {} picture{}, {} {} already in.", added, added == 1 ? "" : "s", already, already == 1 ? "was" : "were");
+	}
+
+	void pictures_coming(page& p, const std::string& key, std::vector<std::filesystem::path> files, std::optional<std::set<std::string>> held) {
+		if (files.empty()) return;
+		auto b = std::make_shared<coming_batch>(coming_batch{std::move(files), p.kept<std::vector<coming_picture>>("pictures come " + key), p.told(), &p.source(), std::move(held)});
+		in_background([b] { come_in(b); });
+	}
+
+	std::vector<coming_picture> pictures_come(page& p, const std::string& key) {
+		auto come = p.kept<std::vector<coming_picture>>("pictures come " + key);
+		if (come.get().empty()) return {};
+		auto ready = come.peek();
+		come.set({});
+		return ready;
+	}
+
+	void run_with_picture(page& p, const std::string& command, value made, const std::string& field, const coming_picture& picture, std::function<void(const answer&)> after) {
+		if (!picture.kept.empty()) return p.run(command, with_uploaded(std::move(made), field, {picture.kept}), {}, std::move(after), false);
+		p.run(command, std::move(made), attached_files{{field, {picture.file.string()}}}, std::move(after), false);
+	}
+
 	desktop::view paper_button(page& p, paper_ask ask) {
 		auto asked = p.kept<std::optional<value>>("paper insert " + ask.key);
-		auto pasting = p.kept<bool>("paper paste " + ask.key);
+		auto pasting = p.kept<bool>("pictures paste " + ask.key);
 		std::function<void()> press = [asked, given = ask.fields] { asked.set(given); };
 		if (ask.pastes) press = [pasting] { pasting.set(true); };
 		// Pictures chosen in the desktop's own file chooser, which waits on the person,
-		// away from the window's thread, and handed back to the paper.
+		// away from the window's thread, and handed back to what the button names; or a
+		// folder of them, gone through as they're kept.
 		if (ask.chooses) {
-			press = [told = p.told(), chosen = p.kept<std::vector<std::string>>("paper chosen " + ask.key), title = ask.label] {
-				std::thread([told, chosen, title] {
-					auto files = desktop::chosen_files({.title = title, .pictures = true, .several = true});
+			press = [told = p.told(), chosen = p.kept<std::vector<std::string>>("pictures chosen " + ask.key), title = ask.label, folder = ask.folder] {
+				std::thread([told, chosen, title, folder] {
+					auto files = desktop::chosen_files({.title = title, .pictures = true, .several = !folder, .folder = folder});
 					post([told, chosen, files] {
 						if (!files) return told.set(files.error());
 						chosen.set(std::vector<std::string>(files->begin(), files->end()));
@@ -1036,6 +1237,7 @@ namespace one::desktop::runtime {
 		for (const auto& row : data[spec.list].as_array()) {
 			block b{row["id"].as_string(), row["kind"].as_string(), row["align"].as_string(), row["words"].as_string(), row["position"].as_double()};
 			b.picture = row["picture"].as_string();
+			if (!b.picture.empty()) (void)picture_kept(p, b.picture);  // read while it's built, so it's drawn once it is
 			b.picture_width = row["picture_width"].as_double(), b.picture_height = row["picture_height"].as_double();
 			b.width = row["width"].is_null() ? 1 : row["width"].as_double();
 			b.corners = row["corners"].as_double();
@@ -1138,17 +1340,8 @@ namespace one::desktop::runtime {
 			else outline = desktop::column(std::move(listed)).padding(edges(around_sheet, 16, 16, 0)).width(232);
 		}
 		auto made = std::make_unique<paper_element>(p, spec, s, std::move(blocks), tick, due);
-		// What a paste button asked of it: the clipboard's pictures after the caret.
-		if (auto asked = p.kept<bool>("paper paste " + spec.key); asked.get()) {
-			asked.set(false);
-			if (!made->pasted_pictures()) p.told().set("There's no picture on the clipboard to paste.");
-		}
-		// Pictures chosen by a button, after the caret.
-		if (auto chosen = p.kept<std::vector<std::string>>("paper chosen " + spec.key); !chosen.get().empty()) {
-			std::vector<std::filesystem::path> files(chosen.peek().begin(), chosen.peek().end());
-			chosen.set({});
-			made->add_pictures(files);
-		}
+		// What a paste or add pictures button handed it, after the caret.
+		if (auto handed = pictures_handed(p, spec.key); !handed.empty()) made->take_pictures(std::move(handed));
 		// What an insert button asked of it.
 		if (auto asked = p.kept<std::optional<value>>("paper insert " + spec.key); asked.get()) {
 			value given = *asked.peek();
@@ -1162,27 +1355,12 @@ namespace one::desktop::runtime {
 		}
 		// Pictures dropped on it, as files or a browser's picture, are picture blocks after
 		// the caret's.
-		paper_element* taking = made.get();
-		desktop::view shown(std::move(made));
 		if (spec.paste) {
-			auto dropped = p.kept<std::shared_ptr<std::vector<std::filesystem::path>>>("paper dropped " + spec.key, std::make_shared<std::vector<std::filesystem::path>>()).peek();
-			if (!dropped->empty()) {
-				taking->add_pictures(*dropped);
-				dropped->clear();
-			}
-			shown = desktop::file_target(
-			    std::move(shown),
-			    [&p, dropped, tick](desktop::dropped what, desktop::point) {
-				    if (!what.picture.empty()) what.files.push_back(kept_for_now(what.picture));
-				    if (what.files.empty() && !what.elsewhere.empty()) {
-					    p.told().set("That picture is on the web. Save it first, then drop it here.");
-					    return;
-				    }
-				    *dropped = what.files;
-				    tick.set(tick.peek() + 1);
-			    },
-			    {.border = t.accent, .border_width = 3});
+			if (auto dropped = pictures_dropped(p, spec.key); !dropped.empty()) made->take_pictures(std::move(dropped));
 		}
+		if (auto come = pictures_come(p, spec.key); !come.empty()) made->add_pictures(come);
+		desktop::view shown(std::move(made));
+		if (spec.paste) shown = pictures_target(p, std::move(shown), spec.key);
 		if (spec.fills) shown = desktop::scroll(std::move(shown)).grow();
 		if (!outline) return shown;
 		// A drawer takes its room from the page's, as the workspace's side does.

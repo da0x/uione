@@ -202,6 +202,23 @@ namespace app {
 )");
 }
 
+TEST_CASE("a local view counts its own list's rows, those its where keeps, and adds up a number of theirs, in both") {
+    const std::string counted = with(with(board, "\ttarget   desktop\n", "\ttarget   desktop web\n"), "\t\t\tx  w  kind\n\t\t}\n",
+                                     "\t\t\tx  w  kind\n\t\t}\n\t\tplaced = count(layers)\n\t\twide = count(layers where w > pictures)\n\t\twidth = sum(layers).w\n");
+    language::diagnostics out;
+    auto files = parsed(counted, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_local(files);
+    for (const auto& e : generated.errors) FAIL_CHECK(language::format(e));
+    REQUIRE(generated.files.size() == 1);
+    REQUIRE(generated.web.size() == 1);
+    CHECK(generated.files[0].content.find("\t\t\t\t\t.tally(\"placed\", \"layers\")\n\t\t\t\t\t.tally(\"wide\", \"layers\", {{\"w\", \">\", \"pictures\"}})\n\t\t\t\t\t.total(\"width\", \"layers\", \"w\")\n") != std::string::npos);
+    CHECK(generated.web[0].content.find("        .tally(\"placed\", \"layers\")\n        .tally(\"wide\", \"layers\", [[\"w\", \">\", \"pictures\"]])\n        .total(\"width\", \"layers\", \"w\")\n") != std::string::npos);
+    // What's added up is a number its rows hold.
+    CHECK(messages(with(counted, "sum(layers).w", "sum(layers).kind")) == std::vector<std::string>{"52: sum adds up a number, and layer holds no number kind"});
+    CHECK(messages(with(with(counted, "\t\t\tx  w  kind\n", "\t\t\tw  kind\n"), "sum(layers).w", "sum(layers).x")) == std::vector<std::string>{"52: layers's rows don't hold x; list it in its block to add it up"});
+}
+
 TEST_CASE("what local storage can't do yet is an error at its line, and nothing's written") {
     language::diagnostics out;
     auto files = parsed(with(board, "\tscreen \"Boards\"", "\tfunction twice(n) {\n\t\treturn n * 2\n\t}\n\n\tscreen \"Boards\""), out);

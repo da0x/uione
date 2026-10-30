@@ -10,8 +10,10 @@ import { useState } from "react";
 import {
   App,
   Board,
+  Cards,
   Code,
   Command,
+  DatedTimeline,
   Confirm,
   Form,
   Hero,
@@ -193,6 +195,102 @@ describe("dialogs", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(source.runs).toEqual([]);
+  });
+});
+
+describe("cards", () => {
+  it("name each card in a heading set in the text's face, not the headings'", () => {
+    const source = memorySource();
+    source.set("studio::room_page", { pieces: [{ id: "c1", name: "Harbor" }] });
+    function Pieces() {
+      const page = useView("studio::room_page");
+      return <Cards view={page} list="pieces" columns={{ name: "Name" }} />;
+    }
+    renderScreen(() => <Pieces />, source);
+    const title = screen.getByRole("heading", { name: "Harbor" });
+    expect(title.tagName).toBe("H2");
+    expect(title.className.split(" ")).toContain("font-sans");
+  });
+
+  it("set as a mosaic, fill each card's tile with its picture, its title over its foot, a heading in the text's face", async () => {
+    const source = memorySource();
+    source.set("studio::room_page", { pieces: Array.from({ length: 5 }, (_, i) => ({ id: `c${i + 1}`, name: `Clipping ${i + 1}` })) });
+    function Pieces() {
+      const page = useView("studio::room_page");
+      return <Cards view={page} list="pieces" columns={{ name: "Name" }} mosaic />;
+    }
+    renderScreen(() => <Pieces />, source);
+    const tiles = screen.getAllByRole("article");
+    expect(tiles.length).toBe(5);
+    expect([tiles[1]!.style.gridColumn, tiles[1]!.style.gridRow]).toEqual(["2 / span 2", "1 / span 1"]);
+    expect([tiles[4]!.style.gridColumn, tiles[4]!.style.gridRow]).toEqual(["3 / span 1", "3 / span 2"]);
+    const title = within(tiles[0]!).getByRole("heading", { name: "Clipping 1" });
+    expect(title.className.split(" ")).toContain("font-sans");
+  });
+});
+
+describe("cards under a heading for each month", () => {
+  it("head each in the text's face, strong and larger, each part laid out only near the view, and a timeline of them moved through by its keys", async () => {
+    const source = memorySource();
+    const at = (m: number, d: number) => new Date(Date.UTC(2026, m - 1, d, 12));
+    source.set("studio::room_page", { pieces: [at(10, 30), at(10, 2), at(9, 14), at(9, 3), at(9, 1)].map((when, i) => ({ id: `c${i + 1}`, name: `Clipping ${i + 1}`, picture_date: when })) });
+    function Pieces() {
+      const page = useView("studio::room_page");
+      return (
+        <>
+          <Cards view={page} list="pieces" columns={{ name: "Name" }} mosaic by={{ field: "picture_date", unit: "month" }} name="clippings" />
+          <DatedTimeline view={page} list="pieces" by="picture_date" cards="clippings" />
+        </>
+      );
+    }
+    renderScreen(() => <Pieces />, source);
+    const september = screen.getByRole("region", { name: "September 2026" });
+    const heading = within(september).getByRole("heading", { name: "September 2026" });
+    expect(heading.className.split(" ")).toEqual(expect.arrayContaining(["font-sans", "font-semibold", "text-2xl"]));
+    expect(september.style.contentVisibility).toBe("auto");
+    const tiles = within(september).getAllByRole("article");
+    expect([tiles[0]!.style.gridColumn, tiles[0]!.style.gridRow]).toEqual(["1 / span 1", "1 / span 2"]);
+    // The timeline's, not the page's own.
+    const buttons = screen.getAllByRole("button").filter((b) => /\d/.test(b.textContent ?? ""));
+    expect(buttons.map((b) => b.textContent)).toEqual(["20265", "October2", "September3"]);
+    // jsdom lays nothing out, so every heading is at the top, and the last is the one in view.
+    await waitFor(() => expect(buttons.map((b) => b.getAttribute("aria-current"))).toEqual([null, null, "true"]));
+    expect(buttons[2]!.className).toContain("bg-accent/15");
+    expect(buttons[1]!.className).toContain("focus-visible:ring-2");
+    buttons[0]!.focus();
+    fireEvent.keyDown(buttons[0]!, { key: "j" });
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(buttons[2]);
+    fireEvent.keyDown(document.activeElement!, { key: "Home" });
+    expect(document.activeElement).toBe(buttons[0]);
+  });
+});
+
+describe("a workspace that's only its picture", () => {
+  it("draws its picture on black across all of the window, its bars over it while they're awake, and hidden but there while they're not, nor the pointer", () => {
+    const Layout = radix.Layout;
+    const regions = { main: <p>The picture</p>, toolbar: <button type="button">Next</button>, status: <span>Harbor</span> };
+    const drawn = render(<Layout name="workspace" regions={regions} alone={{ awake: true }} />);
+    const window = drawn.container.firstElementChild as HTMLElement;
+    expect(window.className.split(" ")).toContain("bg-black");
+    expect(screen.getByText("The picture").closest("main")!.className).toContain("absolute inset-0");
+    const bars = screen.getByRole("toolbar").parentElement!;
+    expect(bars.className.split(" ")).not.toContain("invisible");
+    expect(screen.getByRole("toolbar").className).toContain("bg-surface/85");
+    drawn.rerender(<Layout name="workspace" regions={regions} alone={{ awake: false }} />);
+    expect(screen.getByRole("toolbar", { hidden: true }).parentElement!.className.split(" ")).toContain("invisible");
+    expect(screen.getByText("Next")).toBeTruthy();
+    expect(window.style.cursor).toBe("none");
+  });
+
+  it("keeps an open drawer shown over it while its bars rest", () => {
+    const Layout = radix.Layout;
+    const regions = { main: <p>The picture</p>, toolbar: <button type="button">About</button>, side: <span>1.5 MB</span> };
+    const drawn = render(<Layout name="workspace" regions={regions} alone={{ awake: false }} />);
+    expect(screen.getByText("1.5 MB").closest("aside")!.className.split(" ")).not.toContain("visible");
+    drawn.rerender(<Layout name="workspace" regions={regions} alone={{ awake: false, drawers: ["side"] }} />);
+    expect(screen.getByText("1.5 MB").closest("aside")!.className.split(" ")).toContain("visible");
+    expect(screen.getByRole("toolbar", { hidden: true }).parentElement!.className.split(" ")).toContain("invisible");
   });
 });
 
@@ -844,5 +942,28 @@ describe("a front page's new parts", () => {
     expect(Array.from(container.querySelectorAll(".one-constellation-step-number")).map((n) => n.textContent)).toEqual(["01", "02"]);
     expect(container.querySelector(".one-constellation-band")?.textContent).toContain("Data");
     expect(document.getElementById("talk")?.querySelector("a")?.getAttribute("href")).toBe("mailto:hello@example.com");
+  });
+});
+
+describe("a workspace's toolbar", () => {
+  const Group = radix.Group;
+  const tools = (n: number) => Array.from({ length: n }, (_, at) => <button key={at} type="button">{at}</button>);
+
+  it("marks a group that's a single row of small tools, and none that's more", () => {
+    const { container } = render(
+      <>
+        <Group name="Reading" small across={4}>{tools(4)}</Group>
+        <Group name="View" small across={2}>{tools(2)}</Group>
+        <Group name="Align" small>{tools(2)}</Group>
+        <Group name="Style">{tools(2)}</Group>
+      </>,
+    );
+    const marked = Array.from(container.querySelectorAll("[role=group]")).map((g) => [g.getAttribute("aria-label"), g.hasAttribute("data-one-row")]);
+    expect(marked).toEqual([["Reading", true], ["View", true], ["Align", false], ["Style", false]]);
+  });
+
+  it("is a thin strip, its groups' names hidden, only while every group is a single row of small tools", () => {
+    const text = readFileSync(resolve(process.cwd(), "dist/styles.css"), "utf8");
+    expect(text).toContain(":not(:has(>[role=group]:not([data-one-row])))>[role=group]>span{display:none}");
   });
 });

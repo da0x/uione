@@ -20,9 +20,9 @@ import "@fontsource-variable/fraunces/wght.css";
 import "@fontsource-variable/fraunces/wght-italic.css";
 import { Children, Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { CSSProperties, ReactNode } from "react";
-import type { ButtonProps, ChoiceProps, ColorPickerProps, ComponentSet, OptionsProps, SliderProps } from "@uione/react";
-import { Surface } from "@uione/react";
+import type { CSSProperties, KeyboardEvent as KeyDown, ReactNode } from "react";
+import type { ButtonProps, CardGroup, CardsProps, ChoiceProps, ColorPickerProps, ComponentSet, DatedTimelineProps, OptionsProps, SliderProps } from "@uione/react";
+import { Surface, mosaicRows, mosaicTile } from "@uione/react";
 import { highlight, highlightCodeBlocks } from "./highlight.js";
 import { MarkdownField, MarkdownText } from "./markdown.js";
 import { nameStyles, setCodeDisplay, tabWidths, useCodeDisplay } from "./display.js";
@@ -523,6 +523,102 @@ function ColorPicker({ label, value, disabled, onSettle }: ColorPickerProps) {
         />
       </div>
     </div>
+  );
+}
+
+// Cards as a mosaic of their pictures, edge to edge but for the gap cards keep, each
+// filling the tile mosaicTile gives it around its middle, its title and what else it
+// shows over its foot on a shade of it, so it reads on any picture. Its rows are as
+// tall as a column is wide, so it scales as it's resized and no card changes tile;
+// a tile out of view isn't drawn, and its picture isn't fetched, until it's near.
+function Mosaic({ status, cards }: CardsProps) {
+  return (
+    <div className="@container" aria-busy={status === "loading"}>
+      <div className="grid grid-cols-3 gap-4" style={{ gridAutoRows: "calc((100cqw - var(--spacing) * 8) / 3)" }}>
+        {cards.map((card, n) => {
+          const at = mosaicTile(n);
+          return (
+            <article
+              key={card.id}
+              className="relative overflow-hidden rounded-box bg-sunken [contain-intrinsic-size:auto_16rem] [content-visibility:auto]"
+              style={{ gridColumn: `${at.column + 1} / span ${at.columns}`, gridRow: `${at.row + 1} / span ${at.rows}` }}
+            >
+              {card.picture?.source && <img src={card.picture.source} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />}
+              <div className="absolute inset-x-2 bottom-2 flex flex-col gap-0.5 rounded-box bg-black/45 px-3 py-2 text-white">
+                <h2 className="font-sans text-base leading-snug font-semibold">
+                  {card.link ? (
+                    <a {...card.link} className="text-white after:absolute after:inset-0 hover:underline">
+                      {card.title}
+                    </a>
+                  ) : (
+                    card.title
+                  )}
+                </h2>
+                {card.details.length > 0 && <div className="flex flex-wrap gap-x-3 text-sm text-white/85">{card.details.map((detail, i) => <span key={i}>{detail}</span>)}</div>}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+      {cards.length === 0 && <p className="text-sm text-muted">{status === "loading" ? "Loading…" : "Nothing here yet."}</p>}
+    </div>
+  );
+}
+
+// Cards under a heading for each year, month or day, in the text's face, strong and
+// larger, a mosaic's tiles starting again under each. A part out of view isn't laid out
+// or drawn, its height reckoned from how many it holds, so the page scrolls to any
+// heading at once however many are above it.
+function Grouped({ status, cards, mosaic, groups }: CardsProps & { groups: CardGroup[] }) {
+  return (
+    <div className="@container flex flex-col gap-8" aria-busy={status === "loading"}>
+      {groups.map((group) => {
+        const rows = mosaic ? mosaicRows(group.count) : Math.ceil(group.count / 3);
+        const tall = mosaic ? `calc(${rows} * 33cqw + 3rem)` : `calc(${rows} * 22rem + 3rem)`;
+        return (
+          <section key={group.id} aria-labelledby={group.id} className="flex flex-col gap-3" style={{ contentVisibility: "auto", containIntrinsicSize: `auto ${tall}` }}>
+            <h2 id={group.id} className="scroll-mt-4 font-sans text-2xl font-semibold tracking-normal">
+              {group.title}
+            </h2>
+            <radix.Cards status={status} cards={cards.slice(group.first, group.first + group.count)} mosaic={mosaic} />
+          </section>
+        );
+      })}
+      {groups.length === 0 && <p className="text-sm text-muted">{status === "loading" ? "Loading…" : "Nothing here yet."}</p>}
+    </div>
+  );
+}
+
+// The years and months of cards under headings by a date: each year strong with how
+// many it holds, its months under it with theirs, the one in view marked in the accent.
+// Each is a button; the arrows, j and k, Home and End move between them.
+function DatedTimeline({ entries }: DatedTimelineProps) {
+  const moved = (event: KeyDown<HTMLUListElement>) => {
+    const buttons = [...event.currentTarget.querySelectorAll("button")];
+    const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    const to = { ArrowDown: at + 1, j: at + 1, ArrowUp: at - 1, k: at - 1, Home: 0, End: buttons.length - 1 }[event.key];
+    if (to === undefined || event.altKey || event.ctrlKey || event.metaKey) return;
+    event.preventDefault();
+    buttons[Math.max(0, Math.min(buttons.length - 1, to))]?.focus();
+  };
+  return (
+    <ul className="flex flex-col text-sm" onKeyDown={moved}>
+      {entries.map((entry, i) => (
+        <li key={entry.key} className={entry.year && i > 0 ? "mt-2" : undefined}>
+          <button
+            type="button"
+            aria-current={entry.current || undefined}
+            onClick={entry.onChoose}
+            className={`flex w-full items-center justify-between gap-3 rounded-control py-1.5 text-left focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-hidden ${
+              entry.year ? "px-2 font-semibold" : "pr-2 pl-5"
+            } ${entry.current ? "bg-accent/15 text-ink" : "hover:bg-sunken"}`}
+          >
+            {entry.title}
+            <span className="text-muted tabular-nums">{entry.count}</span>
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -1145,7 +1241,7 @@ export const radix: ComponentSet = {
       {source && <img src={source} alt="" className={`h-full w-full ${fit ? "object-contain" : "object-cover"}`} />}
     </div>
   ),
-  Cards: ({ status, cards }) => (
+  Cards: ({ status, cards, mosaic, groups }) => groups ? <Grouped status={status} cards={cards} mosaic={mosaic} groups={groups} /> : (mosaic ? <Mosaic status={status} cards={cards} /> : (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy={status === "loading"}>
       {cards.map((card) => {
         const total = card.tally?.reduce((n, part) => n + part.count, 0) ?? 0;
@@ -1157,7 +1253,8 @@ export const radix: ComponentSet = {
               </div>
             )}
             <div className="flex items-start justify-between gap-3">
-              <h2 className="text-lg leading-snug font-semibold">
+              {/* A card's name, in the text's face, not the headings': still a heading to a screen reader. */}
+              <h2 className="font-sans text-lg leading-snug font-semibold">
                 {card.link ? (
                   <a {...card.link} className="text-ink hover:text-accent hover:underline">
                     {card.title}
@@ -1228,7 +1325,7 @@ export const radix: ComponentSet = {
       })}
       {cards.length === 0 && <p className="text-sm text-muted">{status === "loading" ? "Loading…" : "Nothing here yet."}</p>}
     </div>
-  ),
+  )),
 
   // Columns side by side, scrolled across when there are many, each with its cards and
   // how many; a card dragged dims the columns it can't go to and marks the one it's
@@ -2339,39 +2436,71 @@ export const radix: ComponentSet = {
   // A workspace, filling the window: its bar along the top, its toolbar under it,
   // its tools down the left, the work beside what's at its side, and a status line
   // along the bottom.
-  Layout: ({ name, regions, site }) =>
-    name === "workspace" ? (
-      <div className="fixed inset-0 flex min-h-0 flex-col bg-sunken text-ink">
-        {regions.bar && (
-          // The app's name in the middle, in the theme's heading font, as a window's
-          // title is; the bar's lines at the start and light and dark at the end, each
-          // side as wide as the other so the name stays centered.
-          <div className="grid h-11 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 border-b border-line bg-surface px-3">
-            <div className="flex min-w-0 items-center gap-2">{regions.bar}</div>
-            <span className="text-lg leading-none font-semibold" style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}>
-              {site}
-            </span>
-            <span className="flex justify-end">
-              <ThemeToggle />
-            </span>
-          </div>
-        )}
-        {regions.toolbar && (
-          <div role="toolbar" className="flex shrink-0 items-stretch gap-1 overflow-x-auto border-b border-line bg-surface px-2 py-1 [&>[data-at-end]]:ml-auto [&>[data-at-end]~[data-at-end]]:ml-0">
-            {regions.toolbar}
-          </div>
-        )}
-        <div className="flex min-h-0 flex-1">
-          {regions.tools && (
-            // Its tools in a column down its left side, as a drawing app's are.
-            <div role="toolbar" aria-orientation="vertical" className="flex w-12 shrink-0 flex-col items-center gap-0.5 overflow-y-auto border-r border-line bg-surface py-2">
-              {regions.tools}
+  Layout: ({ name, regions, site, alone }) => {
+    // Its bar and toolbar, in their place or, see through, over a picture alone.
+    const over = alone ? "pointer-events-auto bg-surface/85 backdrop-blur" : "bg-surface";
+    const bar = regions.bar && (
+      // The app's name in the middle, in the theme's heading font, as a window's
+      // title is; the bar's lines at the start and light and dark at the end, each
+      // side as wide as the other so the name stays centered.
+      <div className={`grid h-11 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 border-b border-line px-3 ${over}`}>
+        <div className="flex min-w-0 items-center gap-2">{regions.bar}</div>
+        <span className="text-lg leading-none font-semibold" style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}>
+          {site}
+        </span>
+        <span className="flex justify-end">
+          <ThemeToggle />
+        </span>
+      </div>
+    );
+    // When every group is a single row of small tools, a thin strip, their names said
+    // by their tools' as they're pointed at.
+    const toolbar = regions.toolbar && (
+      <div
+        role="toolbar"
+        className={`flex shrink-0 items-stretch gap-1 overflow-x-auto border-b border-line px-2 py-1 [&>[data-at-end]]:ml-auto [&>[data-at-end]~[data-at-end]]:ml-0 [&:not(:has(>[role=group]:not([data-one-row])))>[role=group]>span]:hidden ${over}`}
+      >
+        {regions.toolbar}
+      </div>
+    );
+    const tools = regions.tools && (
+      // Its tools in a column down its left side, as a drawing app's are.
+      <div role="toolbar" aria-orientation="vertical" className={`flex w-12 shrink-0 flex-col items-center gap-0.5 overflow-y-auto border-r border-line py-2 ${over}`}>
+        {regions.tools}
+      </div>
+    );
+    // An open drawer stays over a picture alone while the rest rests.
+    const stays = alone?.drawers?.includes("side") && !alone.awake;
+    const side = regions.side && <aside className={`w-72 shrink-0 overflow-y-auto border-l border-line p-3 ${over} ${stays ? "visible" : ""}`}>{regions.side}</aside>;
+    const status = regions.status && <div className={`flex shrink-0 items-center gap-4 overflow-hidden whitespace-nowrap border-t border-line px-3 py-1 text-xs text-muted ${over}`}>{regions.status}</div>;
+    // Only its picture, all of the window on black, the rest over it while it's awake:
+    // what's between them is the picture's to point at.
+    if (name === "workspace" && alone) {
+      return (
+        <div className="fixed inset-0 bg-black text-ink" style={alone.awake ? undefined : { cursor: "none" }}>
+          <main className="absolute inset-0">{regions.main}</main>
+          <div className={`pointer-events-none absolute inset-0 flex flex-col ${alone.awake ? "" : "invisible"}`}>
+            {bar}
+            {toolbar}
+            <div className="flex min-h-0 flex-1 justify-between">
+              {tools ?? <span />}
+              {side}
             </div>
-          )}
-          <main className="relative flex min-w-0 flex-1 flex-col gap-4 overflow-auto p-3">{regions.main}</main>
-          {regions.side && <aside className="w-72 shrink-0 overflow-y-auto border-l border-line bg-surface p-3">{regions.side}</aside>}
+            {status}
+          </div>
         </div>
-        {regions.status && <div className="flex shrink-0 items-center gap-4 overflow-hidden whitespace-nowrap border-t border-line bg-surface px-3 py-1 text-xs text-muted">{regions.status}</div>}
+      );
+    }
+    return name === "workspace" ? (
+      <div className="fixed inset-0 flex min-h-0 flex-col bg-sunken text-ink">
+        {bar}
+        {toolbar}
+        <div className="flex min-h-0 flex-1">
+          {tools}
+          <main className="relative flex min-w-0 flex-1 flex-col gap-4 overflow-auto p-3">{regions.main}</main>
+          {side}
+        </div>
+        {status}
       </div>
     ) : name === "two_columns" ? (
       <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
@@ -2388,7 +2517,8 @@ export const radix: ComponentSet = {
           </div>
         ))}
       </div>
-    ),
+    );
+  },
 
   // A toolbar's group: its tools, then its name under them, and a line after it; a
   // small one's tools in rows as long as it says, or two rows, read a row at a time,
@@ -2399,7 +2529,12 @@ export const radix: ComponentSet = {
   ColorPicker,
 
   Group: ({ name, small, across, atEnd, unsaid, children }) => (
-    <div role="group" aria-label={name} data-at-end={atEnd ? "" : undefined} className="flex flex-col items-center justify-between gap-0.5 border-r border-line px-2 last:border-r-0 [&:has(>div:empty)]:hidden">
+    <div
+      role="group"
+      aria-label={name}
+      data-at-end={atEnd ? "" : undefined}
+      data-one-row={small && (across ?? Math.ceil(Children.toArray(children).length / 2)) >= Children.toArray(children).length ? "" : undefined}
+      className="flex flex-col items-center justify-between gap-0.5 border-r border-line px-2 last:border-r-0 [&:has(>div:empty)]:hidden">
       <div
         className={small ? "grid gap-0.5" : "flex items-start gap-0.5"}
         style={small ? { gridTemplateColumns: `repeat(${across ?? Math.max(1, Math.ceil(Children.toArray(children).length / 2))}, auto)` } : undefined}
@@ -2489,6 +2624,7 @@ export const radix: ComponentSet = {
     </div>
   ),
 
+  DatedTimeline,
   Timeline: ({ status, entries, title, fresh }) => {
     if (status !== "live" || entries.length === 0) return null;
     const changes = (

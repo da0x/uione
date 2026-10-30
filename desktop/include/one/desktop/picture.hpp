@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 #include <expected>
 #include <filesystem>
@@ -38,6 +39,27 @@ namespace one::desktop {
 	// Its shapes, lowest first, those it says aren't seen left out.
 	std::vector<svg_shape> svg_shapes(std::string_view svg);
 
+	// What a camera wrote in a photo it took, its EXIF: when, as it says it, like
+	// 2026:10:12 08:30:15, and its offset from UTC, like +02:00, when it says one; its
+	// make and model, like FUJIFILM and X-T5; and which way up it was held, 1 to 8 as
+	// EXIF counts them, 1 as it's stored. What it doesn't say is left empty.
+	struct photo_facts {
+		std::string taken = {}, offset = {}, make = {}, model = {};
+		int orientation = 1;
+		// Its make and model together, the make said once when the model starts with it,
+		// as Canon's Canon EOS R5 does: what a person calls the camera.
+		std::string camera() const;
+		// When it was taken: at its offset, or else as the time is where this runs.
+		std::optional<std::chrono::sys_seconds> when() const;
+		// Whether it's turned a quarter, so it's as tall as it's stored wide.
+		bool turned() const { return orientation >= 5; }
+	};
+	// Read from a picture's bytes, or from its file, a JPEG, TIFF, PNG or WebP, without
+	// decoding it, and from a file, reading only the little that's needed; a file cut
+	// short or made wrong is read as far as it's sound. Nothing for any other.
+	photo_facts facts_of(std::span<const std::uint8_t> bytes);
+	photo_facts facts_of(const std::filesystem::path& file);
+
 	class canvas;
 
 	class picture {
@@ -49,10 +71,14 @@ namespace one::desktop {
 		static constexpr int longest_side = 16384;
 
 		picture() = default;
-		// Read from a file, or from its bytes, as a picture pasted arrives; why not,
-		// in words a person can act on, when it can't be.
+		// Read from a file, or from its bytes, as a picture pasted arrives, the way up its
+		// camera says it was held; why not, in words a person can act on, when it can't be.
 		static std::expected<picture, std::string> read(const std::filesystem::path& file);
 		static std::expected<picture, std::string> decode(std::span<const std::uint8_t> bytes);
+		// How big a picture in a file is, as its file says, without reading all of it, the
+		// way up it's drawn: what a picture coming in is measured by. Nothing when it isn't
+		// one this can read.
+		static std::optional<std::pair<int, int>> size_of(const std::filesystem::path& file);
 		// Pixels made by the app, `width` × `height`, four bytes each.
 		static picture of(int width, int height, std::vector<std::uint8_t> rgba);
 		// Drawn with no window, as a canvas in one is, `width` × `height` pixels on
@@ -66,6 +92,11 @@ namespace one::desktop {
 		// read as pixels; and its own size, as nanosvg reads it, when it can be.
 		static bool is_svg(std::span<const std::uint8_t> bytes);
 		static std::optional<std::pair<double, double>> svg_size(std::string_view svg);
+
+		// A smaller copy, its longer side at most `longest`, each pixel the average of those
+		// it covers: what's drawn where the whole of a large one would be wasted, like a card.
+		// Itself when it's that small already.
+		picture smaller(int longest) const;
 
 		int width() const { return pixels_ ? pixels_->width : 0; }
 		int height() const { return pixels_ ? pixels_->height : 0; }

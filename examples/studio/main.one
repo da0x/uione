@@ -87,6 +87,22 @@ namespace studio at / {
 		picture_height  number  = 0
 	}
 
+	// A picture kept to go on posters later, made of one dropped, pasted or chosen: its
+	// file, its own size, its file's name, how many bytes it is, when it was taken and
+	// the camera it was taken with.
+	entity clipping {
+		name            text
+		image           file
+		picture_width   number  = 0
+		picture_height  number  = 0
+		picture_bytes   number  = 0
+		picture_date    date
+		picture_camera  text
+	}
+
+	command clipping::create
+	command clipping::delete
+
 	command passage::create
 	command passage::delete
 	command passage::write {
@@ -174,6 +190,20 @@ namespace studio at / {
 		}
 	}
 
+	view clippings_page {
+		clippings = each clipping {
+			order by picture_date descending
+			name  image  picture_bytes  picture_date
+		}
+		// How many there are, and how many bytes they take together.
+		total = count(clippings)
+		size = sum(clippings).picture_bytes
+	}
+
+	view clipping_page per clipping {
+		name  image  picture_bytes  picture_date  picture_camera  picture_width  picture_height
+	}
+
 	view notes_page per poster {
 		title
 		passages = each passage in poster {
@@ -190,6 +220,7 @@ namespace studio at / {
 			redo "Redo" icon redo key ctrl+y key ctrl+shift+z
 			text "Posters"
 			link /gallery "Gallery" icon gallery key g
+			link /clippings "Clippings" icon picture
 		}
 		toolbar {
 			group "Poster" {
@@ -272,6 +303,74 @@ namespace studio at / {
 		cards posters link /posters/:poster {
 			picture preview fit
 			title
+		}
+	}
+
+	// Pictures kept to go on posters, each one dropped, pasted or chosen made a clipping,
+	// set edge to edge as a mosaic under the month each was taken, newest first, and
+	// the years and months beside it, each scrolled to.
+	screen "Clippings" /clippings {
+		layout workspace
+		bar {
+			link / "Posters" icon gallery key escape
+		}
+		toolbar {
+			group "Add" {
+				add pictures "Pictures" icon picture
+				add folder "Folder" icon folder
+				paste "Paste" icon paste key ctrl+v
+			}
+		}
+		main {
+			cards clippings_page.clippings mosaic by picture_date month link /clippings/:clipping {
+				picture image
+				name
+				add clipping::create
+				paste
+			}
+		}
+		side {
+			timeline clippings_page.clippings by picture_date
+		}
+		status {
+			text "{clippings_page.total} clippings, {clippings_page.size} bytes"
+			messages
+		}
+	}
+
+	// A clipping on its own, all of the screen, stepped through as they're set out, by
+	// hand or as a slideshow, its bars over it until the pointer's still, and what's
+	// known of it in a drawer beside.
+	screen "{clipping_page.name}" /clippings/:clipping {
+		layout workspace
+		bar {
+			link /clippings "Clippings" icon gallery key escape
+		}
+		toolbar {
+			group "Clipping" {
+				link previous "Previous" icon previous key left
+				link next "Next" icon next key right every 4 seconds while slideshow
+				toggle slideshow "Slideshow" icon play key s
+			}
+			group "View" small at end {
+				zoom out "Smaller" icon zoom_out
+				zoom in "Larger" icon zoom_in
+				zoom to fit "Fit" icon zoom_fit
+				toggle about "About" icon info key i
+				full screen "Full screen" icon fullscreen key f11
+			}
+		}
+		main {
+			picture clipping_page.image fit alone
+		}
+		side when about {
+			details clipping_page {
+				name  picture_date "Taken"  picture_camera "Camera"
+				picture_bytes "Size" as bytes  picture_width "Width"  picture_height "Height"
+			}
+		}
+		status {
+			text "{clipping_page.name}, taken {clipping_page.picture_date} with {clipping_page.picture_camera}"
 		}
 	}
 

@@ -53,6 +53,7 @@ namespace one::language {
         drawn_by{"link", "a link", everywhere},
         drawn_by{"link.icon", "a link's icon", everywhere},
         drawn_by{"link.built", "a link to what the site was built from", everywhere},
+        drawn_by{"link.step", "a link to the record before or after, in a list", everywhere},
         drawn_by{"hero", "a hero", everywhere},
         drawn_by{"section", "a section", everywhere},
         drawn_by{"section.color", "a section's color", everywhere},
@@ -102,7 +103,8 @@ namespace one::language {
         drawn_by{"collage.order", "a collage's layers raised and lowered", "web desktop"},
         drawn_by{"collage.paste", "pasting and dropping pictures on a collage", everywhere},
         drawn_by{"collage.screenshot", "a screenshot added to a collage", "web desktop"},
-        drawn_by{"pictures.choose", "pictures chosen from the device's files, onto a collage or a paper", "web desktop"},
+        drawn_by{"pictures.choose", "pictures chosen from the device's files, onto a collage, a paper or cards", "web desktop"},
+        drawn_by{"pictures.folder", "a folder of pictures chosen, onto a collage, a paper or cards", "web desktop"},
         drawn_by{"calendar", "a list's rows on the days a date of theirs says, a week side by side", "web desktop terminal"},
         drawn_by{"notify", "a row whose time has come said by the system, whatever screen is open", "web desktop terminal"},
         drawn_by{"notify.buttons", "buttons on what the system says, acting on its row", "web desktop"},
@@ -129,6 +131,7 @@ namespace one::language {
         drawn_by{"table.reorder", "reordering a table", everywhere},
         drawn_by{"table.picture", "a picture on each table row", "web desktop"},
         drawn_by{"picture", "a picture of a file a value holds", "web desktop"},
+        drawn_by{"picture.alone", "a picture alone on its screen, zoomed as it's looked at", "web desktop"},
         drawn_by{"table.hide", "a table's hide when empty", everywhere},
         drawn_by{"table.only", "a table's only", everywhere},
         drawn_by{"table.color", "a table's color", everywhere},
@@ -149,6 +152,9 @@ namespace one::language {
         drawn_by{"cards.tally", "cards' tally", everywhere},
         drawn_by{"cards.filter", "cards' filter", everywhere},
         drawn_by{"cards.picture", "a picture on each card", "web desktop"},
+        drawn_by{"cards.paste", "pictures pasted and dropped on cards, each made a record", "web desktop"},
+        drawn_by{"cards.mosaic", "cards set as a mosaic of their pictures", "web desktop"},
+        drawn_by{"cards.by", "cards under a heading for each year, month or day", "web desktop"},
         drawn_by{"chart", "chart", everywhere},
         drawn_by{"monitor", "monitor", everywhere},
         drawn_by{"details", "details", everywhere},
@@ -165,6 +171,7 @@ namespace one::language {
         drawn_by{"timeline.link", "a timeline's link", everywhere},
         drawn_by{"timeline.new", "a timeline's new when", everywhere},
         drawn_by{"timeline.open", "a timeline's on open", everywhere},
+        drawn_by{"timeline.by", "a timeline of cards' years and months, scrolled to", "web desktop"},
         drawn_by{"copy", "copy", everywhere},
         drawn_by{"themes", "themes", everywhere},
         drawn_by{"grid", "a grid", everywhere},
@@ -281,7 +288,7 @@ namespace one::language {
                         else use("text");
                         if (n.when) use("text.when");
                     } else if constexpr (std::is_same_v<T, content_link>) {
-                        use(n.built.empty() ? "link" : "link.built");
+                        use(!n.step.empty() ? "link.step" : n.built.empty() ? "link" : "link.built");
                         if (n.icon) use("link.icon");
                         if (!n.keys.empty()) use("key");
                     } else if constexpr (std::is_same_v<T, table_item>) {
@@ -318,6 +325,9 @@ namespace one::language {
                         if (n.tally) use("cards.tally");
                         if (!n.filters.empty()) use("cards.filter");
                         if (n.picture) use("cards.picture");
+                        if (n.paste) use("cards.paste");
+                        if (n.mosaic) use("cards.mosaic");
+                        if (n.by) use("cards.by");
                     } else if constexpr (std::is_same_v<T, chart_item>) {
                         use("chart");
                     } else if constexpr (std::is_same_v<T, monitor_item>) {
@@ -351,6 +361,10 @@ namespace one::language {
                     } else if constexpr (std::is_same_v<T, thread_item>) {
                         use("thread");
                     } else if constexpr (std::is_same_v<T, timeline_item>) {
+                        if (n.by) {
+                            use("timeline.by");
+                            return;
+                        }
                         use("timeline");
                         if (n.link) use("timeline.link");
                         if (n.fresh) use("timeline.new");
@@ -400,6 +414,7 @@ namespace one::language {
                         if (n.match_colors) use("collage.match_colors");
                     } else if constexpr (std::is_same_v<T, picture_item>) {
                         use("picture");
+                        if (n.alone) use("picture.alone");
                     } else if constexpr (std::is_same_v<T, paper_item>) {
                         use("paper");
                         if (n.outline) use("paper.outline");
@@ -425,6 +440,7 @@ namespace one::language {
                             : n.does == kind::paste      ? "collage.paste"
                             : n.does == kind::screenshot ? "collage.screenshot"
                             : n.does == kind::add_pictures ? "pictures.choose"
+                            : n.does == kind::add_folder ? "pictures.folder"
                             : n.does == kind::copy || n.does == kind::cut ? "collage.copy"
                             : n.does == kind::save       ? "collage.save"
                             : n.does == kind::ungroup || n.does == kind::group_picked ? "collage.group"

@@ -148,8 +148,9 @@ namespace one::generators {
         bool workspace_ = false;         // the screen being written is laid out as a workspace
         std::optional<std::string> row_named_;  // the row an on open line's where reads, by what it's of
         std::string collage_key_;        // what its collage buttons name its collage by
+        std::string alone_field_;        // the field its picture alone shows, for its steps to read ahead
         std::string paper_key_;          // and its insert buttons its paper
-        bool screen_pastes_into_paper_ = false;  // its paste and add pictures buttons go into its paper, as it has no collage that pastes
+        std::optional<std::string> pictures_key_;  // and what its paste and add pictures buttons go into, a paper or cards that paste, as it has no collage that does
         std::optional<std::string> collage_over_;  // and the pick over it, which they may name
         const language::collage_item* collage_ = nullptr;  // and the collage itself, which its layers list
         // and its picks, each the view and list it picks a row of, and that list's entity
@@ -174,10 +175,10 @@ namespace one::generators {
         static std::string full_view(const std::string& ns, const std::string& name) { return screens::full_view(ns, name); }
         static bool names_parameter(const std::string& route, const std::string& name) { return screens::names_parameter(route, name); }
         std::set<std::string> inputs_of(const std::string& command) const { return model_.inputs_of(command); }
-        // A paste or add pictures button that goes into the screen's paper.
+        // A paste or add pictures button that goes into the screen's paper or cards.
         bool into_paper(const language::collage_button& b) const {
             using kind = language::collage_button::kind;
-            return screen_pastes_into_paper_ && (b.does == kind::paste || b.does == kind::add_pictures);
+            return pictures_key_ && (b.does == kind::paste || b.does == kind::add_pictures || b.does == kind::add_folder);
         }
         std::optional<std::string> edit_view(const std::string& ns, const language::entity_declaration& entity, const language::form_item& form) const {
             return model_.edit_view(ns, entity, form);
@@ -349,13 +350,18 @@ namespace one::generators {
                 choices_ = choices_in(s->items);
                 workspace_ = (s->layout ? *s->layout : layout_) == "workspace";
                 collage_key_ = route + " collage";
+                alone_field_ = language::alone_field(s->items);
                 collage_over_.reset();
                 collage_ = nullptr;
                 paper_key_ = route + " paper";
-                screen_pastes_into_paper_ = false;
+                pictures_key_.reset();
                 std::function<void(const std::vector<language::screen_item>&)> papers = [&](const std::vector<language::screen_item>& inside) {
                     for (const auto& item : inside) {
-                        if (auto* paper = std::get_if<language::paper_item>(&item.node)) paper_key_ = route + " paper " + paper->list, screen_pastes_into_paper_ = paper->paste;
+                        if (auto* paper = std::get_if<language::paper_item>(&item.node)) {
+                            paper_key_ = route + " paper " + paper->list;
+                            if (paper->paste) pictures_key_ = paper_key_;
+                        }
+                        if (auto* cards = std::get_if<language::cards_item>(&item.node); cards && cards->paste && !pictures_key_) pictures_key_ = cards_key(*cards);
                         if (auto* block = std::get_if<language::content_block>(&item.node)) papers(block->items);
                     }
                 };
@@ -433,7 +439,15 @@ namespace one::generators {
                     if (opens && !regions.empty()) on_open(items, parts, ns, s->items);
                     parts.components.insert("Layout");
                     parts.components.insert("Region");
-                    items.open("<Layout name=" + web_detail::js_string(layout) + ">");
+                    // Only its picture, its bars drawn over it while the pointer's moved lately.
+                    bool alone = std::ranges::any_of(regions, [](const language::screen_item* r) {
+                        const auto& inside = std::get<language::content_block>(r->node).items;
+                        return std::ranges::any_of(inside, [](const language::screen_item& i) {
+                            auto* picture = std::get_if<language::picture_item>(&i.node);
+                            return picture && picture->alone;
+                        });
+                    });
+                    items.open("<Layout name=" + web_detail::js_string(layout) + (alone ? " alone" : "") + ">");
                     if (regions.empty()) {
                         items.open("<Region name=\"main\">");
                         screen_items(items, parts, ns, s->items, s->items);
@@ -443,7 +457,7 @@ namespace one::generators {
                         const auto& region = std::get<language::content_block>(item->node);
                         // side when layers: there only while it holds.
                         if (item->when) items.open("{" + condition(parts, ns, *item->when) + " && (");
-                        items.open("<Region name=" + web_detail::js_string(region.title) + ">");
+                        items.open("<Region name=" + web_detail::js_string(region.title) + (item->when ? " drawer" : "") + ">");
                         if (layout == "workspace" && region.title == "tools") {
                             // A workspace's tools, a column of them down its side, each a small tool.
                             parts.components.insert("Tools");
@@ -1171,7 +1185,20 @@ namespace one::generators {
                                          : link->target.starts_with("/") ? full_route(ns, link->target)
                                                                                          : link->target;
                     std::string icon = link->icon ? " icon=" + web_detail::js_string(*link->icon) : "";
-                    if (!link->built.empty()) {
+                    if (!link->step.empty()) {
+                        // The record before or after this one, in a list's own order.
+                        parts.components.insert("StepLink");
+                        // With none named, in the list it was opened from, or else the first that opens it.
+                        auto fallback = link->step_view ? std::nullopt : model_.first_opening(route_);
+                        std::string from = link->step_view ? "view={" + view_variable(parts, full_view(ns, link->step_view->text())) + "} list=" + web_detail::js_string(link->step_list.empty() ? "rows" : link->step_list) + " "
+                                           : fallback       ? "view={" + view_variable(parts, fallback->first) + "} list=" + web_detail::js_string(fallback->second.empty() ? "rows" : fallback->second) + " "
+                                                            : "";
+                        // every 4 seconds while slideshow: by itself, while the toggle's on.
+                        std::string every = link->every_while.empty() ? "" : std::format(" every={{{}}} whileOn=", link->every) + web_detail::js_string(route_ + " " + link->every_while);
+                        out.line("<StepLink " + from + "to=" + web_detail::js_string(route_) + (link->step == "next" ? " next" : "") + (link->step_view ? "" : " opened") + every +
+                                 (alone_field_.empty() ? "" : " picture=" + web_detail::js_string(alone_field_)) + icon + keys_of(link->keys) +
+                                 ">" + live_text(parts, ns, link->label) + "</StepLink>");
+                    } else if (!link->built.empty()) {
                         // What the site was built from: its release's notes, or its commit.
                         parts.components.insert("BuiltLink");
                         out.line("<BuiltLink to=" + web_detail::js_string(link->built) + ">" + live_text(parts, ns, link->label) + "</BuiltLink>");
@@ -1221,6 +1248,13 @@ namespace one::generators {
                         sources += (sources.empty() ? "" : ", ") + one + ", by: [" + by + "] }";
                     }
                     out.line("<Find label=" + web_detail::js_string(box->label) + " sources={[" + sources + "]} />");
+                } else if (auto* timeline = std::get_if<language::timeline_item>(&item.node); timeline && timeline->by) {
+                    // The years and months of the cards it goes with, which it scrolls.
+                    parts.components.insert("DatedTimeline");
+                    const language::cards_item* c = language::dated_cards(screen, *timeline);
+                    out.line("<DatedTimeline view={" + view_variable(parts, full_view(ns, timeline->view.text())) + "} list=" + web_detail::js_string(timeline->list) +
+                             " by=" + web_detail::js_string(*timeline->by) + " unit=" + web_detail::js_string(c ? c->by_unit : "month") + " cards=" +
+                             web_detail::js_string(c ? cards_key(*c) : "") + " />");
                 } else if (auto* timeline = std::get_if<language::timeline_item>(&item.node)) {
                     parts.components.insert("Timeline");
                     std::string line = "<Timeline view={" + view_variable(parts, full_view(ns, timeline->view.text())) + "} list=" + web_detail::js_string(timeline->list);
@@ -1599,11 +1633,13 @@ namespace one::generators {
                                                   [](const language::screen_item& it) { return std::holds_alternative<language::on_open_item>(it.node); });
                     if (first_one) on_open(out, parts, ns, items);
                 } else if (auto* picture = std::get_if<language::picture_item>(&item.node)) {
-                    // picture poster.preview fit: as wide as its place, 320 tall.
+                    // picture poster.preview fit: as wide as its place, 320 tall; alone, all of
+                    // its screen, zoomed by the screen's zoom buttons.
                     parts.components.insert("Picture");
                     shown_while(out, parts, ns, item, [&] {
                         std::set<std::string> read;
-                        out.line("<Picture source={" + condition_of(parts, ns, *picture->source, read) + "}" + (picture->fit ? " fit" : "") + " />");
+                        std::string alone = picture->alone ? " alone zoom=" + web_detail::js_string(collage_key_) : "";
+                        out.line("<Picture source={" + condition_of(parts, ns, *picture->source, read) + "}" + (picture->fit ? " fit" : "") + alone + " />");
                     });
                 } else if (auto* insert = std::get_if<language::paper_insert>(&item.node)) {
                     // A block made after the caret's, by the screen's paper.
@@ -1617,12 +1653,13 @@ namespace one::generators {
                                  (insert->sizes ? " sizes={" + std::to_string(insert->sizes) + "}" : " given={{ " + given + " }}") + " />");
                     });
                 } else if (auto* does = std::get_if<language::collage_button>(&item.node); does && into_paper(*does)) {
-                    // Paste into the screen's paper, or pictures chosen from files: after the caret.
+                    // Paste into the screen's paper or cards, or pictures chosen from files.
                     parts.components.insert("PaperButton");
-                    bool chooses = does->does == language::collage_button::kind::add_pictures;
+                    bool folder = does->does == language::collage_button::kind::add_folder;
+                    bool chooses = does->does == language::collage_button::kind::add_pictures || folder;
                     shown_while(out, parts, ns, item, [&] {
-                        out.line("<PaperButton paper=" + web_detail::js_string(paper_key_) + " label=" + web_detail::js_string(language::label_of(*does)) +
-                                 (does->icon ? " icon=" + web_detail::js_string(*does->icon) : "") + keys_of(does->keys) + (chooses ? " chooses />" : " pastes />"));
+                        out.line("<PaperButton paper=" + web_detail::js_string(*pictures_key_) + " label=" + web_detail::js_string(language::label_of(*does)) +
+                                 (does->icon ? " icon=" + web_detail::js_string(*does->icon) : "") + keys_of(does->keys) + (folder ? " chooses folder />" : chooses ? " chooses />" : " pastes />"));
                     });
                 } else if (auto* does = std::get_if<language::collage_button>(&item.node)) {
                     // What it asks of the screen's collage, by what names it.
@@ -1774,6 +1811,20 @@ namespace one::generators {
             out.line(line + " />");
         }
 
+        // What a record made on this screen is given as a create form here would be: each
+        // field pointing at what the address names, but the one a file goes in.
+        std::string given_by_address(screen_parts& parts, const std::string& ns, const language::entity_declaration& made, const std::string& into) {
+            std::string given;
+            for (const auto& field : made.fields) {
+                if (!field.type || field.type->parts.size() != 1 || field.name == into) continue;
+                const std::string& points = field.type->parts[0];
+                if (!names_parameter(route_, points) || !entity_named(ns, points)) continue;
+                parts.params.insert(points);
+                given += (given.empty() ? "" : ", ") + field.name + ": " + web_detail::js_name(points + "_id");
+            }
+            return given;
+        }
+
         // A canvas: its cards' rows, where they're kept, the command placing them, the
         // grid they snap to, and how those not placed yet are laid out.
         void canvas(stream& out, screen_parts& parts, const std::string& ns, const language::canvas_item& c) {
@@ -1812,16 +1863,11 @@ namespace one::generators {
             // A pasted file makes a card as a create form on this screen would: what the
             // address names given, the file in its field, named from the file.
             if (const auto* card = listed(ns, c.view.text(), c.list); c.paste && card) {
-                std::string given, named;
+                std::string given = given_by_address(parts, ns, *card, c.paste_into), named;
                 bool many = false;
                 for (const auto& field : card->fields) {
                     if (field.name == c.paste_into) many = field.list;
                     if ((field.name == "title" || field.name == "name") && named.empty() && field.type && field.type->text() == "text") named = field.name;
-                    if (!field.type || field.type->parts.size() != 1 || field.name == c.paste_into) continue;
-                    const std::string& points = field.type->parts[0];
-                    if (!names_parameter(route_, points) || !entity_named(ns, points)) continue;
-                    parts.params.insert(points);
-                    given += (given.empty() ? "" : ", ") + field.name + ": " + web_detail::js_name(points + "_id");
                 }
                 line += " paste={{ command: " + web_detail::js_string(full_command(ns, *c.paste)) + ", into: " + web_detail::js_string(c.paste_into) +
                         (many ? ", many: true" : "") + (named.empty() ? "" : ", named: " + web_detail::js_string(named)) +
@@ -2187,7 +2233,7 @@ namespace one::generators {
                     if (auto found = scope->second.find(*view->per); found != scope->second.end()) entity = found->second;
                 }
             }
-            std::string fields, shown, labels, files;
+            std::string fields, shown, labels, files, bytes;
             for (const auto& f : details.fields) {
                 std::string key = web_detail::text_of(*f.value);
                 // Called as it says, or as its field is everywhere: assignees.name as
@@ -2199,6 +2245,8 @@ namespace one::generators {
                 }
                 fields += (fields.empty() ? "" : ", ") + std::string("[") + web_detail::js_string(key) + ", " +
                           web_detail::js_string(label ? *label : web_detail::label(key)) + "]";
+                // A number of bytes, said as KB, MB or GB.
+                if (f.bytes) bytes += (bytes.empty() ? "" : ", ") + web_detail::js_string(key);
                 if (!view || !entity) continue;
                 for (const auto& value : view->values) {
                     if ((value.name ? *value.name : web_detail::text_of(*value.value)) != key) continue;
@@ -2220,6 +2268,7 @@ namespace one::generators {
             if (!shown.empty()) line += " choices={{ " + shown + " }}";
             if (!labels.empty()) line += " labels={[" + labels + "]}";
             if (!files.empty()) line += " files={[" + files + "]}";
+            if (!bytes.empty()) line += " bytes={[" + bytes + "]}";
             // tint by priority: a value of the view holding a choice of the entity's.
             if (details.tint && view && entity) {
                 for (const auto& value : view->values) {
@@ -2444,6 +2493,8 @@ namespace one::generators {
                                " columns={{ " + columns + " }}";
             if (cards.hide_empty) line += " hideEmpty";
             if (cards.picture) line += " picture=" + web_detail::js_string(*cards.picture) + (cards.picture_sits == "fit" ? " fit" : "");
+            if (cards.mosaic) line += " mosaic";
+            if (cards.by) line += " by={{ field: " + web_detail::js_string(*cards.by) + ", unit: " + web_detail::js_string(cards.by_unit) + " }}";
             if (cards.link) {
                 std::string target = full_route(ns, *cards.link);
                 line += " link=" + web_detail::js_string(target);
@@ -2479,8 +2530,21 @@ namespace one::generators {
                 }
                 line += " filters={[" + filters + "]}";
             }
+            // Pictures dropped, pasted or chosen, each a record made by its add, given what the
+            // address names, each part in the field it's kept in.
+            if (cards.paste && cards.add && cards.picture && entity) {
+                std::string fields, given = given_by_address(parts, ns, *entity, *cards.picture);
+                for (const auto& [part, field] : language::cards_fields(cards, *entity)) fields += (fields.empty() ? "" : ", ") + part + ": " + web_detail::js_string(field);
+                line += " paste={{ command: " + web_detail::js_string(full_command(ns, *cards.add)) + ", fields: { " + fields + " }" + (given.empty() ? "" : ", given: { " + given + " }") +
+                        " }} name=" + web_detail::js_string(cards_key(cards));
+            } else if (cards.by) {
+                line += " name=" + web_detail::js_string(cards_key(cards));
+            }
             out.line(line + " />");
         }
+
+        // What a screen's paste and add pictures buttons name its cards by.
+        std::string cards_key(const language::cards_item& cards) const { return route_ + " cards " + cards.list.value_or("rows"); }
 
         // A filter as the address says it, like { author: "me" }, or, for a time,
         // { "updated_at>": "-7d" }: after seven days ago.

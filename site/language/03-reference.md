@@ -1002,6 +1002,10 @@ view book_page per book {
   another of the view's values, joined by `&&`. Nothing comes before everything, so
   before someone has ever looked, all of it counts. It counts what the list holds,
   after its `limit`.
+- `size = sum(clippings).picture_bytes` adds up a number the rows of the view's own
+  list `clippings` hold, listed in its block, like how many bytes its pictures take;
+  a `where` keeps the rows it adds up as a count's does. It needs `storage local`,
+  for now.
 - `public` lets anyone read it, signed in or not.
 - In a view per entity, `readers member` lets the people a member names read each
   document: everyone with a role in the project the entity is held within. `public
@@ -2039,7 +2043,7 @@ form step::update "Save" {
   `building`, `chart`, `cloud`, `code`, `connect`, `database`, `globe`, `layers`,
   `lock`, `people`, `shield` and `spark`; and for a drawing app's toolbar, `undo`,
   `redo`, `save`, `paste`, `copy`, `crop`, `text`, `screenshot`, `picture`,
-  `gallery`, `fullscreen`, `sun`, `moon`, `check`, `close`, `raise`, `lower`,
+  `folder`, `gallery`, `fullscreen`, `sun`, `moon`, `check`, `close`, `raise`, `lower`,
   `rotate_left`, `rotate_right`, `flip_horizontal`, `flip_vertical`, `bold`,
   `smaller`, `larger`, `fill`, `fit`, `stretch`, `center`, `color` and `edges`. A
   name close to one of them is told which it was likely meant to be.
@@ -2062,11 +2066,94 @@ form step::update "Save" {
   boards to someone outside it. `picture preview fit` shows a file each row holds as
   a picture on top of its card, all of it fitted in, or, with `fill` or nothing
   said, filling its place. A terminal draws no pictures, so it can't show one.
+  `cards clippings_page.clippings mosaic { picture image ... }` sets them as a mosaic
+  of their pictures instead, each filling its tile, cropped around its middle, its
+  title and what else it shows over the picture's foot. Every eight cards are two
+  blocks, one above the other, each three equal columns by two rows as tall as a
+  column is wide: in the first, a tile a column wide and both rows tall at the left,
+  one two columns wide on the top row at the right, and two small ones under that;
+  the second is the first mirrored. A card's tile follows from its place in the list
+  alone, so nothing moves as pictures load, and resizing scales the whole mosaic
+  with no card changing tile. The last block ends with the cards, its empty tiles
+  left blank. Only what's in view is drawn, each picture read as it comes near.
+  A mosaic says which picture each card shows, and its pictures fill their tiles,
+  so its picture line says `fill` or nothing. A terminal draws no pictures, so it can't set one.
+  `cards clippings_page.clippings mosaic by picture_date month` sets the cards under
+  a heading for each month of a date their list holds, like "October 2026", in the
+  text's face, strong and larger. `year` and `day` head each year, or each day, like
+  "October 12, 2026", instead. The list is ordered by that date first, so each month's
+  cards are together, and they're newest first when it's `descending`. A mosaic's
+  tiles start again under each heading. A time is the day it is where it's read, and a
+  day alone is that day anywhere. Cards with no date are under "No date". The
+  headings are worked out once each time the list changes. A terminal has no
+  headings among cards, so it can't set them.
+  `add clipping::create` and `paste` make a record of each picture dropped on the
+  cards, or pasted or chosen by the screen's `paste` and `add pictures` buttons,
+  which go to cards that say `paste` when the screen has no collage or paper that
+  does. Each is made by `add`, given what the screen's address names, its file in
+  the field `picture` names; its own size goes in `picture_width` and
+  `picture_height`, its file's name, without its extension, in `name`, how many
+  bytes it is in `picture_bytes`, when it was taken in `picture_date`, and the
+  camera it was taken with in `picture_camera`, each only when the entity has that
+  field, of that type: a number, text, a date and text. The date is the one its
+  camera wrote, with its offset from UTC when the camera says one, or else when its
+  file was last changed. The camera is its make and model, like `Fujifilm X-T5`,
+  the make said once when the model starts with it. Several at once are one
+  step to undo, and cards with none yet still take them. Each picture is kept
+  once: one whose content is already the file of one of the cards, or of one
+  before it in the same batch, isn't made a record again, whatever its file is
+  called. Once they're in, the workspace says so: "Added 31 pictures, 9 were
+  already in." It's known by the file's SHA-256, which is what a store that keeps
+  files here names it by; a store that names files otherwise takes every one. A
+  terminal can't be dropped on, so it doesn't take them.
+
+  `add folder "Folder" icon folder` beside `add pictures` goes to the
+  same place, a collage, a paper or cards, and asks for a folder instead, in the
+  desktop's own chooser or the browser's. Every picture in it, and in the folders in
+  it, comes in, known as a picture by what's in it, not what it's called. Hidden
+  folders and files are passed over, and so is anything that isn't a picture, without
+  saying so. The desktop goes through the folder as the pictures are kept, never
+  listing it whole first, and follows no link out of it, so a folder of ten thousand
+  photos neither stops the window nor fills memory. While it goes, the workspace says
+  "Adding pictures from Summer, 120 so far…", and then "Added 214 pictures." A
+  terminal can't choose a folder, so it has no such button.
+
+  Pictures coming in, here or in a collage or paper, are read and kept one at a
+  time away from the app's drawing, so the window keeps answering however many
+  there are and however large. While there are several, the workspace's messages
+  say how far they've got, like "Adding 12 of 40 pictures…", and say nothing once
+  they're in, or what couldn't be taken. A card draws a smaller copy of its
+  picture, made once and kept beside it, while `picture poster.preview` shows the
+  whole of it. A photo is drawn the way up its camera says it was held, wherever
+  it's drawn, on a card, a collage or a paper, whole or as a smaller copy, and its
+  own size is its size that way up. That's read from the file each time, never
+  kept in a field.
 - `picture poster.preview fit` shows the file a value holds, on its own, as wide as
   its place and 320 tall: a field of what's picked, like `poster`, or of a view per
   something, like `poster_page.preview`. All of it is fitted in, or, with `fill` or
   nothing said, it fills its place; `when` shows it only while that holds. A
   terminal draws no pictures, so it can't show one.
+- `picture clipping_page.image fit alone`, the only line of a workspace's `main`, is
+  all of its screen, as a photo's own screen is: the whole picture fitted in on
+  black, edge to edge. The workspace's bar, toolbar, tools, side and status are
+  drawn over it, see through, and hidden two seconds after the pointer stops, with
+  the pointer itself; they come back as it moves, or as a key is pressed, but not
+  for a key that only steps to the next picture, like a `link next` line's. They
+  take no room, so the picture never moves as they come and go, and filling the
+  screen they stay hidden. A side opened by a toggle, like `side when about` with
+  `toggle about "About" icon info key i`, is a drawer: once it's open, it stays over
+  the picture until it's closed, whether the rest is resting or not. Ctrl and `=`, `-` or `0`, the screen's `zoom in`, `zoom
+  out` and `zoom to fit` buttons, and the wheel with Ctrl or a touchpad's pinch
+  zoom it, from fitted to eight times its own size; a double click goes to 100%, a
+  pixel of it a pixel of the screen, about where it's clicked, and back. Larger than
+  fits, it's dragged, or the wheel moves it, as far as its edges; two fingers on a
+  touchscreen pinch it. At fit, a swipe across it steps, as a photo app's does: to the
+  left for the screen's `link next`, to the right for its `link previous`, by a finger,
+  a drag, or three fingers on a touchpad. The picture follows it, and goes back to its
+  place when it's too short, under an eighth of the screen. Each picture stepped to is
+  fitted again. A key a screen's line names, like `key left`, is that line's whatever
+  button has the keyboard; only a field being typed in keeps its own. A terminal draws
+  no pictures, so its screen is its bars.
 - `chart agent_page.stats.cpu "CPU" percent` draws a run of numbers over time, newest
   at the right, as btop draws one: a line over a soft fill in the accent, its title,
   its latest value, and the top of its scale. Its numbers are a field of the view, or
@@ -2472,7 +2559,10 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   for. One form can serve several commands.
 - `details issue_page { status "Status"  implementer "Implemented by" }` shows a
   view's values, each beside what it is, a choice as it's shown and a list of words
-  each on its own, and leaves out the ones with nothing in them.
+  each on its own, and leaves out the ones with nothing in them. A date is its day,
+  and a moment its day and its time of day. `picture_bytes "Size" as bytes` says a
+  number of bytes as KB, MB or GB, each K 1,024 of what's under it, as a chart's
+  `bytes` does; only a number can say it.
 - `text "Taken by {issue_page.owner_name}" when issue_page.owner != none` shows a
   text only while its when holds, as a button's does.
 - A view can read a person's `name`, `picture` or `username` through a field
@@ -2526,7 +2616,11 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   read a row at a time, its words said when it's pointed at. A large tool is as
   tall as two small ones, so the toolbar is as tall whichever groups it shows.
   `group "Align" small rows of 3 { ... }` lays its tools in rows of three instead,
-  read a row at a time. `group "View" at end` sits at the toolbar's far end.
+  read a row at a time. `group "View" at end` sits at the toolbar's far end. While
+  every group the toolbar shows is a single row of small tools, as `group "Reading"
+  small rows of 4` with four, it's a thin strip, its groups' names said by their tools
+  as they're pointed at; a mode that shows only such groups, like reading, gets a
+  thin toolbar, and one with large tools a full one.
 - In a toolbar, `when` doesn't hide: a group or a tool whose `when` doesn't hold is
   there, faint, and can't be pressed, nor its keys used, so the toolbar keeps its
   shape as what's picked changes. `group "Rotate" small when layer.picture != none`.
@@ -2690,6 +2784,15 @@ screen / landing constellation {
   none, like a person who has never looked, is before everything. `on open dispatch
   reader::create` runs a command once the timeline opens with something new in it,
   like one saying they've looked; nothing runs when nothing is new.
+- `timeline clippings_page.clippings by picture_date` lists the years and months of the
+  screen's cards under headings by that date instead, each with how many it holds:
+  "2026 214", then "October 31", "September 40". Under headings by year it lists only
+  the years. The month at the top of the cards as they scroll is marked. Click one,
+  or press Enter on it, and the cards scroll so its first heading is at the top. The
+  arrows, `j` and `k`, Home and End move between them. It's placed from the counts above
+  it, so a jump to the oldest month of twenty thousand cards draws none of those
+  above. A screen with a timeline by a date has cards under headings by it, usually in
+  its `side`. A terminal can't scroll cards to a heading, so it has no such timeline.
 - Buttons one after another on a screen sit together in a row, a command's own and
   the ones that open forms alike, and so do links one after another, outside a
   hero or a section, which lay out their own.
@@ -2789,6 +2892,43 @@ issue::verify "Verify" when {
   "tel:+15555550100" "Call us"`. A link to an address or a
   namespace has to reach a screen that's there, so a renamed namespace or a typo
   is an error rather than a page that isn't found.
+- `link next in archive.posters "Next" icon next key right` and `link previous in
+  archive.posters "Previous" icon previous key left`, on a screen for one record,
+  like `/posters/:poster`, open the same screen for the record after or before it in
+  that list, in the list's own order. The record shown is the one the address's last
+  parameter names, and the screen it steps to opens in its place, so going back goes
+  where it was opened from. At either end the link is still there, but can't be
+  followed, as it doesn't go around. The list is in a view of them all, not one per
+  record, and it lists what the address names, posters here; a view of one list
+  names none, as in `link next in posters "Next"`. `link next "Next"`, naming no
+  list, steps through the list the record was opened from, whichever it was: the
+  cards of the month they're under, a table sorted or searched as it was shown, or
+  another screen's list of them, in the order it showed them. Opened some other way,
+  as by an address typed or a link that isn't a list's, it steps through the first
+  list in the project whose rows open the screen, of a view of them all, and can't be
+  followed when there's none. Some list's rows open the screen, or a link that names
+  no list is an error. A terminal steps through that first list. In a terminal, an arrow goes first
+  to what's beside what has the keyboard, as it does everywhere there, and steps
+  when there's nothing that way.
+- `link next "Next" icon next key right every 4 seconds while slideshow`, with
+  `toggle slideshow "Slideshow" icon play key s` on the same screen, steps by itself
+  every 4 seconds while the toggle is on, as a slideshow does. The toggle goes off at
+  the end of the list, as any key is pressed or any click made, the toggle's own
+  included, and when the screen is left; opened again, the screen starts with it off.
+  The wait is a timer, so nothing else waits on it. Its toggle is one of the screen's
+  own, on or off alone, or it's an error.
+- On a screen with a picture alone, its `link previous` and `link next` read the whole
+  pictures of the records they go to ahead, while the screen's open, after its own and
+  away from the window, so a step either way draws the whole picture at once. The
+  picture is the one the cards it was opened from show for that record, or the field
+  the picture alone shows, read from the step's list. Only the one shown and those
+  beside it are kept: a step lets go of the one it leaves behind. Until the next
+  screen's own picture is ready, the last one stays, so a picture alone never shows
+  black between them.
+- A screen shown again while the app is open, gone back to or opened by a link, is
+  as it was left: scrolled where it was, once what it shows reaches that far, with
+  what was last opened from it, like a card, or the record stepped to from that,
+  given the keyboard and in view. Nothing of this is kept once the app is closed.
 - `menu { link /:project/settings "General"  link /:project/settings/deployments
   "Deployments" }` puts its links down the side of the page, with everything after
   it on the screen beside them, and marks the link to the page it's on. On a phone

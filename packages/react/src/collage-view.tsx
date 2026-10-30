@@ -24,7 +24,7 @@ import type { ViewState } from "./data.js";
 import { useUI } from "./ui.js";
 import { useSaying } from "./said.js";
 import { useSite } from "./app.js";
-import { OverKind, OverLayer, OverRun, choosePictures, lastGiven, styleThese, hintOf, setChosen, setPicked, typing, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
+import { OverKind, OverLayer, OverRun, chooseFolder, choosePictures, lastGiven, styleThese, hintOf, notAPicture, setChosen, setPicked, takeInTurn, typing, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
 
 type Row = Record<string, unknown>;
 
@@ -174,7 +174,7 @@ function pictureOf(path: string, address: ((path: string) => Promise<string>) | 
     .then((r) => r.blob())
     .then(async (blob) => {
       const svg = await svgIn(blob);
-      if (svg === undefined) return void pictures.set(path, await createImageBitmap(blob));
+      if (svg === undefined) return void pictures.set(path, await createImageBitmap(blob, { imageOrientation: "from-image" }));
       vectors.set(path, await vectorImage(svg));
       pictures.set(path, "vector");
     })
@@ -646,6 +646,26 @@ function ask(name: string, does: string) {
   askListeners.forEach((changed) => changed());
 }
 
+// What's asked of something else a screen's buttons act on, like a picture alone zoomed,
+// by the name they ask it by: told it once, as a collage is.
+export function useAsked(name: string, run: (does: string) => void): void {
+  const asking = useSyncExternalStore(
+    (changed) => {
+      askListeners.add(changed);
+      return () => askListeners.delete(changed);
+    },
+    () => asked.get(name),
+    () => undefined,
+  );
+  const latest = useRef(run);
+  latest.current = run;
+  useEffect(() => {
+    if (!asking) return;
+    asked.delete(name);
+    latest.current(asking);
+  }, [asking, name]);
+}
+
 // What a Paste line's ctrl+v pasted, or an add pictures button chose, handed to its
 // collage as it came: a browser gives a paste's pictures with the paste itself,
 // without asking to read the clipboard.
@@ -656,15 +676,15 @@ const pastes = new Map<string, { files: File[]; words: string }>();
 let copiedLayers: { svg: string; rows: Row[] } = { svg: "", rows: [] };
 
 // crop "Crop", edit words "Edit", add words "Text": what's asked of the screen's collage.
-export function CollageButton({ collage, does, label, icon, keys }: { collage: string; does: "crop" | "edit" | "ungroup" | "group picked" | "raise" | "lower" | "zoom in" | "zoom out" | "zoom to fit" | "add" | "add pictures" | "paste" | "screenshot" | "copy" | "copy picked" | "save" | "save picked" | "copy svg" | "copy svg picked" | "cut svg picked" | "save svg" | "save svg picked"; label: string; icon?: string; keys?: string[] }) {
+export function CollageButton({ collage, does, label, icon, keys }: { collage: string; does: "crop" | "edit" | "ungroup" | "group picked" | "raise" | "lower" | "zoom in" | "zoom out" | "zoom to fit" | "add" | "add pictures" | "add folder" | "paste" | "screenshot" | "copy" | "copy picked" | "save" | "save picked" | "copy svg" | "copy svg picked" | "cut svg picked" | "save svg" | "save svg picked"; label: string; icon?: string; keys?: string[] }) {
   const ui = useUI();
   const tool = useTool() ?? "small";
   const off = useOff();
   // Pasting with ctrl+v takes what's pasted; its other keys, and a press, read the clipboard.
   const byPaste = does === "paste" && (keys ?? []).includes("ctrl+v") && !off;
   const press = () =>
-    does === "add pictures"
-      ? choosePictures((files) => {
+    does === "add pictures" || does === "add folder"
+      ? (does === "add folder" ? chooseFolder : choosePictures)((files) => {
           pastes.set(collage, { files, words: "" });
           ask(collage, "pasted");
         })
@@ -931,20 +951,17 @@ export function Collage({
     const top = layers[layers.length - 1];
     let depth = top && top["depth"] !== undefined ? num(top["depth"]) + 1 : undefined;
     let covered = layers.length > 0, at = 0, first = true;
-    for (const file of given) {
+    await takeInTurn(given, say, async (file) => {
       // An SVG, where the collage keeps shapes, comes in as its own shapes.
       const svg = keepsShapes ? await svgIn(file) : undefined;
       if (svg !== undefined) {
         const where = on && at ? { x: on.x + 40 * at, y: on.y + 40 * at } : on;
         at++;
         await addShapes(svg, file.name.replace(/\.svg$/i, "") || "Pasted", where);
-        continue;
+        return;
       }
       const size = await pictureSize(file);
-      if (!size) {
-        say({ text: `${file.name} isn't a picture this can read.`, problem: true });
-        continue;
-      }
+      if (!size) return notAPicture(file);
       if (!asked) (inLayer = await layerFor()), (asked = true);
       let b: Box;
       // An SVG is drawing, not a photograph: it comes in at its own size, fitted, never
@@ -969,7 +986,7 @@ export function Collage({
       first = false;
       const reply = await send(add, made);
       if (reply?.id && pick) setPicked(pick, reply.id);
-    }
+    });
   };
   // An SVG brought in as its own shapes and curves, each an object, where it would sit
   // as a picture: as big as it is, smaller where it wouldn't fit, centered on `on` or the

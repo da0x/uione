@@ -82,6 +82,9 @@ namespace {
 		                     .copy("title", "title")
 		                     .copy("author", "author")
 		                     .count("times_lent", where("library::loan", "book", subject))
+		                     .tally("listed", "loans")
+		                     .tally("latest", "loans", {{"number", ">=", "times_lent"}})
+		                     .total("numbers", "loans", "number")
 		                     .list("loans", where("library::loan", "book", subject))
 		                     .order("-number")
 		                     .fields({"number", "member", "returned_at"});
@@ -197,7 +200,7 @@ TEST("the shelf leaves out what's withdrawn, orders by title as it's said, and s
 	CHECK(desk["rows"].as_array()[0]["book.title"].as_string() == "Emma");
 }
 
-TEST("a page per book copies the book, counts and lists its loans, and is missing for no book") {
+TEST("a page per book copies the book, counts and lists its loans, counts and adds up the loans it lists, and is missing for no book") {
 	app a;
 	a.ok("library::book::create", book("Dune", "SCI-0001"));
 	for (int i = 0; i < 3; ++i) {
@@ -207,6 +210,10 @@ TEST("a page per book copies the book, counts and lists its loans, and is missin
 	value page = a.view("library::book_page", "SCI-0001");
 	CHECK(page["title"].as_string() == "Dune");
 	CHECK(page["times_lent"].as_integer() == 3);
+	// Of those it lists: all of them, those numbered from how many there are, and their numbers added up.
+	CHECK(page["listed"].as_integer() == 3);
+	CHECK(page["latest"].as_integer() == 1);
+	CHECK(page["numbers"].as_double() == 6);
 	const auto& loans = page["loans"].as_array();
 	CHECK(loans.size() == 3);
 	CHECK(loans[0]["number"].as_integer() == 3);
