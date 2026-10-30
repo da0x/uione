@@ -29,14 +29,14 @@ func TestAnEntityKeyedByItsOwnersUsernameIsMadeInTheirNameOnly(t *testing.T) {
 	h.expect("repos/repository/create", token, map[string]any{"slug": "tracker"}, http.StatusBadRequest,
 		"this needs your GitHub username; sign in with GitHub")
 
-	if _, err := h.store.Collection("users").Doc(ada).Set(context.Background(), map[string]any{"username": "da0x"}); err != nil {
+	if _, err := h.store.Collection("users").Doc(ada).Set(context.Background(), map[string]any{"username": "someone"}); err != nil {
 		t.Fatal(err)
 	}
 	id := h.mustRun("repos/repository/create", token, map[string]any{"slug": "tracker", "owner": "someone-else"})
 	if id != "someone-tracker" {
 		t.Fatalf("the repository is %s", id)
 	}
-	if stored := h.stored("repos_repository", id); stored["owner"] != "da0x" {
+	if stored := h.stored("repos_repository", id); stored["owner"] != "someone" {
 		t.Errorf("the repository is owned by %v", stored["owner"])
 	}
 }
@@ -44,10 +44,10 @@ func TestAnEntityKeyedByItsOwnersUsernameIsMadeInTheirNameOnly(t *testing.T) {
 func TestASlugIsLoweredAndRefusedWhenItIsntOne(t *testing.T) {
 	h := start(t)
 	ada, token := h.signUp("ada@example.com")
-	if _, err := h.store.Collection("users").Doc(ada).Set(context.Background(), map[string]any{"username": "da0x"}); err != nil {
+	if _, err := h.store.Collection("users").Doc(ada).Set(context.Background(), map[string]any{"username": "someone"}); err != nil {
 		t.Fatal(err)
 	}
-	if id := h.mustRun("repos/repository/create", token, map[string]any{"slug": " My-App2 "}); id != "da0x-my%2Dapp2" {
+	if id := h.mustRun("repos/repository/create", token, map[string]any{"slug": " My-App2 "}); id != "someone-my%2Dapp2" {
 		t.Fatalf("the repository is %s", id)
 	}
 	for _, bad := range []string{"my app", "my--app", "-app", "app-", "my_app", "app.io"} {

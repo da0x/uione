@@ -340,8 +340,8 @@ func TestTheRepositoryIsItsGitHubPage(t *testing.T) {
 		"https://github.com/someone/tracker/":      "https://github.com/someone/tracker",
 		"ssh://git@github.com/someone/tracker.git": "https://github.com/someone/tracker",
 		"https://gitlab.com/someone/tracker.git":   "",
-		"https://github.com/da0x":               "",
-		"/home/da/tracker":                      "",
+		"https://github.com/da0x":                  "",
+		"/home/da/tracker":                         "",
 	} {
 		if got := webAddress(remote); got != want {
 			t.Errorf("%s is %q, not %q", remote, got, want)
