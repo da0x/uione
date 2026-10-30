@@ -136,6 +136,28 @@ command hand::turn {
     CHECK(found->content.find("one.Divide(") != std::string::npos);
 }
 
+TEST_CASE("a function's parameters take the Go types they say") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace shelf {
+entity book {
+	title  text
+}
+function same_title(a text, b text) {
+	return a == b
+}
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    for (const auto& d : generated.errors) FAIL_CHECK(language::format(d));
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "shelf/shelf.go"; });
+    REQUIRE(found != generated.files.end());
+    CAPTURE(found->content);
+    CHECK(found->content.find("func SameTitle(a string, b string) bool {\n\treturn a == b\n}") != std::string::npos);
+}
+
 TEST_CASE("a field can be worked out from what another points at, and a list can start with values") {
     language::diagnostics out;
     std::vector<language::file> files;

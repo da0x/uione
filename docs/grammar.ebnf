@@ -220,7 +220,10 @@ define_service ::= "define" "service" NAME STRING ("in" NAME)? "{" NEWLINE? (qua
 
 /* function */
 
-function       ::= "function" NAME "(" (NAME ("," NAME)*)? ")" block END
+function       ::= "function" NAME "(" (parameter ("," parameter)*)? ")" block END
+/* a parameter's type as a field says it, deck list of card, though never a serial, which is counted as a
+   record is made; one written bare takes the type of where it's used */
+parameter      ::= NAME ("text" | "markdown" | "email" | "slug" | "date" | "number" | "boolean" | "user" | "file" | "data" | list | qualified)?
 
 /* screen */
 

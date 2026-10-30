@@ -31,6 +31,7 @@ relevant record before changing what it covers.
 | [0023](0023-a-calendar-is-a-list-on-its-days.md) | A calendar is a list on its days |
 | [0024](0024-a-notice-is-said-when-a-rows-time-comes.md) | A notice is said when a row's time comes |
 | [0025](0025-a-collage-layer-may-be-a-shape.md) | A collage's layer may be a shape, drawn by a pinned copy of nanosvg |
+| [0026](0026-a-function-says-its-parameters-types.md) | A function says its parameters' types, as fields do |
 
 ## Writing one
 

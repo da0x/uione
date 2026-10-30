@@ -172,6 +172,22 @@ function sort_title(title, other) {
     CHECK(nested.else_body.size() == 1);
 }
 
+TEST_CASE("a function's parameters may say their types, as fields do") {
+    auto f = parse_ok(R"(
+function cut(deck list of book, at number, title) {
+	return deck
+}
+)");
+    const auto& function = only<function_declaration>(f);
+    CHECK(function.parameters == std::vector<std::string>{"deck", "at", "title"});
+    REQUIRE(function.parameter_types.size() == 3);
+    CHECK(function.parameter_types[0].list);
+    CHECK(function.parameter_types[0].type->text() == "book");
+    CHECK(!function.parameter_types[1].list);
+    CHECK(function.parameter_types[1].type->text() == "number");
+    CHECK(!function.parameter_types[2].type);
+}
+
 TEST_CASE("a screen and everything that can go on it") {
     auto f = parse_ok(R"(
 screen "Shelf" /shelf {

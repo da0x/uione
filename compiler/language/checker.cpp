@@ -338,22 +338,27 @@ namespace one::language {
                 if (auto* n = std::get_if<namespace_declaration>(&d.node)) {
                     give_enums(join(ns, n->name), n->declarations);
                 } else if (auto* e = std::get_if<entity_declaration>(&d.node)) {
-                    for (const auto& f : e->fields) {
-                        if (!f.type || !f.choices.empty()) continue;
-                        const enum_declaration* en = find(ns, *f.type, &scope::enums);
-                        if (!en) continue;
-                        mean(f.type->where, f.type->text().size(), "enum " + f.type->text(), origin_of(en, &scope::enums));
-                        if (f.list) {
-                            error(f.type->where, "a list of " + en->name + "'s choices isn't supported yet; a field holds one of them");
-                            continue;
-                        }
-                        f.choices = en->choices;
-                        f.choice_labels = en->choice_labels;
-                        f.enum_name = en->name;
-                        f.type.reset();
-                    }
+                    for (const auto& f : e->fields) give_enum(ns, f);
+                } else if (auto* function = std::get_if<function_declaration>(&d.node)) {
+                    for (const auto& f : function->parameter_types) give_enum(ns, f);
                 }
             }
+        }
+
+        // A field's, or a parameter's, which reads like one.
+        void give_enum(const std::string& ns, const field& f) {
+            if (!f.type || !f.choices.empty()) return;
+            const enum_declaration* en = find(ns, *f.type, &scope::enums);
+            if (!en) return;
+            mean(f.type->where, f.type->text().size(), "enum " + f.type->text(), origin_of(en, &scope::enums));
+            if (f.list) {
+                error(f.type->where, "a list of " + en->name + "'s choices isn't supported yet; a field holds one of them");
+                return;
+            }
+            f.choices = en->choices;
+            f.choice_labels = en->choice_labels;
+            f.enum_name = en->name;
+            f.type.reset();
         }
 
         // finding what a name refers to
@@ -2629,6 +2634,14 @@ namespace one::language {
         void verify(const std::string& ns, location where, const function_declaration& f) {
             snake(f.name, where);
             for (const auto& parameter : f.parameters) snake(parameter, where);
+            for (const auto& typed : f.parameter_types) {
+                if (!typed.type) continue;
+                if (typed.type->text() == "serial") {
+                    error(typed.type->where, "a serial is counted as a record is made, so a parameter can't be one; say number");
+                    continue;
+                }
+                verify_type(ns, *typed.type);
+            }
             statements(ns, f.body, nullptr, context{ns, nullptr, nullptr, f.parameters, false});
         }
 
