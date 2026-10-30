@@ -960,6 +960,57 @@ TEST_CASE("cards set as a mosaic of their pictures say so to both runtimes, and 
     CHECK(messages(fitted) == std::vector<std::string>{"31: a mosaic's pictures each fill their tile, so its picture line says fill, or nothing"});
 }
 
+TEST_CASE("cards in columns say how many to both runtimes, and say why when they can't be") {
+    const std::string pieces = R"(namespace studio at / {
+	entity poster {
+		title  text
+	}
+
+	entity clipping {
+		poster          poster  required
+		name            text
+		image           file
+		picture_width   number
+		picture_height  number
+	}
+
+	view poster_page per poster {
+		title
+		clippings = each clipping in poster {
+			name  image  picture_width  picture_height
+		}
+	}
+
+	screen "Clipping" /posters/:poster/clippings/:clipping {
+	}
+
+	screen "Clippings" /posters/:poster {
+		cards poster_page.clippings columns 5 link /posters/:poster/clippings/:clipping {
+			picture image
+			name
+		}
+	}
+}
+)";
+    CHECK(messages(project + pieces).empty());
+    auto files = built(project + pieces);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    CHECK(web.find(R"(picture="image" across={5} link="/posters/:poster/clippings/:clipping")") != std::string::npos);
+    CHECK(native.find(R"(.picture = "image", .across = 5)") != std::string::npos);
+    std::string bare = project + pieces;
+    bare.replace(bare.find("\t\t\tpicture image\n"), std::string("\t\t\tpicture image\n").size(), "");
+    CHECK(messages(bare) == std::vector<std::string>{"32: columns are their cards' pictures, so its cards say which file each shows, like picture image"});
+    std::string both = project + pieces;
+    both.replace(both.find("columns 5"), std::string("columns 5").size(), "mosaic columns 5");
+    CHECK(messages(both) == std::vector<std::string>{"32: cards are a mosaic or in columns, not both"});
+    std::string many = project + pieces;
+    many.replace(many.find("columns 5"), std::string("columns 5").size(), "columns 20");
+    CHECK(messages(many) == std::vector<std::string>{"32: cards are in 1 to 12 columns, like columns 5"});
+}
+
 TEST_CASE("cards under a heading for each month of a date, and the timeline drawn along them, say so to both runtimes, at a workspace's side while a toggle is on, and say why when they can't be") {
     const std::string pieces = R"(namespace studio at / {
 	entity poster {

@@ -12,6 +12,7 @@
 #include <expected>
 #include <functional>
 #include <optional>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -484,6 +485,27 @@ namespace one::screens {
 	mosaic_place mosaic_tile(std::size_t n);
 	// How many rows a mosaic of `count` cards takes: the last block ends with them.
 	int mosaic_rows(std::size_t count);
+
+	// Cards in columns, as stone is laid in a wall: each picture as wide as a column
+	// and as tall as its own shape, uncropped, in the shortest column so far, the
+	// leftmost of those, so the columns line up and the rows don't. `tall` is each one's
+	// height over its width, 1 for one whose size isn't known. Each goes in its column,
+	// below the heights of those above it, in column widths, and so many gaps; each
+	// column ends likewise. Worked out from the sizes the rows keep, so nothing moves as
+	// pictures come in. The same as the web's.
+	struct column_place {
+		int column = 0;
+		double above = 0;
+		int before = 0;
+	};
+	struct columns_laid {
+		std::vector<column_place> places;
+		std::vector<double> heights;
+		std::vector<int> counts;
+	};
+	columns_laid columns_place(std::span<const double> tall, int columns);
+	// A row's picture's height over its width, from the sizes it keeps.
+	double tall_of(const value& row);
 
 	// What find found in each list, and how many more.
 	struct found {

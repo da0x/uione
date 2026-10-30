@@ -86,23 +86,39 @@ namespace one::desktop::runtime {
 		// comes into view, so a mosaic of many thousands is placed from its count alone. One
 		// tile is chosen, ringed while the mosaic has the keyboard: moved with the arrows, to
 		// the card before or after, or to the one above or below, and opened with Enter.
+		// In columns instead, as columns_place lays them, each picture is its column's width
+		// and as tall as its own shape, uncropped, placed from the sizes its row keeps.
 		class mosaic_element : public element {
 		public:
 			struct tile {
 				std::string picture, address;
 				card_model card;
+				double tall = 1;  // in columns, its height over its width
 			};
 			// `start` is the address of the tile chosen first, like the card a page was left
-			// from, brought into view as it's first placed.
-			mosaic_element(page& p, std::vector<tile> tiles, const std::string& start) : p_(p), tiles_(std::move(tiles)), captions_(tiles_.size()) {
+			// from, brought into view as it's first placed. `across` columns, or none for a mosaic.
+			mosaic_element(page& p, std::vector<tile> tiles, const std::string& start, int across = 0)
+			    : p_(p), tiles_(std::move(tiles)), captions_(tiles_.size()), across_(across) {
 				for (std::size_t i = 0; i < tiles_.size(); ++i) {
 					if (!start.empty() && tiles_[i].address == start) chosen_ = i, shown_ = false;
+				}
+				if (across_ > 0) {
+					std::vector<double> tall;
+					tall.reserve(tiles_.size());
+					for (const auto& t : tiles_) tall.push_back(t.tall);
+					laid_ = columns_place(tall, across_);
 				}
 			}
 
 			bool focusable() const override { return !tiles_.empty(); }
 
 			extent measure_content(float width) override {
+				if (across_ > 0) {
+					float side = column(width), tallest = 0;
+					for (std::size_t c = 0; c < laid_.heights.size(); ++c)
+						tallest = std::max(tallest, static_cast<float>(laid_.heights[c]) * side + std::max(0, laid_.counts[c] - 1) * gap);
+					return {width, tallest};
+				}
 				int rows = mosaic_rows(tiles_.size());
 				return {width, rows * column(width) + std::max(0, rows - 1) * gap};
 			}
@@ -111,6 +127,11 @@ namespace one::desktop::runtime {
 				frames_.resize(tiles_.size());
 				float side = column(area.width);
 				for (std::size_t i = 0; i < tiles_.size(); ++i) {
+					if (across_ > 0) {
+						const auto& at = laid_.places[i];
+						frames_[i] = {area.x + at.column * (side + gap), area.y + static_cast<float>(at.above) * side + at.before * gap, side, static_cast<float>(tiles_[i].tall) * side};
+						continue;
+					}
 					auto at = mosaic_tile(i);
 					frames_[i] = {area.x + at.column * (side + gap), area.y + at.row * (side + gap), at.columns * side + (at.columns - 1) * gap, at.rows * side + (at.rows - 1) * gap};
 				}
@@ -200,10 +221,26 @@ namespace one::desktop::runtime {
 
 		private:
 			static constexpr float gap = 2;  // as photos on a printed page are apart
-			static float column(float width) { return std::max(0.f, (width - 2 * gap) / 3); }
-			// The first tile of the first block of four whose rows reach what's near.
+			float column(float width) const {
+				int n = across_ > 0 ? across_ : 3;
+				return std::max(0.f, (width - (n - 1) * gap) / n);
+			}
+			// The first tile of the first block of four whose rows reach what's near. In
+			// columns, each goes no higher than the one before it, so it's the first whose top
+			// reaches it, less the last before that in each column, which may reach down into it.
 			std::size_t first_near(const rect& near) const {
 				if (frames_.empty()) return 0;
+				if (across_ > 0) {
+					auto from = static_cast<std::size_t>(std::ranges::lower_bound(frames_, near.y, {}, [](const rect& r) { return r.y; }) - frames_.begin());
+					std::vector<bool> seen(static_cast<std::size_t>(across_), false);
+					int left = across_;
+					while (from > 0 && left > 0) {
+						auto c = static_cast<std::size_t>(laid_.places[from - 1].column);
+						if (!seen[c]) seen[c] = true, --left;
+						--from;
+					}
+					return from;
+				}
 				float side = column(frame.width - padding.left - padding.right);
 				float top = frames_[0].y;
 				if (side <= 0 || near.y <= top) return 0;
@@ -232,6 +269,8 @@ namespace one::desktop::runtime {
 			std::vector<rect> frames_;
 			std::size_t chosen_ = 0;
 			bool shown_ = true;  // whether the chosen tile was brought into view, as it's first placed
+			int across_ = 0;
+			columns_laid laid_;
 		};
 
 		// What cards under headings by a date and their timeline share, by the cards' key:
@@ -940,17 +979,17 @@ namespace one::desktop::runtime {
 		// Cards made of the rows they show, in turn: as a mosaic, a gallery of pictures, or a list.
 		desktop::view cards_shown(page& p, const cards_spec& spec, std::vector<card_model> made, std::span<const value> rows) {
 			const auto& t = current_theme();
-			if (spec.mosaic) {
+			if (spec.mosaic || spec.across > 0) {
 				p.bleed();
 				std::vector<mosaic_element::tile> tiles;
 				for (std::size_t i = 0; i < made.size(); ++i) {
 					std::string address = made[i].address;
-					tiles.push_back({rows[i][spec.picture].as_string(), std::move(address), std::move(made[i])});
+					tiles.push_back({rows[i][spec.picture].as_string(), std::move(address), std::move(made[i]), spec.across > 0 ? tall_of(rows[i]) : 1});
 				}
 				// The card the page was left from, when it's back, chosen and given the keyboard.
 				const std::string& left = p.where_left().opened;
 				bool back = std::ranges::any_of(tiles, [&](const auto& tile) { return !left.empty() && tile.address == left; });
-				desktop::view shown(std::make_unique<mosaic_element>(p, std::move(tiles), left));
+				desktop::view shown(std::make_unique<mosaic_element>(p, std::move(tiles), left, spec.across));
 				return back ? std::move(shown).autofocus() : std::move(shown);
 			}
 			std::vector<desktop::list_row> shown;

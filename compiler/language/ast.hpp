@@ -1291,6 +1291,10 @@ namespace one::language {
         // tile, every eight two blocks of four, the second the first mirrored.
         bool mosaic = false;
         location mosaic_where;
+        // cards library.items columns 5: in so many equal columns, each picture as tall as
+        // its own shape, in the shortest column so far.
+        int across = 0;
+        location across_where;
         // by picture_date month: under a heading for each year, month or day of a date
         // field the list is ordered by, a mosaic's tiles starting again under each.
         std::optional<std::string> by;

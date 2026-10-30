@@ -1306,6 +1306,7 @@ namespace one::generators {
             if (c.hide_empty) out += ", .hide_empty = true";
             if (c.picture) out += ", .picture = " + str(*c.picture) + (c.picture_sits == "fit" ? ", .fit = true" : "");
             if (c.mosaic) out += ", .mosaic = true";
+            if (c.across) out += ", .across = " + std::to_string(c.across);
             if (c.by) out += ", .by = " + str(*c.by) + ", .unit = time_unit::" + c.by_unit;
             // Pictures dropped, pasted or chosen, each a record made by its add, given what the
             // address names, each part in the field it's kept in.

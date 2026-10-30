@@ -2950,6 +2950,11 @@ namespace one::language {
                     cards.mosaic_where = advance().where;
                     cards.mosaic = true;
                 }
+                // columns 5: their pictures in five equal columns, each its own shape.
+                if (at_word("columns") && peek(1).kind == token_kind::number) {
+                    cards.across_where = advance().where;
+                    cards.across = std::stoi(advance().text);
+                }
                 // by picture_date month: under a heading for each month of the date.
                 if (at_word("by")) {
                     advance();

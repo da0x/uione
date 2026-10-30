@@ -2138,6 +2138,15 @@ form step::update "Save" {
   left blank. Only what's in view is drawn, each picture read as it comes near.
   A mosaic says which picture each card shows, and its pictures fill their tiles,
   so its picture line says `fill` or nothing. A terminal draws no pictures, so it can't set one.
+  `cards clippings_page.clippings columns 5 { picture image ... }` sets them in five
+  equal columns of their pictures instead, as a mosaic is set, square cornered and two
+  pixels apart: each picture is as wide as a column and as tall as its own shape,
+  uncropped, and goes in the shortest column so far, the leftmost of those, in the
+  list's order, so the columns line up and the rows don't. Its shape is the one its
+  row keeps in `picture_width` and `picture_height`, which the view's list holds, so
+  thousands are placed without reading a picture, and one whose size isn't kept is
+  square. Under `by`, the columns start level again under each heading. Cards are a
+  mosaic or in columns, not both, in 1 to 12 of them. A terminal can't set them.
   `cards clippings_page.clippings mosaic by picture_date month` sets the cards under
   a heading for each month of a date their list holds, like "October 2026", in the
   text's face, strong and larger. `year` and `day` head each year, or each day, like

@@ -330,7 +330,7 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? ("icon" NAME)? ("color" N
                     by two rows as tall as a column is wide, a tall tile, a wide one and two small, the second block mirrored;
                     by: under a heading for each year, month or day of a date the list is ordered by first, newest first
                     when it's descending, a mosaic's tiles starting again under each */
-                 | "cards" qualified ("." NAME)? "mosaic"? ("by" NAME ("year" | "month" | "day"))? ("link" ROUTE)? ("when" expression)? ("{" NEWLINE? cards_line* "}")? END
+                 | "cards" qualified ("." NAME)? "mosaic"? ("columns" NUMBER)? ("by" NAME ("year" | "month" | "day"))? ("link" ROUTE)? ("when" expression)? ("{" NEWLINE? cards_line* "}")? END
                  /* a run of numbers over time, or several side by side */
                  | "chart" qualified "." series ("when" expression)? END
                  | "charts" qualified ("when" expression)? "{" NEWLINE? (series END)* "}" END

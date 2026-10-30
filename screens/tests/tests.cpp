@@ -462,6 +462,21 @@ TEST("a canvas places its cards where they say, lays out those that don't by col
 	CHECK(p.error("tracker::issue::place") == "you can't move that one");
 }
 
+TEST("cards in columns each go in the shortest column so far, the leftmost of those, as tall as their own shape, one of no size square") {
+	std::vector<double> tall{1.5, 0.5, 1, 0.75, 1, 2};
+	auto laid = columns_place(tall, 3);
+	CHECK(laid.places.size() == 6);
+	// The first three across, then each in whichever is shortest.
+	CHECK(laid.places[0].column == 0 && laid.places[1].column == 1 && laid.places[2].column == 2);
+	CHECK(laid.places[3].column == 1 && laid.places[3].above == 0.5 && laid.places[3].before == 1);
+	CHECK(laid.places[4].column == 2 && laid.places[4].above == 1);
+	CHECK(laid.places[5].column == 1 && laid.places[5].above == 1.25 && laid.places[5].before == 2);
+	CHECK((laid.heights == std::vector<double>{1.5, 3.25, 2}));
+	CHECK((laid.counts == std::vector<int>{1, 3, 2}));
+	CHECK(tall_of(value(fields{{"picture_width", 400}, {"picture_height", 300}})) == 0.75);
+	CHECK(tall_of(value(fields{{"name", "no size"}})) == 1);
+}
+
 TEST("a mosaic's cards each go in their tile by their place alone, two blocks of four for every eight, the second the first mirrored") {
 	auto at = [](std::size_t n) {
 		auto t = mosaic_tile(n);

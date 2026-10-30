@@ -4691,6 +4691,12 @@ namespace one::language {
             // A mosaic is its cards' pictures, each filling its tile.
             if (cards.mosaic && !cards.picture) error(cards.mosaic_where, "a mosaic is its cards' pictures, so its cards say which file each shows, like picture image");
             else if (cards.mosaic && cards.picture_sits == "fit") error(cards.picture_where, "a mosaic's pictures each fill their tile, so its picture line says fill, or nothing");
+            // Columns are their cards' pictures too, each its own shape.
+            if (cards.across) {
+                if (cards.mosaic) error(cards.across_where, "cards are a mosaic or in columns, not both");
+                else if (!cards.picture) error(cards.across_where, "columns are their cards' pictures, so its cards say which file each shows, like picture image");
+                if (cards.across < 1 || cards.across > 12) error(cards.across_where, "cards are in 1 to 12 columns, like columns 5");
+            }
             // Under a heading for each month of a date: one the rows hold, which the list is
             // ordered by first, so each month's cards are together.
             if (cards.by) {

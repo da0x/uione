@@ -17,7 +17,7 @@ import { PictureAlone, stepped, useAwakeOn, useSwipeStep } from "./alone.js";
 import { pictureSize } from "./vectors.js";
 import { madeOpens } from "./opening.js";
 import { cameraOf, factsOf, takenAt } from "./exif.js";
-import { dayTitle, rulerOf, timeGroups } from "./contract.js";
+import { dayTitle, rulerOf, tallOf, timeGroups } from "./contract.js";
 import type { BoardCard, CanvasRegion, CardGroup, ChartProps, FieldProps, Filtered, Hue, LandingFeature, LandingProps, LinkProps, PipelineRow, TimelineStep, TimeUnit, TrackStep } from "./contract.js";
 import { readValue, scaleTop, seriesOf, toneOfState, valueAt, type ChartUnit } from "./series.js";
 import { calendarGo, calendarOf, dateOf, dayOf, movedTo } from "./calendar.js";
@@ -2957,6 +2957,7 @@ export function Cards({
   picture,
   fit = false,
   mosaic = false,
+  across,
   by,
   paste,
   name,
@@ -2977,6 +2978,7 @@ export function Cards({
   picture?: string; // a file each row holds, shown on top of its card
   fit?: boolean; // all of it fitted in, or filling its place
   mosaic?: boolean; // set as a mosaic of their pictures, each filling its tile
+  across?: number; // or in so many columns of them, each its own shape, as its picture_width and picture_height say
   by?: { field: string; unit: TimeUnit }; // under a heading for each year, month or day of a date the list is ordered by
   // Pictures dropped, pasted or chosen, each a record made by this command, given what's
   // given besides, each of its parts, like picture and picture_width, in the field named.
@@ -3025,6 +3027,7 @@ export function Cards({
     <ui.Cards
       status={view.status}
       mosaic={mosaic || undefined}
+      across={across}
       groups={groups?.map((g): CardGroup => ({ id: datedId(name ?? "", g.key), title: g.title, first: g.first, count: g.count }))}
       cards={rows.map((row) => {
         const to = link ? rowLink(link, row, params, keyed, named) : undefined;
@@ -3041,7 +3044,7 @@ export function Cards({
           tally: sum(row),
           noun: tally?.noun,
           filters: to ? filters.map((f) => ({ label: f.label, link: links(`${to}?${new URLSearchParams({ is: f.label, ...f.query }).toString()}`), ...(f.hue ? { hue: f.hue } : {}) })) : [],
-          ...(picture ? { picture: { source: addresses[String(row[picture] ?? "")], fit } } : {}),
+          ...(picture ? { picture: { source: addresses[String(row[picture] ?? "")], fit, ...(across ? { tall: tallOf(row) } : {}) } } : {}),
         };
       })}
     />

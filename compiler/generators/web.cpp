@@ -2512,6 +2512,7 @@ namespace one::generators {
             if (cards.hide_empty) line += " hideEmpty";
             if (cards.picture) line += " picture=" + web_detail::js_string(*cards.picture) + (cards.picture_sits == "fit" ? " fit" : "");
             if (cards.mosaic) line += " mosaic";
+            if (cards.across) line += " across={" + std::to_string(cards.across) + "}";
             if (cards.by) line += " by={{ field: " + web_detail::js_string(*cards.by) + ", unit: " + web_detail::js_string(cards.by_unit) + " }}";
             if (cards.link) {
                 std::string target = full_route(ns, *cards.link);

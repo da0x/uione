@@ -755,6 +755,7 @@ namespace one::screens {
 		std::string picture = "";                                 // a file field's picture on top of each card
 		bool fit = false;                                         // all of it fitted in, or filling its place
 		bool mosaic = false;                                      // set as a mosaic of pictures, each filling its tile (see mosaic_tile)
+		int across = 0;                                           // or in so many columns of pictures, each its own shape (see columns_place)
 		// Under a heading for each year, month or day of a date field the list is ordered by.
 		std::string by = "";
 		time_unit unit = time_unit::month;

@@ -273,6 +273,33 @@ describe("cards", () => {
   });
 });
 
+describe("cards in columns", () => {
+  it("place each picture in the shortest column so far, as wide as a column and as tall as its own shape, one of no size square", () => {
+    const source = memorySource();
+    const sizes = [[160, 90], [90, 160], [100, 100], [160, 120], [0, 0]];
+    source.set("studio::room_page", {
+      pieces: sizes.map(([w, h], i) => ({ id: `c${i + 1}`, name: `Clipping ${i + 1}`, ...(w ? { picture_width: w, picture_height: h } : {}) })),
+    });
+    function Pieces() {
+      const page = useView("studio::room_page");
+      return <Cards view={page} list="pieces" columns={{ name: "Name" }} picture="image" across={3} />;
+    }
+    renderScreen(() => <Pieces />, source);
+    const tiles = screen.getAllByRole("article");
+    expect(tiles.length).toBe(5);
+    // Which column each is in, and how far down, in column widths.
+    const column = (tile: HTMLElement) => Number(/^calc\((\d+) \*/.exec(tile.style.left)?.[1]);
+    const down = (tile: HTMLElement) => Number(/([\d.]+) \*/.exec(tile.style.top)?.[1]);
+    // The first three across; the fourth under the shortest, the first; the fifth, of no size, square under the third.
+    expect(tiles.map(column)).toEqual([0, 1, 2, 0, 2]);
+    expect(down(tiles[3]!)).toBeCloseTo(90 / 160);
+    expect(down(tiles[4]!)).toBe(1);
+    expect(tiles[4]!.style.height).toMatch(/\b1 \*/);
+    expect(tiles.every((tile) => !/\brounded/.test(tile.className))).toBe(true);
+    expect(tiles[0]!.closest("[data-bleed]")).not.toBeNull();
+  });
+});
+
 describe("cards under a heading for each month", () => {
   it("head each in the text's face, strong and larger, each part laid out only near the view, and a timeline of them moved through by its keys", async () => {
     const source = memorySource();

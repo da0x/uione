@@ -392,6 +392,7 @@ export interface CardsProps {
   status: ViewStatus;
   cards: Card[];
   mosaic?: boolean;
+  across?: number; // or in so many columns of their pictures, each its own shape, as columnsPlace lays them
   groups?: CardGroup[];
 }
 export interface CardGroup {
@@ -581,6 +582,39 @@ export function mosaicRows(count: number): number {
   return Math.ceil(count / 4) * 2;
 }
 
+// Cards in columns, as stone is laid in a wall: each picture as wide as a column and
+// as tall as its own shape, uncropped, in the shortest column so far, the leftmost of
+// those, so the columns line up and the rows don't. `tall` is each one's height over
+// its width, 1 for one whose size isn't known. Each goes in its column, below the
+// heights of those above it, in column widths, and so many gaps; each column ends
+// likewise. Worked out from the sizes the rows keep, so nothing moves as pictures come
+// in. The same as the desktop's.
+export interface ColumnPlace {
+  column: number;
+  above: number;
+  before: number;
+}
+export function columnsPlace(tall: number[], columns: number): { places: ColumnPlace[]; heights: number[]; counts: number[] } {
+  const n = Math.max(1, columns);
+  const heights = new Array<number>(n).fill(0);
+  const counts = new Array<number>(n).fill(0);
+  const places = tall.map((t) => {
+    let shortest = 0;
+    for (let c = 1; c < n; c++) if (heights[c]! < heights[shortest]!) shortest = c;
+    const at = { column: shortest, above: heights[shortest]!, before: counts[shortest]! };
+    heights[shortest] = heights[shortest]! + t;
+    counts[shortest] = counts[shortest]! + 1;
+    return at;
+  });
+  return { places, heights, counts };
+}
+// A row's picture's height over its width, from the sizes it keeps.
+export function tallOf(row: Record<string, unknown>): number {
+  const wide = Number(row["picture_width"]);
+  const high = Number(row["picture_height"]);
+  return wide > 0 && high > 0 ? high / wide : 1;
+}
+
 export interface Card {
   id: string;
   title: ReactNode;
@@ -593,8 +627,8 @@ export interface Card {
   noun?: string; // what it holds, counted, like issues
   filters: { label: string; link: LinkProps; hue?: Hue }[];
   // A picture on top of it, all of it fitted in or filling its place; its address,
-  // none while it's found or when there's none.
-  picture?: { source?: string; fit: boolean };
+  // none while it's found or when there's none; in columns, its height over its width.
+  picture?: { source?: string; fit: boolean; tall?: number };
 }
 
 // A run of numbers over time, newest at the right, as btop draws one: its title, its

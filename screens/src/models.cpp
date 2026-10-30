@@ -1780,6 +1780,28 @@ namespace one::screens {
 
 	int mosaic_rows(std::size_t count) { return static_cast<int>((count + 3) / 4) * 2; }
 
+	columns_laid columns_place(std::span<const double> tall, int columns) {
+		columns_laid laid;
+		columns = std::max(1, columns);
+		laid.heights.assign(static_cast<std::size_t>(columns), 0);
+		laid.counts.assign(static_cast<std::size_t>(columns), 0);
+		laid.places.reserve(tall.size());
+		for (double t : tall) {
+			auto shortest = static_cast<std::size_t>(std::ranges::min_element(laid.heights) - laid.heights.begin());
+			laid.places.push_back({static_cast<int>(shortest), laid.heights[shortest], laid.counts[shortest]});
+			laid.heights[shortest] += t;
+			laid.counts[shortest] += 1;
+		}
+		return laid;
+	}
+
+	double tall_of(const value& row) {
+		const value& w = row["picture_width"];
+		const value& h = row["picture_height"];
+		double wide = w.is_integer() || w.is_double() ? w.as_double() : 0, high = h.is_integer() || h.is_double() ? h.as_double() : 0;
+		return wide > 0 && high > 0 ? high / wide : 1;
+	}
+
 	namespace {
 		// The day a time says as it's read here, as a number like 20261012, or 0 when it
 		// says none. The zone's offset is looked up again only once a time is past the

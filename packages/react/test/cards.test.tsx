@@ -6,7 +6,7 @@
 // the fields that keep them; several at once one step to undo, and a drop target while empty.
 
 import { fireEvent, render, waitFor } from "@testing-library/react";
-import { App, Cards, DatedTimeline, Link, Messages, PaperButton, Picture, StepLink, Table, Toggle, memorySource, mosaicRows, mosaicTile, screen as defineScreen, dayTitle, markLength, marksAlong, rulerOf, timeGroups, useView } from "../src/index.js";
+import { App, Cards, DatedTimeline, Link, Messages, PaperButton, Picture, StepLink, Table, Toggle, columnsPlace, memorySource, mosaicRows, mosaicTile, tallOf, screen as defineScreen, dayTitle, markLength, marksAlong, rulerOf, timeGroups, useView } from "../src/index.js";
 import { useNavigate, useParams } from "react-router";
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
@@ -253,6 +253,36 @@ describe("cards as a mosaic", () => {
     expect(drawn.getByRole("link", { name: "Clipping 11" }).getAttribute("href")).toBe("/pieces/c11");
     fireEvent.drop(drawn.container.querySelector(".one-cards-taking")!, { dataTransfer: { files: [new File(["abcd"], "harbor.jpg", { type: "image/jpeg" })], getData: () => "", types: ["Files"] } });
     await waitFor(() => expect(source.runs.some((r) => r.command === "studio::piece::create")).toBe(true));
+  });
+});
+
+describe("cards in columns", () => {
+  it("lay each in the shortest column so far, the leftmost of those, by its own shape, one of no size square", () => {
+    const laid = columnsPlace([0.5, 1.5, 1, 0.75, 1], 3);
+    expect(laid.places.map((p) => [p.column, p.above, p.before])).toEqual([[0, 0, 0], [1, 0, 0], [2, 0, 0], [0, 0.5, 1], [2, 1, 1]]);
+    expect(laid.heights).toEqual([1.25, 1.5, 2]);
+    expect(tallOf({ picture_width: 400, picture_height: 300 })).toBe(0.75);
+    expect(tallOf({})).toBe(1);
+  });
+
+  it("set each card in its column, in turn, under its heading, the columns level again under each", async () => {
+    const source = memorySource();
+    const when = (m: number, d: number) => new Date(Date.UTC(2026, m - 1, d, 12));
+    const pieces = [when(10, 30), when(10, 2), when(10, 1), when(9, 3)].map((date, i) => ({ id: `c${i + 1}`, name: `Clipping ${i + 1}`, image: "", picture_date: date, picture_width: 100, picture_height: 100 * (i + 1) }));
+    source.set("studio::room_page", { pieces }, "r1");
+    function Pieces() {
+      const page = useView("studio::room_page", "r1");
+      return <Cards view={page} list="pieces" columns={{ name: "Name" }} picture="image" across={2} by={{ field: "picture_date", unit: "month" }} name="/ cards pieces" />;
+    }
+    const only = defineScreen({ title: "Pieces", route: "/" }, () => <Pieces />);
+    const drawn = render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
+    await waitFor(() => expect(drawn.getAllByRole("article").length).toBe(4));
+    const october = drawn.getByRole("region", { name: "October 2026" });
+    const columns = [...october.firstElementChild!.nextElementSibling!.children].map((c) => [...c.querySelectorAll("article")].map((a) => a.textContent));
+    // The first two across, the third under the shorter, the first.
+    expect(columns).toEqual([["Clipping 1", "Clipping 3"], ["Clipping 2"]]);
+    const september = drawn.getByRole("region", { name: "September 2026" });
+    expect([...september.querySelectorAll("article")].map((a) => a.textContent)).toEqual(["Clipping 4"]);
   });
 });
 

@@ -22,7 +22,7 @@ import { Children, Fragment, useEffect, useId, useMemo, useRef, useState } from 
 import { createPortal } from "react-dom";
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
 import type { ButtonProps, CardGroup, CardsProps, ChoiceProps, ColorPickerProps, ComponentSet, DatedTimelineProps, OptionsProps, SliderProps } from "@uione/react";
-import { Surface, markLength, marksAlong, mosaicRows, mosaicTile, timelineStep } from "@uione/react";
+import { Surface, columnsPlace, markLength, marksAlong, mosaicRows, mosaicTile, timelineStep } from "@uione/react";
 import { highlight, highlightCodeBlocks } from "./highlight.js";
 import { MarkdownField, MarkdownText } from "./markdown.js";
 import { nameStyles, setCodeDisplay, tabWidths, useCodeDisplay } from "./display.js";
@@ -609,22 +609,71 @@ function Mosaic({ status, cards }: CardsProps) {
   );
 }
 
+// Cards in columns of their pictures, set as a mosaic is: square cornered and two
+// pixels apart, each as wide as a column and as tall as its own shape, uncropped, in
+// the place columnsPlace gives it, its title and what else it shows across its foot.
+// Each is placed from the sizes its row keeps, so nothing moves as pictures load; one
+// out of view isn't drawn, and its picture isn't fetched, until it's near.
+function Columns({ status, cards, across }: CardsProps & { across: number }) {
+  const laid = useMemo(() => columnsPlace(cards.map((card) => card.picture?.tall ?? 1), across), [cards, across]);
+  const side = `((100cqw - ${(across - 1) * 2}px) / ${across})`;
+  const tallest = laid.heights.map((h, c) => `calc(${h} * ${side} + ${Math.max(0, laid.counts[c]! - 1) * 2}px)`).join(", ");
+  return (
+    <div className="@container" data-bleed aria-busy={status === "loading"}>
+      <div className="relative" style={{ height: `max(${tallest})` }}>
+        {cards.map((card, n) => {
+          const at = laid.places[n]!;
+          return (
+            <article
+              key={card.id}
+              className="absolute overflow-hidden bg-sunken [content-visibility:auto] has-[a:focus-visible]:after:pointer-events-none has-[a:focus-visible]:after:absolute has-[a:focus-visible]:after:inset-0 has-[a:focus-visible]:after:ring-2 has-[a:focus-visible]:after:ring-inset has-[a:focus-visible]:after:ring-accent"
+              style={{
+                left: `calc(${at.column} * (${side} + 2px))`,
+                top: `calc(${at.above} * ${side} + ${at.before * 2}px)`,
+                width: `calc(${side})`,
+                height: `calc(${card.picture?.tall ?? 1} * ${side})`,
+              }}
+            >
+              {card.picture?.source && <img src={card.picture.source} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />}
+              <div className="absolute inset-x-0 bottom-0 flex flex-col gap-0.5 bg-black/45 px-3 py-2 text-white">
+                <h2 className="font-sans text-base leading-snug font-semibold">
+                  {card.link ? (
+                    <a {...card.link} className="text-white outline-none after:absolute after:inset-0 hover:underline">
+                      {card.title}
+                    </a>
+                  ) : (
+                    card.title
+                  )}
+                </h2>
+                {card.details.length > 0 && <div className="flex flex-wrap gap-x-3 text-sm text-white/85">{card.details.map((detail, i) => <span key={i}>{detail}</span>)}</div>}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+      {cards.length === 0 && <p className="text-sm text-muted">{status === "loading" ? "Loading…" : "Nothing here yet."}</p>}
+    </div>
+  );
+}
+
 // Cards under a heading for each year, month or day, in the text's face, strong and
 // larger, a mosaic's tiles starting again under each. A part out of view isn't laid out
 // or drawn, its height reckoned from how many it holds, so the page scrolls to any
 // heading at once however many are above it.
-function Grouped({ status, cards, mosaic, groups }: CardsProps & { groups: CardGroup[] }) {
+function Grouped({ status, cards, mosaic, across, groups }: CardsProps & { groups: CardGroup[] }) {
   return (
-    <div className="@container flex flex-col gap-8" data-bleed={mosaic || undefined} aria-busy={status === "loading"}>
+    <div className="@container flex flex-col gap-8" data-bleed={mosaic || across ? true : undefined} aria-busy={status === "loading"}>
       {groups.map((group) => {
         const rows = mosaic ? mosaicRows(group.count) : Math.ceil(group.count / 3);
-        const tall = mosaic ? `calc(${rows} * 33cqw + 3rem)` : `calc(${rows} * 22rem + 3rem)`;
+        // In columns, about as tall as its pictures shared among them.
+        const shared = across ? cards.slice(group.first, group.first + group.count).reduce((sum, card) => sum + (card.picture?.tall ?? 1), 0) / across : 0;
+        const tall = across ? `calc(${shared} * ${100 / across}cqw + 3rem)` : mosaic ? `calc(${rows} * 33cqw + 3rem)` : `calc(${rows} * 22rem + 3rem)`;
         return (
           <section key={group.id} aria-labelledby={group.id} className="flex flex-col gap-3" style={{ contentVisibility: "auto", containIntrinsicSize: `auto ${tall}` }}>
             <h2 id={group.id} className="scroll-mt-4 font-sans text-2xl font-semibold tracking-normal">
               {group.title}
             </h2>
-            <radix.Cards status={status} cards={cards.slice(group.first, group.first + group.count)} mosaic={mosaic} />
+            <radix.Cards status={status} cards={cards.slice(group.first, group.first + group.count)} mosaic={mosaic} across={across} />
           </section>
         );
       })}
@@ -1357,7 +1406,7 @@ export const radix: ComponentSet = {
       {source && <img src={source} alt="" className={`h-full w-full ${fit ? "object-contain" : "object-cover"}`} />}
     </div>
   ),
-  Cards: ({ status, cards, mosaic, groups }) => groups ? <Grouped status={status} cards={cards} mosaic={mosaic} groups={groups} /> : (mosaic ? <Mosaic status={status} cards={cards} /> : (
+  Cards: ({ status, cards, mosaic, across, groups }) => groups ? <Grouped status={status} cards={cards} mosaic={mosaic} across={across} groups={groups} /> : across ? <Columns status={status} cards={cards} across={across} /> : (mosaic ? <Mosaic status={status} cards={cards} /> : (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy={status === "loading"}>
       {cards.map((card) => {
         const total = card.tally?.reduce((n, part) => n + part.count, 0) ?? 0;
