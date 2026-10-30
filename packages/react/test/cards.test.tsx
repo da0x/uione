@@ -6,7 +6,7 @@
 // the fields that keep them; several at once one step to undo, and a drop target while empty.
 
 import { fireEvent, render, waitFor } from "@testing-library/react";
-import { App, Cards, DatedTimeline, Link, Messages, PaperButton, Picture, StepLink, Table, Toggle, memorySource, mosaicRows, mosaicTile, screen as defineScreen, timeGroups, useView, within, yearsOf } from "../src/index.js";
+import { App, Cards, DatedTimeline, Link, Messages, PaperButton, Picture, StepLink, Table, Toggle, memorySource, mosaicRows, mosaicTile, screen as defineScreen, dayTitle, markLength, marksAlong, rulerOf, timeGroups, useView } from "../src/index.js";
 import { useNavigate, useParams } from "react-router";
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
@@ -272,15 +272,35 @@ describe("cards under a heading for each month", () => {
       ["2025-07", "July 2025", 7, 1],
       ["none", "No date", 8, 1],
     ]);
-    expect(yearsOf(groups, "month").map((e) => `${e.title} ${e.count}`)).toEqual(["2026 6", "October 3", "September 2", "March 1", "2025 2", "December 1", "July 1", "No date 1"]);
-    expect(yearsOf(timeGroups(pieces, "picture_date", "year"), "year").map((e) => `${e.title} ${e.count}`)).toEqual(["2026 6", "2025 2", "No date 1"]);
+    const ruler = rulerOf(pieces, "picture_date", "month");
+    expect(ruler.days.map((d) => `${dayTitle(d.day)} ${d.group} ${d.along.toFixed(2)} ${d.count}`)).toEqual([
+      "October 30, 2026 0 0.00 1",
+      "October 12, 2026 0 0.33 1",
+      "October 1, 2026 0 0.67 1",
+      "September 20, 2026 1 0.00 1",
+      "September 2, 2026 1 0.50 1",
+      "March 8, 2026 2 0.00 1",
+      "December 31, 2025 3 0.00 1",
+      "July 4, 2025 4 0.00 1",
+    ]);
+    expect(ruler.years).toEqual([
+      { year: 2026, first: 0 },
+      { year: 2025, first: 6 },
+    ]);
+    // Under a heading for each year, a day is as far into its year.
+    expect(rulerOf(pieces, "picture_date", "year").days[6]!.group).toBe(1);
     const days = timeGroups(pieces, "picture_date", "day");
     expect(days[0]!.title).toBe("October 30, 2026");
-    expect(yearsOf(days, "day").map((e) => `${e.title} ${e.count}`).slice(0, 3)).toEqual(["2026 6", "October 3", "September 2"]);
-    expect([within("2026-10-12", "2026-10"), within("2026-10", "2026"), within("2026-10", "2026-1"), within("2025-10", "2026")]).toEqual([true, true, false, false]);
+    // A day of one is a short mark, one of hundreds no wider than the ruler, and more is longer.
+    expect([markLength(1, 40), markLength(300, 40), markLength(3, 40) < markLength(10, 40)]).toEqual([8, 40, true]);
+    // Days closer than two pixels are one mark of them all.
+    expect(marksAlong([{ at: 0, count: 1 }, { at: 0.001, count: 2 }, { at: 0.5, count: 1 }], 1000)).toEqual([
+      { y: 0, count: 3 },
+      { y: 500, count: 1 },
+    ]);
   });
 
-  it("head each month, a mosaic's tiles starting again under each, and a timeline marks the one in view and scrolls to the one chosen", async () => {
+  it("head each month, a mosaic's tiles starting again under each, and a timeline drawn along them says the day at the top, and scrolls them as it's pressed and by its keys", async () => {
     const source = memorySource({ files: true });
     source.set("studio::room_page", { pieces }, "r1");
     function Pieces() {
@@ -292,18 +312,20 @@ describe("cards under a heading for each month", () => {
         </>
       );
     }
-    // Each heading a thousand pixels under the one before, scrolled to by scrollIntoView.
+    // Each heading a thousand pixels under the one before, its part of the cards to 32
+    // short of the next, the page scrolled, all of it six thousand tall.
     let scrolled = 0;
     const order = () => [...document.querySelectorAll("section > h2")];
     const box = Element.prototype.getBoundingClientRect;
-    const into = Element.prototype.scrollIntoView;
+    const page = document.documentElement;
     Element.prototype.getBoundingClientRect = function (this: Element) {
-      const n = order().indexOf(this);
-      return { top: n < 0 ? 0 : n * 1000 - scrolled, left: 0, right: 0, bottom: 0, width: 0, height: 0, x: 0, y: 0, toJSON() {} } as DOMRect;
+      const n = order().indexOf(this.tagName === "SECTION" ? this.querySelector("h2")! : this);
+      const top = n < 0 ? 0 : n * 1000 - scrolled;
+      const bottom = n < 0 ? 0 : this.tagName === "SECTION" ? top + 968 : top + 40;
+      return { top, left: 0, right: 0, bottom, width: 0, height: bottom - top, x: 0, y: top, toJSON() {} } as DOMRect;
     };
-    Element.prototype.scrollIntoView = function (this: Element) {
-      scrolled = order().indexOf(this) * 1000;
-    };
+    Object.defineProperty(page, "scrollTop", { configurable: true, get: () => scrolled, set: (to: number) => void (scrolled = to) });
+    Object.defineProperty(page, "scrollHeight", { configurable: true, get: () => 6000 });
     try {
       const only = defineScreen({ title: "Pieces", route: "/" }, () => <Pieces />);
       const drawn = render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
@@ -312,30 +334,40 @@ describe("cards under a heading for each month", () => {
       // September's first tile is the tall one at the left, as a mosaic's first is.
       const september = drawn.getByRole("region", { name: "September 2026" }).querySelectorAll("article");
       expect([september[0]!.style.gridColumn, september[0]!.style.gridRow, september[1]!.style.gridColumn]).toEqual(["1 / span 1", "1 / span 2", "2 / span 2"]);
-      const entries = () => drawn.getAllByRole("button").map((b) => `${b.textContent}${b.getAttribute("aria-current") ? " *" : ""}`);
-      await waitFor(() => expect(entries()).toEqual(["2026 6", "October 3 *", "September 2", "March 1", "2025 2", "December 1", "July 1", "No date 1"]));
-      // Scrolled past October and September, March is the one in view.
+      const ruler = drawn.getByRole("slider", { name: "Timeline" });
+      expect(ruler.textContent).toBe("2026 2025 ");
+      await waitFor(() => expect(ruler.getAttribute("aria-valuetext")).toBe("October 30, 2026"));
+      // Scrolled past October and September, March's day is at the top.
       scrolled = 2010;
       fireEvent.scroll(document);
-      await waitFor(() => expect(entries()[3]).toBe("March 1 *"));
-      // 2025 chosen scrolls its first month's heading to the top, and it's marked.
-      fireEvent.click(drawn.getByRole("button", { name: "2025 2" }));
+      await waitFor(() => expect(ruler.getAttribute("aria-valuetext")).toBe("March 8, 2026"));
+      // The next heading, then back to the year's start, and to the end.
+      fireEvent.keyDown(ruler, { key: "ArrowDown" });
       expect(scrolled).toBe(3000);
-      await waitFor(() => expect(entries()[5]).toBe("December 1 *"));
-      fireEvent.click(drawn.getByRole("button", { name: "July 1" }));
-      expect(scrolled).toBe(4000);
+      fireEvent.keyDown(ruler, { key: "PageUp" });
+      expect(scrolled).toBe(0);
+      fireEvent.keyDown(ruler, { key: "End" });
+      expect(scrolled).toBe(6000);
+      fireEvent.keyDown(ruler, { key: "k" });
+      expect(scrolled).toBe(5000);
+      // Pressed halfway down it, the cards are scrolled halfway.
+      if (!globalThis.PointerEvent) globalThis.PointerEvent = class extends MouseEvent {} as unknown as typeof PointerEvent;
+      fireEvent.pointerDown(ruler, { button: 0, clientY: 0.5, pointerId: 1 });
+      expect(scrolled).toBe(3000);
     } finally {
       Element.prototype.getBoundingClientRect = box;
-      Element.prototype.scrollIntoView = into;
+      delete (page as { scrollTop?: number }).scrollTop;
+      delete (page as { scrollHeight?: number }).scrollHeight;
     }
   });
 
-  it("work out the months of twenty thousand rows quickly", () => {
-    const many = Array.from({ length: 20000 }, (_, i) => ({ id: `c${i}`, picture_date: new Date(Date.UTC(2026, 9, 30) - i * 3 * 3600 * 1000) }));
+  it("work out the days of twenty thousand rows quickly", () => {
+    const many = Array.from({ length: 20000 }, (_, i) => ({ id: `c${i}`, picture_date: new Date(Date.UTC(2026, 9, 30) - i * 30 * 3600 * 1000) }));
     const started = performance.now();
-    const entries = yearsOf(timeGroups(many, "picture_date", "month"), "month");
+    const ruler = rulerOf(many, "picture_date", "month");
     const took = performance.now() - started;
-    expect(entries.filter((e) => !e.year).reduce((n, e) => n + e.count, 0)).toBe(20000);
+    expect(ruler.days.reduce((n, d) => n + d.count, 0)).toBe(20000);
+    expect(ruler.years.length).toBe(69);
     expect(took).toBeLessThan(500);
   });
 });

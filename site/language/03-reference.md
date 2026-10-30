@@ -2840,15 +2840,22 @@ screen / landing constellation {
   none, like a person who has never looked, is before everything. `on open dispatch
   reader::create` runs a command once the timeline opens with something new in it,
   like one saying they've looked; nothing runs when nothing is new.
-- `timeline clippings_page.clippings by picture_date` lists the years and months of the
-  screen's cards under headings by that date instead, each with how many it holds:
-  "2026 214", then "October 31", "September 40". Under headings by year it lists only
-  the years. The month at the top of the cards as they scroll is marked. Click one,
-  or press Enter on it, and the cards scroll so its first heading is at the top. The
-  arrows, `j` and `k`, Home and End move between them. It's placed from the counts above
-  it, so a jump to the oldest month of twenty thousand cards draws none of those
-  above. A screen with a timeline by a date has cards under headings by it, usually in
-  its `side`. A terminal can't scroll cards to a heading, so it has no such timeline.
+- `timeline clippings_page.clippings by picture_date` draws the screen's cards under
+  headings by that date as a ruler along them, the way a scrollbar is drawn: a narrow
+  strip as tall as what scrolls the cards, its top their top. Each day that has any is
+  a mark where it falls in the cards, longer for more, so most days read apart and a
+  day of hundreds is no wider than the strip; days closer than a pixel or two are one
+  mark. Each year is a line across with its number. A line in the accent shows where
+  the cards are scrolled to. Press or drag on it and the cards scroll there as it
+  moves, the day there, like "October 12, 2026", said beside it, as it is while it's
+  pointed at. With the keyboard, the arrows, `j` and `k` go to the next or previous
+  heading, Page Down and Page Up to the next or previous year, Home and End to either
+  end. Its days are worked out once each time the list changes, so twenty thousand
+  cards stay quick. A screen with a timeline by a date has cards under headings by it.
+  In a workspace it goes alone in its `side`, which is then the strip at the work's
+  right edge, with no border, and `side when timeline` with `toggle timeline
+  "Timeline" icon timeline` in the toolbar shows and hides it. A terminal can't scroll
+  cards to a heading, so it has no such timeline.
 - Buttons one after another on a screen sit together in a row, a command's own and
   the ones that open forms alike, and so do links one after another, outside a
   hero or a section, which lay out their own.

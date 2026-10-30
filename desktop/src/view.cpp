@@ -109,11 +109,11 @@ namespace one::desktop {
 			if (at && !over) over = w.root->hit(*at);
 			each_element(*w.root, [](element& e) {
 				e.hovered = false;
-				point_at_list(e, std::nullopt);
+				e.pointing(std::nullopt);
 			});
 			for (element* e = over; e; e = e->parent) {
 				e->hovered = true;
-				point_at_list(*e, at);
+				e->pointing(at);
 			}
 		}
 

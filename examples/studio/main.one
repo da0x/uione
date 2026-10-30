@@ -308,7 +308,7 @@ namespace studio at / {
 
 	// Pictures kept to go on posters, each one dropped, pasted or chosen made a clipping,
 	// set edge to edge as a mosaic under the month each was taken, newest first, and
-	// the years and months beside it, each scrolled to.
+	// their timeline along it, scrolled through, while it's shown.
 	screen "Clippings" /clippings {
 		layout workspace
 		bar {
@@ -320,6 +320,9 @@ namespace studio at / {
 				add folder "Folder" icon folder
 				paste "Paste" icon paste key ctrl+v
 			}
+			group "View" small at end {
+				toggle timeline "Timeline" icon timeline key t
+			}
 		}
 		main {
 			cards clippings_page.clippings mosaic by picture_date month link /clippings/:clipping {
@@ -329,7 +332,7 @@ namespace studio at / {
 				paste
 			}
 		}
-		side {
+		side when timeline {
 			timeline clippings_page.clippings by picture_date
 		}
 		status {

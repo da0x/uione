@@ -7,7 +7,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import type { Card, ComponentSet, DialogProps } from "./contract.js";
-import { mosaicTile } from "./contract.js";
+import { mosaicTile, timelineStep } from "./contract.js";
 import { Surface } from "./surface.js";
 
 // Read by screen readers, not shown.
@@ -606,16 +606,31 @@ export const plain: ComponentSet = {
     ) : (
       plainCards(status, cards, mosaic)
     ),
-  DatedTimeline: ({ entries }) => (
-    <ul>
-      {entries.map((entry) => (
-        <li key={entry.key}>
-          <button type="button" aria-current={entry.current || undefined} onClick={entry.onChoose}>
-            {entry.title} {entry.count}
-          </button>
-        </li>
+  DatedTimeline: ({ years, at, dayAt, onScrub, onStep }) => (
+    <div
+      role="slider"
+      tabIndex={0}
+      aria-label="Timeline"
+      aria-orientation="vertical"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(at * 100)}
+      aria-valuetext={dayAt(at)}
+      onPointerDown={(event) => {
+        const box = event.currentTarget.getBoundingClientRect();
+        onScrub((event.clientY - box.top) / Math.max(1, box.height));
+      }}
+      onKeyDown={(event) => {
+        const to = timelineStep(event.key);
+        if (!to || event.altKey || event.ctrlKey || event.metaKey) return;
+        event.preventDefault();
+        onStep(to);
+      }}
+    >
+      {years.map((year) => (
+        <span key={year.title}>{year.title} </span>
       ))}
-    </ul>
+    </div>
   ),
 
   Track: ({ label, steps }) => (

@@ -156,7 +156,7 @@ TEST("a time named by the calendar is that day, week or month's start where it's
 	CHECK(time_value("never").is_null());
 }
 
-TEST("a list ordered by a date is under a heading for each month as it's read here, in one pass, and a timeline lists its years and months with their counts, the same as the web's") {
+TEST("a list ordered by a date is under a heading for each month as it's read here, in one pass, and a timeline marks each day along them with how many it holds, and each year, the same as the web's") {
 	auto at = [](int y, unsigned m, unsigned d, int hour) {
 		using namespace std::chrono;
 		value v;
@@ -174,26 +174,26 @@ TEST("a list ordered by a date is under a heading for each month as it's read he
 	std::vector<std::string> said;
 	for (const auto& g : groups) said.push_back(std::format("{} {} {} {}", g.key, g.title, g.first, g.count));
 	CHECK((said == std::vector<std::string>{"2026-10 October 2026 0 3", "2026-09 September 2026 3 2", "2026-03 March 2026 5 1", "2025-12 December 2025 6 1", "2025-07 July 2025 7 1", "none No date 8 1"}));
-	auto listed = [](const std::vector<dated_entry>& entries) {
-		std::vector<std::string> out;
-		for (const auto& e : entries) out.push_back(std::format("{} {}", e.title, e.count));
-		return out;
-	};
-	CHECK((listed(years_of(groups, time_unit::month)) == std::vector<std::string>{"2026 6", "October 3", "September 2", "March 1", "2025 2", "December 1", "July 1", "No date 1"}));
-	CHECK((listed(years_of(time_groups(rows, "picture_date", time_unit::year), time_unit::year)) == std::vector<std::string>{"2026 6", "2025 2", "No date 1"}));
+	auto ruler = ruler_of(rows, "picture_date", time_unit::month);
+	std::vector<std::string> marked;
+	for (const auto& d : ruler.days) marked.push_back(std::format("{} {} {:.2f} {}", day_title(d.day), d.group, d.along, d.count));
+	CHECK((marked == std::vector<std::string>{"October 30, 2026 0 0.00 1", "October 12, 2026 0 0.33 1", "October 1, 2026 0 0.67 1", "September 20, 2026 1 0.00 1",
+	                                          "September 2, 2026 1 0.50 1", "March 8, 2026 2 0.00 1", "December 31, 2025 3 0.00 1", "July 4, 2025 4 0.00 1"}));
+	CHECK((ruler.years.size() == 2 && ruler.years[0].year == 2026 && ruler.years[0].first == 0 && ruler.years[1].year == 2025 && ruler.years[1].first == 6));
+	// Under a heading for each year, a day is as far into its year.
+	CHECK(ruler_of(rows, "picture_date", time_unit::year).days[6].group == 1);
 	auto days = time_groups(rows, "picture_date", time_unit::day);
 	CHECK(days.front().title == "October 30, 2026");
-	CHECK(listed(years_of(days, time_unit::day))[1] == "October 3");
+	// A day of one is a short mark, one of hundreds no wider than the ruler, and more is longer.
+	CHECK(mark_length(1, 40) == 8);
+	CHECK(mark_length(300, 40) == 40);
+	CHECK(mark_length(3, 40) < mark_length(10, 40));
 	// Read where it's late in the evening, the first of October is still September's.
 	use_time_zone("America/Los_Angeles");
 	CHECK(time_groups(std::vector<value>{value(fields{{"picture_date", at(2026, 10, 1, 3)}})}, "picture_date", time_unit::month).front().key == "2026-09");
 	// A day alone is that day wherever it's read.
 	CHECK(time_groups(std::vector<value>{value(fields{{"picture_date", at(2026, 10, 1, 0)}})}, "picture_date", time_unit::month).front().key == "2026-10");
 	use_time_zone("UTC");
-	CHECK(within("2026-10-12", "2026-10"));
-	CHECK(within("2026-10", "2026"));
-	CHECK(!within("2026-10", "2026-1"));
-	CHECK(!within("2025-10", "2026"));
 }
 
 TEST("a record's details say a number of bytes as KB, MB or GB, a date as its day, and a moment as its day and time of day") {

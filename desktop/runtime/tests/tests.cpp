@@ -4321,19 +4321,32 @@ namespace {
 	}
 
 	// What's drawn in a window: each mosaic, taking the keyboard with nothing made inside
-	// it until it's drawn, and the timeline, a row for each year and month.
+	// it until it's drawn, and the timeline, as wide as it says.
 	void each_dated(one::desktop::element& e, std::vector<one::desktop::element*>& mosaics, one::desktop::element*& timeline) {
-		if (e.focusable() && e.children.empty()) mosaics.push_back(&e);
-		else if (e.focusable() && e.children.size() > 1) timeline = &e;
+		if (e.focusable() && e.fixed_width) timeline = &e;
+		else if (e.focusable() && e.children.empty()) mosaics.push_back(&e);
 		for (auto& child : e.children) each_dated(*child, mosaics, timeline);
+	}
+
+	// How many marks are drawn down a column of a picture: runs of what isn't the
+	// background, between two places down it.
+	int marks_down(const seen& picture, int x, int from, int to, std::array<int, 3> background) {
+		int runs = 0;
+		bool in = false;
+		for (int y = from; y < to; ++y) {
+			bool marked = picture.at(x, y) != background;
+			if (marked && !in) ++runs;
+			in = marked;
+		}
+		return runs;
 	}
 
 }  // namespace
 
-TEST("cards by a date are under a heading for each month, a mosaic's tiles starting again under each, and their timeline marks the month in view and scrolls one chosen to the top") {
+TEST("cards by a date are under a heading for each month, a mosaic's tiles starting again under each, and their timeline is drawn along them, a mark for each day, scrolling them as it's pressed and dragged and saying the day there") {
 	use_time_zone("UTC");
 	memory_source data;
-	// 30 hours apart from October 30: 24 in October, 24 in September, 25 in August, the rest in July.
+	// 30 hours apart from October 30: 24 in October, 24 in September, 25 in August, the rest in July; 80 days.
 	auto s = dated_archive(80, data);
 	navigator nav(s, data);
 	nav.open("/posters");
@@ -4348,54 +4361,72 @@ TEST("cards by a date are under a heading for each month, a mosaic's tiles start
 	CHECK(mosaics.size() == 4);
 	CHECK(timeline != nullptr);
 	if (mosaics.size() != 4 || !timeline) return;
-	CHECK(timeline->children.size() == 5);  // 2026, then each of its four months
 	// Each month's mosaic starts with its own tall tile, so its height is its count's.
 	float side = (mosaics[1]->frame.width - 32) / 3;
 	CHECK(std::abs(mosaics[0]->frame.height - (mosaic_rows(24) * side + (mosaic_rows(24) - 1) * 16)) < 2);
 	CHECK(std::abs(mosaics[2]->frame.height - (mosaic_rows(25) * side + (mosaic_rows(25) - 1) * 16)) < 2);
+	// A strip at the window's right edge, as tall as what scrolls the cards.
+	auto scrolled = mosaics[0]->scrolled();
+	CHECK(scrolled.has_value());
+	if (!scrolled) return;
+	one::desktop::rect strip = timeline->frame;
+	CHECK(strip.width == 72);
+	CHECK(std::abs(strip.right() - 1200) < 1);
+	CHECK(std::abs(strip.height - scrolled->visible) < 1);
+	// A mark for each day, from its right edge, the year marked at its top.
+	auto seen = looked(window.w);
+	auto background = seen.at(static_cast<int>(strip.x) + 20, static_cast<int>(strip.y + strip.height / 2));
+	CHECK(marks_down(seen, static_cast<int>(strip.right()) - 3, static_cast<int>(strip.y) + 4, static_cast<int>(strip.bottom()), background) >= 75);
+	CHECK(marks_down(seen, static_cast<int>(strip.x) + 8, static_cast<int>(strip.y) + 2, static_cast<int>(strip.y) + 20, background) > 0);
 	float top = mosaics[0]->frame.y;
-	auto marked = [&](std::size_t row) {
-		auto seen = looked(window.w);
-		auto& r = timeline->children[row]->frame;
-		return seen.at(static_cast<int>(r.x) + 2, static_cast<int>(r.y + r.height / 2)) != seen.at(static_cast<int>(timeline->frame.x) + 2, static_cast<int>(timeline->frame.bottom()) + 20);
+	// Pressed halfway down it, the cards are scrolled halfway, and dragged, along with it.
+	auto offset = [&] {
+		each_dated(*window.w.root, mosaics = {}, timeline);
+		return mosaics[0]->scrolled()->offset;
 	};
-	// October is in view at first.
-	CHECK(marked(1));
-	CHECK(!marked(2));
-	// Chosen with the keyboard, August is scrolled to the top, and marked.
+	float length = scrolled->length;
+	one::desktop::deliver_press(window.w, {strip.x + 30, strip.y + strip.height / 2}, 1);
 	window.update();
+	CHECK_SAYING(std::abs(offset() - length / 2) < 2, std::format("{} {}", offset(), length));
+	one::desktop::deliver_pointer(window.w, {strip.x + 30, strip.y + strip.height * 0.75f});
+	window.update();
+	CHECK(std::abs(offset() - length * 0.75f) < 2);
+	// Where they're scrolled to is a line across it, and the day there is said beside it.
+	// What's drawn over the rest, as a window draws it last, too.
+	auto all_of = [&] {
+		return decltype(looked(window.w)){one::desktop::offscreen::draw(window.w.size, 1, tested_theme().page, [&](one::desktop::canvas& c) {
+			one::desktop::detail::theme_in_use() = &tested_theme();
+			window.w.root->paint(c);
+			c.finish();
+		})};
+	};
+	seen = all_of();
+	float marker = strip.y + offset() / length * strip.height;
+	CHECK(seen.at(static_cast<int>(strip.x) + 10, static_cast<int>(marker)) != background);
+	one::desktop::point said{strip.x - 30, strip.y + strip.height * 0.75f - 10};
+	auto saying = seen.at(static_cast<int>(said.x), static_cast<int>(said.y));
+	one::desktop::deliver_release(window.w, {strip.x + 30, strip.y + strip.height * 0.75f});
+	one::desktop::deliver_leave(window.w);
+	window.update();
+	CHECK(all_of().at(static_cast<int>(said.x), static_cast<int>(said.y)) != saying);
+	// With the keyboard: Home to the top, then down a heading, to September's.
 	each_dated(*window.w.root, mosaics = {}, timeline);
+	timeline->handle_key({.symbol = one::desktop::keys::home, .text = ""});
 	timeline->handle_key({.symbol = one::desktop::keys::down, .text = ""});
-	timeline->handle_key({.symbol = one::desktop::keys::down, .text = ""});
-	timeline->handle_key({.symbol = one::desktop::keys::down, .text = ""});
-	timeline->handle_key({.symbol = one::desktop::keys::enter, .text = ""});
 	window.update();
 	(void)looked(window.w);
-	window.update();
 	each_dated(*window.w.root, mosaics = {}, timeline);
-	CHECK_SAYING(std::abs(mosaics[2]->frame.y - top) < 30, std::format("{} {}", mosaics[2]->frame.y, top));
-	CHECK(marked(3));
-	CHECK(!marked(1));
-	// Scrolled back by the wheel to September, it's marked in its place.
-	one::desktop::deliver_wheel(window.w, {300, 300}, 0, -(mosaics[2]->frame.y - mosaics[1]->frame.y) + 10);
+	CHECK_SAYING(std::abs(mosaics[1]->frame.y - top) < 50, std::format("{} {}", mosaics[1]->frame.y, top));
+	timeline->handle_key({.symbol = one::desktop::keys::up, .text = ""});
 	window.update();
 	(void)looked(window.w);
+	CHECK(offset() < 50);
+	timeline->handle_key({.symbol = one::desktop::keys::end, .text = ""});
 	window.update();
-	each_dated(*window.w.root, mosaics = {}, timeline);
-	CHECK(marked(2));
-	CHECK(!marked(3));
-	// A click on one: July's heading at the top.
-	auto& july = timeline->children[4]->frame;
-	window.click({july.x + july.width / 2, july.y + july.height / 2});
-	window.update();
-	(void)looked(window.w);
-	window.update();
-	each_dated(*window.w.root, mosaics = {}, timeline);
-	CHECK_SAYING(std::abs(mosaics[3]->frame.y - top) < 30, std::format("{} {}", mosaics[3]->frame.y, top));
-	CHECK(marked(4));
+	CHECK(std::abs(offset() - (length - scrolled->visible)) < 1);
 }
 
-TEST("twenty thousand cards by a date have their months worked out, and the oldest scrolled to, in a moment, drawing only what's in view") {
+TEST("twenty thousand cards by a date have their days worked out, and the oldest scrolled to as their timeline is dragged past its foot, in a moment, drawing only what's in view") {
 	use_time_zone("UTC");
 	memory_source data;
 	auto s = dated_archive(20000, data);
@@ -4404,35 +4435,40 @@ TEST("twenty thousand cards by a date have their months worked out, and the olde
 	using clock = std::chrono::steady_clock;
 	auto rows = rows_of(nav.current().view("studio::archive").peek(), "posters");
 	auto started = clock::now();
-	auto entries = years_of(time_groups(rows, "taken", time_unit::month), time_unit::month);
-	auto months = clock::now() - started;
+	auto ruler = ruler_of(rows, "taken", time_unit::month);
+	auto days = clock::now() - started;
+	CHECK(ruler.days.size() == 20000);
+	CHECK(ruler.years.size() == 69);
 	kept_window window(nav);
 	window.w.size = {1200, 700};
-	started = clock::now();
-	started = clock::now();
 	window.update();
 	(void)looked(window.w);
-	auto first = clock::now() - started;
 	std::vector<one::desktop::element*> mosaics;
 	one::desktop::element* timeline = nullptr;
 	each_dated(*window.w.root, mosaics, timeline);
 	CHECK(timeline != nullptr);
 	if (!timeline) return;
-	CHECK(timeline->children.size() == entries.size());
-	float top = mosaics.front()->frame.y;
+	one::desktop::rect strip = timeline->frame;
+	// Days closer than two pixels are one mark, so there are fewer marks than half its height.
+	auto seen = looked(window.w);
+	auto background = seen.at(static_cast<int>(strip.x) + 20, static_cast<int>(strip.y + strip.height / 2) + 1);
+	int marks = marks_down(seen, static_cast<int>(strip.right()) - 3, static_cast<int>(strip.y), static_cast<int>(strip.bottom()), background);
+	CHECK(marks > 0);
+	CHECK(marks <= strip.height / 2);
 	started = clock::now();
-	// Scrolled, not built again, as the window does when it's chosen.
-	timeline->handle_key({.symbol = one::desktop::keys::end, .text = ""});
-	timeline->handle_key({.symbol = one::desktop::keys::enter, .text = ""});
+	// Scrolled, not built again, as it's pressed and dragged past its foot.
+	one::desktop::deliver_press(window.w, {strip.x + 30, strip.bottom() - 1}, 1);
+	one::desktop::deliver_pointer(window.w, {strip.x + 30, strip.bottom() + 20});
+	one::desktop::deliver_release(window.w, {strip.x + 30, strip.bottom() + 20});
 	one::desktop::bring_up_to_date(window.w);
 	(void)looked(window.w);
 	auto jump = clock::now() - started;
 	each_dated(*window.w.root, mosaics = {}, timeline);
-	CHECK_SAYING(std::abs(mosaics.back()->frame.y - top) < 30, std::format("{} {}", mosaics.back()->frame.y, top));
+	CHECK_SAYING(mosaics.back()->frame.y < 700, std::format("{}", mosaics.back()->frame.y));
 	auto ms = [](auto d) { return std::chrono::duration<double, std::milli>(d).count(); };
-	std::fprintf(stderr, "    20000 cards in %zu months: months worked out in %.1f ms, first drawn in %.1f ms, the oldest month scrolled to and drawn in %.1f ms\n", mosaics.size(), ms(months), ms(first), ms(jump));
+	std::fprintf(stderr, "    20000 cards in %zu months: days worked out in %.1f ms, the oldest scrolled to and drawn in %.1f ms\n", mosaics.size(), ms(days), ms(jump));
 	// Unoptimized and checked as these tests are built, a good deal slower than an app.
-	CHECK(ms(months) < 200);
+	CHECK(ms(days) < 200);
 	CHECK(ms(jump) < 500);
 }
 

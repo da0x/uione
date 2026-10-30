@@ -1780,26 +1780,32 @@ namespace one::screens {
 
 	int mosaic_rows(std::size_t count) { return static_cast<int>((count + 3) / 4) * 2; }
 
+	namespace {
+		// The day a time says as it's read here, as a number like 20261012, or 0 when it
+		// says none. The zone's offset is looked up again only once a time is past the
+		// span it holds for.
+		long day_of(const value& when, const std::chrono::time_zone* zone, std::chrono::sys_info& offset) {
+			using namespace std::chrono;
+			if (!when.is_time()) return 0;
+			// A day alone is that day wherever it's read, as a calendar places it.
+			auto at = time_point_cast<system_clock::duration>(when.as_time());
+			if (!(at >= offset.begin && at < offset.end)) offset = zone->get_info(at);
+			year_month_day ymd = floor<days>(at) == at ? year_month_day(floor<days>(at)) : year_month_day(floor<days>(at + offset.offset));
+			return static_cast<int>(ymd.year()) * 10000L + static_cast<unsigned>(ymd.month()) * 100L + static_cast<unsigned>(ymd.day());
+		}
+		constexpr const char* month_names[] = {"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
+	}  // namespace
+
 	std::vector<time_group> time_groups(const std::vector<value>& rows, const std::string& field, time_unit by) {
-		using namespace std::chrono;
-		static constexpr const char* months[] = {"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
 		std::vector<time_group> out;
-		// The zone's offset, looked up again only once a time is past the span it holds for.
 		const std::chrono::time_zone* zone = time_zone();
-		sys_info offset{};
+		std::chrono::sys_info offset{};
+		long divisor = by == time_unit::year ? 10000 : by == time_unit::month ? 100 : 1;
 		// What the last heading is of, as a number, so a row under it is only counted.
 		long last = -1;
 		for (std::size_t i = 0; i < rows.size(); ++i) {
-			const value& when = field_of(rows[i], field);
-			long of = 0;
-			year_month_day ymd{};
-			if (when.is_time()) {
-				// A day alone is that day wherever it's read, as a calendar places it.
-				auto at = time_point_cast<system_clock::duration>(when.as_time());
-				if (!(at >= offset.begin && at < offset.end)) offset = zone->get_info(at);
-				ymd = floor<days>(at) == at ? year_month_day(floor<days>(at)) : year_month_day(floor<days>(at + offset.offset));
-				of = 1 + static_cast<int>(ymd.year()) * 10000L + (by == time_unit::year ? 0 : static_cast<unsigned>(ymd.month()) * 100L) + (by == time_unit::day ? static_cast<unsigned>(ymd.day()) : 0);
-			}
+			long day = day_of(field_of(rows[i], field), zone, offset);
+			long of = day == 0 ? 0 : 1 + day / divisor;
 			if (!out.empty() && of == last) {
 				++out.back().count;
 				continue;
@@ -1807,37 +1813,52 @@ namespace one::screens {
 			last = of;
 			std::string key = "none", title = "No date";
 			if (of != 0) {
-				int y = static_cast<int>(ymd.year());
-				unsigned m = static_cast<unsigned>(ymd.month()), d = static_cast<unsigned>(ymd.day());
+				long y = day / 10000, m = day / 100 % 100, d = day % 100;
 				if (by == time_unit::year) key = std::format("{:04}", y), title = std::to_string(y);
-				else if (by == time_unit::month) key = std::format("{:04}-{:02}", y, m), title = std::format("{} {}", months[m - 1], y);
-				else key = std::format("{:04}-{:02}-{:02}", y, m, d), title = std::format("{} {}, {}", months[m - 1], d, y);
+				else if (by == time_unit::month) key = std::format("{:04}-{:02}", y, m), title = std::format("{} {}", month_names[m - 1], y);
+				else key = std::format("{:04}-{:02}-{:02}", y, m, d), title = day_title(day);
 			}
 			out.push_back({key, title, i, 1});
 		}
 		return out;
 	}
 
-	bool within(const std::string& key, const std::string& entry) { return key.starts_with(entry) && (key.size() == entry.size() || key[entry.size()] == '-'); }
-
-	std::vector<dated_entry> years_of(const std::vector<time_group>& groups, time_unit by) {
-		static constexpr const char* months[] = {"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
-		std::vector<dated_entry> out;
-		std::size_t year_at = 0;
-		for (const auto& g : groups) {
-			std::string year = g.key == "none" ? "none" : g.key.substr(0, 4);
-			if (out.empty() || out[year_at].key != year) {
-				year_at = out.size();
-				out.push_back({year, year == "none" ? g.title : year, 0, true});
+	dated_ruler ruler_of(const std::vector<value>& rows, const std::string& field, time_unit by) {
+		dated_ruler out;
+		const std::chrono::time_zone* zone = time_zone();
+		std::chrono::sys_info offset{};
+		long divisor = by == time_unit::year ? 10000 : by == time_unit::month ? 100 : 1;
+		// The headings are as time_groups makes them: the runs of rows of the same year,
+		// month or day, or of no date. Each day is how far into its heading's rows it
+		// starts, made a share of them once the heading's last row is passed.
+		long heading = -1, last = -1;
+		std::size_t group = 0, first = 0, opened = 0;
+		auto ended = [&](std::size_t end) {
+			for (std::size_t d = opened; d < out.days.size(); ++d) out.days[d].along /= static_cast<float>(end - first);
+		};
+		for (std::size_t i = 0; i < rows.size(); ++i) {
+			long day = day_of(field_of(rows[i], field), zone, offset);
+			long of = day == 0 ? 0 : 1 + day / divisor;
+			if (i == 0 || of != heading) {
+				if (i > 0) ended(i), ++group;
+				heading = of, first = i, opened = out.days.size();
 			}
-			out[year_at].count += g.count;
-			if (by == time_unit::year || year == "none") continue;
-			std::string month = g.key.substr(0, 7);
-			if (out.back().key != month) out.push_back({month, months[std::stoi(month.substr(5)) - 1], 0, false});
-			out.back().count += g.count;
+			if (day == last && day != 0) {
+				++out.days.back().count;
+				continue;
+			}
+			last = day;
+			if (day == 0) continue;
+			if (out.years.empty() || out.years.back().year != day / 10000) out.years.push_back({day / 10000, out.days.size()});
+			out.days.push_back({day, group, static_cast<float>(i - first), 1});
 		}
+		if (!rows.empty()) ended(rows.size());
 		return out;
 	}
+
+	std::string day_title(long day) { return std::format("{} {}, {}", month_names[day / 100 % 100 - 1], day % 100, day / 10000); }
+
+	float mark_length(std::size_t count, float wide) { return std::min(wide, 3 + 5 * std::log2(1.f + static_cast<float>(count))); }
 
 	namespace {
 		// The row of the step's list it goes to, by the record the page's address names.

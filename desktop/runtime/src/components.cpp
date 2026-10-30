@@ -12,6 +12,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <array>
 #include <chrono>
 #include <filesystem>
 #include <format>
@@ -233,30 +234,22 @@ namespace one::desktop::runtime {
 		};
 
 		// What cards under headings by a date and their timeline share, by the cards' key:
-		// the heading in view, as the cards are drawn, and how to scroll the cards to one.
+		// the cards, while they're there, for the timeline to read where each heading's
+		// part of them lies and to scroll them.
 		struct dated_link {
-			std::string in_view;
-			std::function<void(const std::string&)> jump;
-			const void* jumper = nullptr;  // what jump scrolls, while it's there
+			element* cards = nullptr;
 		};
 		std::shared_ptr<dated_link> dated_link_of(page& p, const std::string& key) {
 			return p.kept<std::shared_ptr<dated_link>>("dated " + key, std::make_shared<dated_link>()).peek();
 		}
 
 		// Cards under a heading for each year, month or day, each heading and what's under
-		// it in turn: only those near what's in view are drawn, the heading at the top of
-		// it is told to the timeline, and the timeline scrolls one to the top, from where
-		// it's placed, without anything above it drawn.
+		// it in turn: only those near what's in view are drawn.
 		class dated_element : public element {
 		public:
-			dated_element(std::vector<std::string> keys, std::shared_ptr<dated_link> link) : keys_(std::move(keys)), link_(std::move(link)) {
-				link_->jumper = this;
-				link_->jump = [this](const std::string& entry) { jump(entry); };
-			}
+			explicit dated_element(std::shared_ptr<dated_link> link) : link_(std::move(link)) { link_->cards = this; }
 			~dated_element() override {
-				if (link_->jumper != this) return;
-				link_->jumper = nullptr;
-				link_->jump = {};
+				if (link_->cards == this) link_->cards = nullptr;
 			}
 
 			extent measure_content(float width) override {
@@ -272,7 +265,6 @@ namespace one::desktop::runtime {
 					children[i]->place({area.x, y, area.width, h});
 					y += h + (i % 2 == 0 ? 12 : 32);
 				}
-				if (!wanted_.empty()) jump(std::exchange(wanted_, ""));
 			}
 
 			void paint_content(canvas& c) override {
@@ -281,155 +273,183 @@ namespace one::desktop::runtime {
 					if (child->frame.y > view.y + 2 * view.height || child->frame.bottom() < view.y - view.height) continue;
 					child->paint(c);
 				}
-				// The heading whose part reaches the top of the view, a little under it.
-				std::string seen = keys_.empty() ? "" : keys_.front();
-				for (std::size_t i = 0; i < keys_.size(); ++i) {
-					if (children[2 * i]->frame.y <= view.y + 24) seen = keys_[i];
-				}
-				if (link_->in_view != seen) {
-					link_->in_view = seen;
-					desktop::runtime::redraw();
-				}
 			}
 
-			void adopt(element& before) override {
-				element::adopt(before);
-				wanted_ = static_cast<dated_element&>(before).wanted_;
-			}
+			// How many headings it has, and where each and what's under it lie down the
+			// window, from the heading's top to the foot of its last card.
+			std::size_t parts() const { return children.size() / 2; }
+			std::pair<float, float> part(std::size_t i) const { return {children[2 * i]->frame.y, children[2 * i + 1]->frame.bottom()}; }
 
 		private:
-			// The first heading in what a timeline's entry names brought to the top of what
-			// scrolls it; once they're placed, if they aren't yet.
-			void jump(const std::string& entry) {
-				for (std::size_t i = 0; i < keys_.size(); ++i) {
-					if (!within(keys_[i], entry)) continue;
-					element& heading = *children[2 * i];
-					if (heading.frame.width <= 0) {
-						wanted_ = entry;
-						return;
-					}
-					link_->in_view = keys_[i];
-					heading.bring_to_top();
-					desktop::runtime::redraw();
-					return;
-				}
-			}
-			std::vector<std::string> keys_;
 			std::shared_ptr<dated_link> link_;
-			std::string wanted_;
 		};
 
-		// A timeline of cards set under headings by a date: each year, strong, with how
-		// many it holds, and under it each of its months with its own count, the one in
-		// view marked as the cards are scrolled. One is chosen, ringed while it has the
-		// keyboard, moved with the arrows, j and k, Home and End, and a click or Enter on
-		// one scrolls the cards so its heading is at the top.
-		class dated_timeline_element : public element {
+		// A timeline of cards under headings by a date, drawn along them as a scrollbar is:
+		// as tall as what scrolls them, its top their top. Each day that has any is a mark
+		// from its right edge, where the day is in the cards, as long as mark_length says,
+		// days closer than two pixels one mark of them all; each year a line across, with
+		// its number under it; and where they're scrolled to, a line across in the accent.
+		// Pressed or dragged, it scrolls the cards there as it moves, and the day there is
+		// said beside it while it's pressed or pointed at. With the keyboard, the arrows,
+		// j and k go to the heading after or before, Page Down and Page Up to the year,
+		// and Home and End to either end.
+		class ruler_element : public element {
 		public:
-			dated_timeline_element(std::vector<dated_entry> entries, std::shared_ptr<dated_link> link) : entries_(std::move(entries)), link_(std::move(link)) {
-				const auto& t = current_theme();
-				auto year = t.strong();
-				auto month = t.body();
-				auto count = t.quiet();
-				for (const auto& e : entries_) {
-					std::vector<desktop::view> said;
-					said.push_back(desktop::text(e.title, e.year ? year : month).grow());
-					said.push_back(desktop::text(std::to_string(e.count), count));
-					children.push_back(desktop::row(std::move(said)).spacing(12).padding(edges(0, e.year ? 8 : 20)).take());
-					children.back()->parent = this;
-				}
-			}
+			ruler_element(dated_ruler ruler, std::shared_ptr<dated_link> link) : ruler_(std::move(ruler)), link_(std::move(link)) {}
 
-			bool focusable() const override { return !entries_.empty(); }
-
-			extent measure_content(float width) override {
-				float height = 0;
-				for (std::size_t i = 0; i < children.size(); ++i) height += row_height(i, width);
-				return {width, height};
-			}
-
-			void place_content(const rect& area) override {
-				float y = area.y;
-				for (std::size_t i = 0; i < children.size(); ++i) {
-					float h = row_height(i, area.width);
-					float inside = children[i]->measure(area.width).height;
-					float above = entries_[i].year && i > 0 ? 10 : 0;
-					children[i]->place({area.x, y + above + (h - above - inside) / 2, area.width, inside});
-					y += h;
-				}
-			}
-
-			void paint_content(canvas& c) override {
-				const auto& t = current_theme();
-				for (std::size_t i = 0; i < children.size(); ++i) {
-					rect r = row_of(i);
-					if (in_view(i)) {
-						auto marked = t.accent;
-						marked.alpha = 0.14f;
-						c.box(r, {.fill = marked, .radius = t.corners});
-					}
-					children[i]->paint(c);
-					if (shows_focus() && i == chosen_) c.box(r, {.border = t.accent, .border_width = 2, .radius = t.corners});
-				}
-			}
-
-			bool handle_key(const key_event& e) override {
-				if (e.alt || e.control || e.super || entries_.empty()) return false;
-				if (e.is(keys::enter) || e.is(keys::keypad_enter)) {
-					go(chosen_);
-					return true;
-				}
-				std::size_t to = chosen_;
-				if (e.is(keys::down) || e.is('j')) to = std::min(chosen_ + 1, entries_.size() - 1);
-				else if (e.is(keys::up) || e.is('k')) to = chosen_ == 0 ? 0 : chosen_ - 1;
-				else if (e.is(keys::home)) to = 0;
-				else if (e.is(keys::end)) to = entries_.size() - 1;
-				else return false;
-				chosen_ = to;
-				reveal(row_of(chosen_));
-				return true;
-			}
-
-			bool click(point at) override {
-				for (std::size_t i = 0; i < children.size(); ++i) {
-					if (!row_of(i).contains(at)) continue;
-					chosen_ = i;
-					go(i);
-					return true;
-				}
-				return false;
-			}
-
-			void adopt(element& before) override {
-				element::adopt(before);
-				auto& was = static_cast<dated_timeline_element&>(before);
-				if (was.chosen_ >= was.entries_.size()) return;
-				for (std::size_t i = 0; i < entries_.size(); ++i) {
-					if (entries_[i].key == was.entries_[was.chosen_].key) chosen_ = i;
-				}
-			}
-
+			bool focusable() const override { return !ruler_.days.empty(); }
+			extent measure_content(float width) override { return {width, 0}; }
 			element* hit(point at) override { return frame.contains(at) ? this : nullptr; }
 			one::desktop::cursor cursor() const override { return cursor::pointer; }
 
+			void paint_content(canvas& c) override {
+				auto* cards = shown();
+				if (!cards) return;
+				const auto& t = current_theme();
+				lay_out_marks(*cards, c.scale());
+				// Clear of the years' numbers at its left.
+				float wide = std::max(4.f, frame.width - 36);
+				auto marking = t.muted;
+				for (const auto& m : marks_) c.box({frame.right() - mark_length(m.count, wide), frame.y + m.y, mark_length(m.count, wide), 1}, {.fill = marking});
+				// Each year's line, and its number under it where there's room since the last.
+				float free = frame.y;
+				auto year = t.ink;
+				year.alpha = 0.5f;
+				for (std::size_t i = 0; i < ruler_.years.size(); ++i) {
+					float y = frame.y + days_[ruler_.years[i].first];
+					c.box({frame.x, y, frame.width, 1}, {.fill = year});
+					if (y + 3 < free) continue;
+					c.text(years_[i], {frame.x + 4, y + 3});
+					free = y + 3 + years_[i].height() + 2;
+				}
+				c.box({frame.x, frame.y + place_.offset / place_.length * frame.height - 1, frame.width, 2}, {.fill = t.accent, .radius = 1});
+				if (shows_focus()) c.box(frame.inset(1), {.border = t.accent, .border_width = 2, .radius = t.corners});
+				// The day there, beside it, while it's pressed or pointed at.
+				auto at = held_ ? held_ : pointed_;
+				if (!at || days_.empty()) return;
+				auto said = t.quiet();
+				said.color = t.page;
+				auto named = lay_out(text_span{day_title(ruler_.days[day_at(at->y - frame.y)].day), said}, 0, c.scale());
+				float w = named.width() + 16, h = named.height() + 8;
+				rect beside{frame.x - 8 - w, std::clamp(at->y - h / 2, frame.y, std::max(frame.y, frame.bottom() - h)), w, h};
+				c.later([named = std::move(named), beside, behind = t.ink](canvas& on) {
+					on.box(beside, {.fill = behind, .radius = 6});
+					on.text(named, {beside.x + 8, beside.y + 4});
+				});
+			}
+
+			bool press(point at, int) override {
+				held_ = at;
+				go(at.y);
+				return true;
+			}
+			void drag(point at) override {
+				held_ = at;
+				go(at.y);
+			}
+			void release(point, element*) override { held_.reset(); }
+			void pointing(std::optional<point> at) override { pointed_ = at; }
+
+			void adopt(element& before) override {
+				element::adopt(before);
+				auto& was = static_cast<ruler_element&>(before);
+				held_ = was.held_;
+				pointed_ = was.pointed_;
+			}
+
+			bool handle_key(const key_event& e) override {
+				auto* cards = shown();
+				if (e.alt || e.control || e.super || !cards) return false;
+				float now = place_.offset;
+				// Where each heading or year starts, the next past one just under the top.
+				std::vector<float> stops;
+				if (e.is(keys::down) || e.is('j') || e.is(keys::up) || e.is('k')) {
+					for (std::size_t i = 0; i < cards->parts(); ++i) stops.push_back(cards->part(i).first - place_.top);
+				} else if (e.is(keys::page_down) || e.is(keys::page_up)) {
+					for (const auto& y : ruler_.years) stops.push_back(down_to(*cards, ruler_.days[y.first]));
+				} else if (e.is(keys::home)) {
+					stops.push_back(0);
+				} else if (e.is(keys::end)) {
+					stops.push_back(place_.length);
+				} else {
+					return false;
+				}
+				bool back = e.is(keys::up) || e.is('k') || e.is(keys::page_up);
+				std::optional<float> to;
+				for (float y : stops) {
+					if (back ? y < now - 1 : (y > now + 24 || stops.size() == 1)) to = back ? y : to.value_or(y);
+				}
+				if (back && !to) to = 0;
+				if (to) cards->scroll_to(*to);
+				desktop::runtime::redraw();
+				return true;
+			}
+
 		private:
-			float row_height(std::size_t i, float width) { return std::max(30.f, children[i]->measure(width).height + 10) + (entries_[i].year && i > 0 ? 10 : 0); }
-			rect row_of(std::size_t i) const {
-				const rect& r = children[i]->frame;
-				return {frame.x + padding.left, r.y - 5, frame.width - padding.left - padding.right, r.height + 10};
+			struct mark {
+				float y;
+				std::size_t count;
+			};
+
+			// The cards, while they're there, and where they're scrolled to.
+			dated_element* shown() {
+				auto* cards = static_cast<dated_element*>(link_->cards);
+				if (!cards || cards->parts() == 0) return nullptr;
+				auto place = cards->scrolled();
+				place_ = place ? *place : element::scroll_place{0, cards->frame.height, cards->frame.height, cards->frame.y};
+				place_.length = std::max({place_.length, place_.visible, 1.f});
+				return cards;
 			}
-			// Marked while its heading, or one of its days', is the one at the top of the
-			// cards: a month, or a year when that's all it lists.
-			bool in_view(std::size_t i) const {
-				if (!within(link_->in_view, entries_[i].key)) return false;
-				return !entries_[i].year || i + 1 == entries_.size() || entries_[i + 1].year;
+
+			// How far down all that scrolls the cards a day starts, from where they're laid out.
+			float down_to(const dated_element& cards, const ruler_day& d) const {
+				auto [top, bottom] = cards.part(std::min(d.group, cards.parts() - 1));
+				return top + d.along * (bottom - top) - place_.top;
 			}
-			void go(std::size_t i) {
-				if (link_->jump) link_->jump(entries_[i].key);
+
+			// Each day's place down it, and the marks, worked out again only when the
+			// cards are laid out otherwise or it's another height.
+			void lay_out_marks(const dated_element& cards, double scale) {
+				std::array<float, 5> now{frame.height, place_.length, static_cast<float>(cards.parts()), cards.part(0).first - place_.top, cards.part(cards.parts() - 1).second - place_.top};
+				if (now == laid_ && years_scale_ == scale) return;
+				laid_ = now;
+				days_.clear();
+				marks_.clear();
+				for (const auto& d : ruler_.days) {
+					float y = std::round(down_to(cards, d) / place_.length * frame.height);
+					days_.push_back(y);
+					if (!marks_.empty() && y - marks_.back().y < 2) marks_.back().count += d.count;
+					else marks_.push_back({y, d.count});
+				}
+				if (years_scale_ != scale) {
+					years_scale_ = scale;
+					years_.clear();
+					for (const auto& y : ruler_.years) years_.push_back(lay_out(text_span{std::to_string(y.year), current_theme().quiet()}, 0, scale));
+				}
 			}
-			std::vector<dated_entry> entries_;
+
+			// The day at a place down it: the last that starts there or above.
+			std::size_t day_at(float y) const {
+				auto after = std::upper_bound(days_.begin(), days_.end(), y + 0.5f);
+				return after == days_.begin() ? 0 : static_cast<std::size_t>(after - days_.begin()) - 1;
+			}
+
+			void go(float y) {
+				auto* cards = shown();
+				if (!cards) return;
+				cards->scroll_to(std::clamp((y - frame.y) / std::max(1.f, frame.height), 0.f, 1.f) * place_.length);
+				desktop::runtime::redraw();
+			}
+
+			dated_ruler ruler_;
 			std::shared_ptr<dated_link> link_;
-			std::size_t chosen_ = 0;
+			element::scroll_place place_;
+			std::array<float, 5> laid_{};
+			std::vector<float> days_;
+			std::vector<mark> marks_;
+			std::vector<text_layout> years_;
+			double years_scale_ = 0;
+			std::optional<point> held_, pointed_;
 		};
 
 		// The short line over a front page's title, small and in the accent.
@@ -893,15 +913,13 @@ namespace one::desktop::runtime {
 			opened_among(p, "cards " + spec.list + " " + spec.link, all, rows, spec.picture);
 			auto heading = t.strong();
 			heading.size = 22, heading.line_height = 1.25f;
-			std::vector<std::string> keys;
 			std::vector<desktop::view> parts;
 			for (const auto& g : groups) {
-				keys.push_back(g.key);
 				parts.push_back(desktop::text(g.title, heading));
 				std::vector<card_model> held(std::make_move_iterator(all.begin() + static_cast<std::ptrdiff_t>(g.first)), std::make_move_iterator(all.begin() + static_cast<std::ptrdiff_t>(g.first + g.count)));
 				parts.push_back(cards_shown(p, spec, std::move(held), std::span(rows).subspan(g.first, g.count)));
 			}
-			auto made = std::make_unique<dated_element>(std::move(keys), dated_link_of(p, spec.key));
+			auto made = std::make_unique<dated_element>(dated_link_of(p, spec.key));
 			for (auto& part : parts) {
 				made->children.push_back(std::move(part).take());
 				made->children.back()->parent = made.get();
@@ -993,9 +1011,9 @@ namespace one::desktop::runtime {
 	desktop::view dated_timeline(page& p, dated_timeline_spec spec) {
 		const view_state& v = *spec.view;
 		if (v.status != status::ready) return {};
-		auto entries = years_of(time_groups(rows_of(v, spec.list), spec.by, spec.unit), spec.unit);
-		if (entries.empty()) return {};
-		return desktop::view(std::make_unique<dated_timeline_element>(std::move(entries), dated_link_of(p, spec.cards)));
+		auto ruler = ruler_of(rows_of(v, spec.list), spec.by, spec.unit);
+		if (ruler.days.empty()) return {};
+		return desktop::view(std::make_unique<ruler_element>(std::move(ruler), dated_link_of(p, spec.cards))).width(72).grow();
 	}
 
 	desktop::view details(page&, state<view_state> from, std::vector<screens::column> fields, std::map<std::string, std::vector<screens::option>> choices,

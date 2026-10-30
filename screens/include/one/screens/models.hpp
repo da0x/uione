@@ -444,18 +444,32 @@ namespace one::screens {
 		std::size_t first = 0, count = 0;
 	};
 	std::vector<time_group> time_groups(const std::vector<value>& rows, const std::string& field, time_unit by);
-	// What a timeline of them lists: each year, with how many it holds, and under it
-	// its months, each with its own count, as the list orders them; only the years when
-	// the headings are a year's. A month of headings by day is all of its days.
-	struct dated_entry {
-		std::string key, title;
+	// What a timeline drawn along them as a ruler marks: each day that holds any, in the
+	// list's order, as a number like 20261012, the heading it's under, how far into that
+	// heading's rows it starts, from 0 to 1, and how many it holds; and each year and its
+	// first day. Rows that don't say a date are no day. Worked out once each time the
+	// list changes, in one pass. The same as the web's.
+	struct ruler_day {
+		long day = 0;
+		std::size_t group = 0;
+		float along = 0;
 		std::size_t count = 0;
-		bool year = false;
 	};
-	std::vector<dated_entry> years_of(const std::vector<time_group>& groups, time_unit by);
-	// Whether a heading's key is in what a timeline's entry names, as 2026-10-12 is in
-	// 2026-10 and in 2026.
-	bool within(const std::string& key, const std::string& entry);
+	struct ruler_year {
+		long year = 0;
+		std::size_t first = 0;
+	};
+	struct dated_ruler {
+		std::vector<ruler_day> days;
+		std::vector<ruler_year> years;
+	};
+	dated_ruler ruler_of(const std::vector<value>& rows, const std::string& field, time_unit by);
+	// What a day like 20261012 says: October 12, 2026.
+	std::string day_title(long day);
+	// How long a day's mark is on a ruler `wide` across: a few pixels for one, and the
+	// same few longer each time it holds twice as many, so most days read apart and one
+	// of hundreds is at most the ruler's width.
+	float mark_length(std::size_t count, float wide);
 
 	// Where the nth card of a mosaic goes, in its columns and rows: every 8 cards are
 	// two blocks, one above the other, each three equal columns by two rows as tall as

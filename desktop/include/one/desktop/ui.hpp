@@ -150,6 +150,17 @@ namespace one::desktop {
 		void bring_to_top();
 		// Or brought into view, once, as what a page was left from is when it's back.
 		bool in_view = false;
+		// What scrolls it down, when something does: how far it's scrolled, how long all
+		// it holds is and how much of it shows, and where all it holds starts, in the
+		// window; and scrolled so a place, `down` from where all it holds starts, is at
+		// the top of what shows, as far as it goes.
+		struct scroll_place {
+			float offset = 0, length = 0, visible = 0, top = 0;
+		};
+		std::optional<scroll_place> scrolled() const;
+		void scroll_to(float down);
+		// Where the pointer is while it's over it, or nothing once it's left.
+		virtual void pointing(std::optional<point>) {}
 
 	protected:
 		virtual extent measure_content(float width);
@@ -158,6 +169,8 @@ namespace one::desktop {
 		virtual void paint_content(canvas& c);
 		virtual bool reveal_here(const rect&) { return false; }
 		virtual bool top_here(const rect&) { return false; }
+		virtual std::optional<scroll_place> scroll_here() const { return std::nullopt; }
+		virtual bool scroll_here_to(float) { return false; }
 		rect inner() const;
 	};
 
