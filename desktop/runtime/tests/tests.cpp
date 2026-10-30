@@ -3772,6 +3772,78 @@ TEST("a step steps by itself every so long while its slideshow's toggle is on, t
 	one::desktop::runtime::hold_posted(false);
 }
 
+TEST("a record's screen reads the whole pictures of the records before and after it ahead, so a step draws the whole one in its first frame, and lets go of those stepped away from") {
+	auto folder = std::filesystem::temp_directory_path() / "uione-ahead";
+	std::filesystem::remove_all(folder);
+	std::filesystem::create_directories(folder / "files");
+	// Each a picture of stripes a pixel wide, black and white, which only the whole of it
+	// draws as they are at a pixel of it to a pixel of the window: a smaller copy grows gray.
+	for (int i = 0; i < 3; ++i) {
+		std::vector<std::uint8_t> pixels(std::size_t{1600} * 1000 * 4, 255);
+		for (std::size_t at = 0; at < std::size_t{1600} * 1000; ++at) {
+			if (at % 2 == 0) pixels[at * 4] = pixels[at * 4 + 1] = pixels[at * 4 + 2] = 0;
+		}
+		one::desktop::offscreen::write_png(folder / "files" / std::format("p{}.png", i), {1600, 1000, std::move(pixels)});
+	}
+	struct kept_there : memory_source {
+		std::filesystem::path in;
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return in / kept; }
+	} data;
+	data.in = folder;
+	auto s = archive_of(3, data, {.view = {}, .list = "posters", .columns = {{"title", "Title"}}, .link = "/posters/:poster"});
+	list posters;
+	for (int i = 0; i < 3; ++i) posters.push_back(value(fields{{"id", std::format("p{}", i)}, {"title", std::format("Poster {}", i)}, {"image", std::format("files/p{}.png", i)}}));
+	data.set("studio::archive", "", value(fields{{"posters", posters}}));
+	s.screens.back().build = [](page& p) {
+		auto archive = p.view("studio::archive");
+		return items(workspace(p, region{"toolbar", along(step(p, {.view = archive, .list = "posters", .route = "/posters/:poster", .picture = "image"}, "Previous", "previous", {"left"}),
+		                                                  step(p, {.view = archive, .list = "posters", .route = "/posters/:poster", .next = true, .picture = "image"}, "Next", "next", {"right"}))},
+		                          region{"main", items(picture_alone(p, std::format("files/{}.png", p.param("poster")), "/posters/:poster collage"))}));
+	};
+	navigator nav(s, data);
+	one::desktop::runtime::hold_posted(true);
+	nav.open("/posters/p0");
+	kept_window window(nav);
+	window.w.size = {1600, 1000};
+	window.update();
+	auto read = [&](int i) { return read_whole(nav.current(), std::format("files/p{}.png", i)); };
+	// A smaller copy of the next one, as cards would have, which would be drawn first
+	// were the whole one not read.
+	for (auto until = std::chrono::steady_clock::now() + std::chrono::seconds(20); !(read(0) && read(1) && picture_soon(nav.current(), "files/p1.png", 640)) && std::chrono::steady_clock::now() < until;) {
+		if (one::desktop::runtime::run_posted() == 0) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		window.update();
+	}
+	CHECK(read(0));
+	CHECK(read(1));
+	CHECK(picture_soon(nav.current(), "files/p1.png", 640).has_value());
+	rest();
+	key_down(right_key);
+	CHECK(key(nav, right_key));
+	window.update();
+	CHECK(nav.current().address() == "/posters/p1");
+	// Its first frame, nothing run since the step: the whole picture, stripe by stripe.
+	auto shown = looked(window.w);
+	auto a = shown.at(800, 500), b = shown.at(801, 500);
+	CHECK(((a == black && b == std::array<int, 3>{255, 255, 255}) || (b == black && a == std::array<int, 3>{255, 255, 255})));
+	// Beside it now, the one before is kept and the one after is read.
+	for (auto until = std::chrono::steady_clock::now() + std::chrono::seconds(20); !read(2) && std::chrono::steady_clock::now() < until;) {
+		if (one::desktop::runtime::run_posted() == 0) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		window.update();
+	}
+	CHECK(read(0));
+	CHECK(read(2));
+	// Stepped on again, the first is let go, as it's no longer beside the one shown.
+	key_down(right_key);
+	CHECK(key(nav, right_key));
+	window.update();
+	CHECK(nav.current().address() == "/posters/p2");
+	CHECK(!read(0));
+	CHECK(read(1));
+	CHECK(read(2));
+	one::desktop::runtime::hold_posted(false);
+	std::filesystem::remove_all(folder);
+}
+
 TEST("a picture alone fills its window, edge to edge, fitted on black, wide or tall, at any size and at any scale") {
 	auto folder = std::filesystem::temp_directory_path() / "uione-alone-fills";
 	std::filesystem::remove_all(folder);

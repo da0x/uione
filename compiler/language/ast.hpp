@@ -1718,6 +1718,21 @@ namespace one::language {
         }
     }
 
+    // The field a screen's picture alone shows, like image of picture clipping_page.image
+    // fit alone, for its steps to read the record they go to's picture ahead from the
+    // list's rows; or none.
+    inline std::string alone_field(const std::vector<screen_item>& items) {
+        for (const auto& item : items) {
+            if (auto* picture = std::get_if<picture_item>(&item.node); picture && picture->alone) {
+                if (auto* member = std::get_if<member_expression>(&picture->source->node)) return member->member;
+            }
+            if (auto* block = std::get_if<content_block>(&item.node)) {
+                if (std::string found = alone_field(block->items); !found.empty()) return found;
+            }
+        }
+        return "";
+    }
+
     // The cards a timeline by a date goes with: of the same list, under headings by it.
     inline const cards_item* dated_cards(const std::vector<screen_item>& items, const timeline_item& t) {
         for (const auto& item : items) {

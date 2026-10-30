@@ -109,20 +109,30 @@ namespace one::desktop::runtime {
 			std::optional<T> peek(const std::string& key) {
 				std::lock_guard hold(lock_);
 				auto found = made_.find(key);
-				return found == made_.end() ? std::nullopt : std::optional<T>(found->second);
+				if (found == made_.end()) return std::nullopt;
+				found->second.second = ++used_;
+				return found->second.first;
 			}
 			template <class Make>
 			T get(const std::string& key, Make make) {
 				if (auto known = peek(key)) return *known;
 				T fresh = make();
 				std::lock_guard hold(lock_);
-				if (made_.size() >= most_) made_.clear();
-				return made_.emplace(key, std::move(fresh)).first->second;
+				// Full, the one used longest ago goes.
+				if (made_.size() >= most_ && !made_.contains(key)) {
+					made_.erase(std::ranges::min_element(made_, {}, [](const auto& kept) { return kept.second.second; }));
+				}
+				return made_.insert_or_assign(key, std::pair{std::move(fresh), ++used_}).first->second.first;
+			}
+			void let_go(const std::string& key) {
+				std::lock_guard hold(lock_);
+				made_.erase(key);
 			}
 
 		private:
 			std::mutex lock_;
-			std::map<std::string, T> made_;
+			std::map<std::string, std::pair<T, std::uint64_t>> made_;  // each, and when it was last used
+			std::uint64_t used_ = 0;
 			std::size_t most_;
 		};
 
@@ -199,7 +209,7 @@ namespace one::desktop::runtime {
 				});
 			}
 		}
-		std::optional<desktop::picture> read_soon(const std::filesystem::path& file, int longest, std::optional<std::weak_ptr<void>> wanted = std::nullopt) {
+		std::optional<desktop::picture> read_soon(const std::filesystem::path& file, int longest, std::optional<std::weak_ptr<void>> wanted = std::nullopt, bool ahead = false) {
 			auto& kept = pictures_kept(longest);
 			std::string key = std::format("{} {}", file.string(), longest);
 			auto make = [file, longest] {
@@ -229,13 +239,15 @@ namespace one::desktop::runtime {
 			pictures_read.get();
 			std::lock_guard hold(reading);
 			if (longest <= 0 && wanted) {
-				// Asked for again, it's the last asked for, by what asked.
+				// Asked for again, it's the last asked for, by what asked. One read ahead, for
+				// a step that may come, waits behind any that's to be shown now.
 				auto found = std::ranges::find(waiting, key, &waiting_read::key);
 				if (found != waiting.end()) {
 					found->wanted = *wanted;
-					std::rotate(found, found + 1, waiting.end());
+					if (!ahead) std::rotate(found, found + 1, waiting.end());
 				} else if (working.insert(key).second) {
-					waiting.push_back({key, make, *wanted});
+					if (ahead) waiting.insert(waiting.begin(), {key, make, *wanted});
+					else waiting.push_back({key, make, *wanted});
 				}
 				if (!std::exchange(reading_in_turn, true)) in_background(read_in_turn);
 				return std::nullopt;
@@ -1690,8 +1702,33 @@ namespace one::desktop::runtime {
 		return file ? read_soon(*file, longest) : std::optional(desktop::picture());
 	}
 
-	void read_ahead(page& p, const std::string& kept) {
-		if (auto file = kept.empty() ? std::nullopt : p.file_here(kept)) (void)read_soon(*file, 0);
+	namespace {
+		// The whole pictures near a page: its own and those of the records its steps go to,
+		// by their addresses.
+		std::map<std::string, std::string>& pictures_near(page& p) {
+			return *p.kept<std::shared_ptr<std::map<std::string, std::string>>>("pictures near", std::make_shared<std::map<std::string, std::string>>()).peek();
+		}
+	}  // namespace
+
+	void read_ahead(page& p, const std::string& address, const std::string& kept) {
+		auto file = kept.empty() ? std::nullopt : p.file_here(kept);
+		if (!file) return;
+		pictures_near(p)[address] = kept;
+		(void)read_soon(*file, 0, p.kept<std::shared_ptr<void>>("pictures wanted", std::make_shared<bool>()).peek(), true);
+	}
+
+	void stepping(page& p, const std::string& to) {
+		// Those of the records stepped away from, which aren't next to where it goes, go.
+		for (const auto& [address, kept] : pictures_near(p)) {
+			if (address == p.address() || address == to) continue;
+			if (auto file = p.file_here(kept)) pictures_kept(0).let_go(std::format("{} {}", file->string(), 0));
+		}
+		last_stepped_to() = to;
+	}
+
+	bool read_whole(page& p, const std::string& kept) {
+		auto file = kept.empty() ? std::nullopt : p.file_here(kept);
+		return file && pictures_kept(0).peek(std::format("{} {}", file->string(), 0)).has_value();
 	}
 
 	std::string& last_stepped_to() {
@@ -1807,6 +1844,7 @@ namespace one::desktop::runtime {
 			else if (does == "zoom to fit") fit();
 		}
 		bool waiting = false;
+		if (!kept.empty()) pictures_near(p)[p.address()] = kept;
 		desktop::picture shown = shown_now(p, kept, 0, &waiting);
 		// Stepped to, the last picture shown stays until this one's read, so there's no
 		// black between them.
@@ -1819,7 +1857,7 @@ namespace one::desktop::runtime {
 		auto step = [&p](float dx) {
 			auto to = *p.kept<std::shared_ptr<std::string>>(dx < 0 ? "step next" : "step previous", std::make_shared<std::string>()).peek();
 			if (to.empty()) return;
-			last_stepped_to() = to;
+			stepping(p, to);
 			p.open_instead(to);
 		};
 		return desktop::drawing(

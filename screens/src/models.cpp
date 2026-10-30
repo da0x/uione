@@ -1839,6 +1839,39 @@ namespace one::screens {
 		return out;
 	}
 
+	namespace {
+		// The row of the step's list it goes to, by the record the page's address names.
+		const value* row_stepped_to(page_base& p, const step_spec& spec) {
+			const view_state& v = *spec.view;
+			std::size_t at = spec.route.rfind("/:");
+			if (v.status != status::ready || at == std::string::npos) return nullptr;
+			std::string last = spec.route.substr(at + 2);
+			if (last.ends_with('*') || last.ends_with('?')) last.pop_back();
+			// A row is the one shown when it holds what the parameter names, as its link does,
+			// or is that one itself.
+			auto named = [&](const value& row) {
+				const value& own = row[last];
+				return own.is_string() && !own.text.empty() ? own.text : row["id"].as_string();
+			};
+			const auto& rows = rows_of(v, spec.list);
+			std::string shown = p.param(last);
+			for (std::size_t i = 0; i < rows.size(); ++i) {
+				if (named(rows[i]) != shown) continue;
+				if (spec.next ? i + 1 == rows.size() : i == 0) return nullptr;
+				return &rows[spec.next ? i + 1 : i - 1];
+			}
+			return nullptr;
+		}
+	}  // namespace
+
+	std::string picture_stepped_to(page_base& p, const step_spec& spec, const std::string& to) {
+		if (to.empty()) return "";
+		if (std::string shown = spec.opened ? picture_shown_for(p, to) : ""; !shown.empty()) return shown;
+		if (spec.picture.empty()) return "";
+		const value* row = row_stepped_to(p, spec);
+		return row && row_link(spec.route, *row, p.params()) == to ? (*row)[spec.picture].as_string() : "";
+	}
+
 	std::string stepped_to(page_base& p, const step_spec& spec) {
 		if (const place* from = spec.opened ? p.opened_from() : nullptr) {
 			for (const auto& [list, addresses] : from->lists) {
@@ -1848,25 +1881,8 @@ namespace one::screens {
 				return *(spec.next ? at + 1 : at - 1);
 			}
 		}
-		const view_state& v = *spec.view;
-		std::size_t at = spec.route.rfind("/:");
-		if (v.status != status::ready || at == std::string::npos) return "";
-		std::string last = spec.route.substr(at + 2);
-		if (last.ends_with('*') || last.ends_with('?')) last.pop_back();
-		// A row is the one shown when it holds what the parameter names, as its link does,
-		// or is that one itself.
-		auto named = [&](const value& row) {
-			const value& own = row[last];
-			return own.is_string() && !own.text.empty() ? own.text : row["id"].as_string();
-		};
-		const auto& rows = rows_of(v, spec.list);
-		std::string shown = p.param(last);
-		for (std::size_t i = 0; i < rows.size(); ++i) {
-			if (named(rows[i]) != shown) continue;
-			if (spec.next ? i + 1 == rows.size() : i == 0) return "";
-			return row_link(spec.route, rows[spec.next ? i + 1 : i - 1], p.params());
-		}
-		return "";
+		const value* row = row_stepped_to(p, spec);
+		return row ? row_link(spec.route, *row, p.params()) : "";
 	}
 
 	std::string picture_shown_for(page_base& p, const std::string& to) {

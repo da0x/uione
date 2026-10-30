@@ -1554,6 +1554,7 @@ namespace one::generators {
         bool quiet_ = false;          // building a status line, its words said quietly
         std::optional<std::string> row_named_;  // the row an on open line's where reads, by what it's of
         std::string collage_key_;     // what its collage buttons name its collage by
+        std::string alone_field_;     // the field its picture alone shows, for its steps to read ahead
         std::string paper_key_;       // and its insert buttons its paper
         std::optional<std::string> pictures_key_;  // and what its paste and add pictures buttons go into, a paper or cards that paste, as it has no collage that does
         std::optional<std::string> collage_over_;  // and the pick over it, which they may name
@@ -1830,7 +1831,8 @@ namespace one::generators {
                         std::string list = link->step_view ? link->step_list : fallback ? fallback->second : "";
                         code = "step(p, {.view = " + view + ", .list = " + str(list) + ", .route = " + str(route_) + (link->step == "next" ? ", .next = true" : "") +
                                (link->step_view ? "" : ", .opened = true") +
-                               (link->every_while.empty() ? "" : std::format(", .every = {}, .while_on = ", link->every) + str(route_ + " " + link->every_while)) + "}, " +
+                               (link->every_while.empty() ? "" : std::format(", .every = {}, .while_on = ", link->every) + str(route_ + " " + link->every_while)) +
+                               (alone_field_.empty() ? "" : ", .picture = " + str(alone_field_)) + "}, " +
                                said_of(parts, ns, link->label) + ", " + str(link->icon.value_or("")) +
                                (link->keys.empty() ? "" : ", " + keys_of(link->keys)) + ")";
                     } else {
@@ -2034,6 +2036,7 @@ namespace one::generators {
                 choices_ = choices_in(s->items);
                 at_end_said_ = false;
                 collage_key_ = route_ + " collage";
+                alone_field_ = language::alone_field(s->items);
                 collage_over_.reset();
                 collage_ = nullptr;
                 paper_key_ = route_ + " paper";

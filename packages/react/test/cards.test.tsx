@@ -6,7 +6,7 @@
 // the fields that keep them; several at once one step to undo, and a drop target while empty.
 
 import { fireEvent, render, waitFor } from "@testing-library/react";
-import { App, Cards, DatedTimeline, Link, Messages, PaperButton, StepLink, Table, Toggle, memorySource, mosaicRows, mosaicTile, screen as defineScreen, timeGroups, useView, within, yearsOf } from "../src/index.js";
+import { App, Cards, DatedTimeline, Link, Messages, PaperButton, Picture, StepLink, Table, Toggle, memorySource, mosaicRows, mosaicTile, screen as defineScreen, timeGroups, useView, within, yearsOf } from "../src/index.js";
 import { useNavigate, useParams } from "react-router";
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
@@ -384,6 +384,68 @@ describe("a record's screen stepping through its list", () => {
     Object.defineProperty(page, "scrollTop", { configurable: true, get: () => scrolled, set: (to: number) => void (scrolled = to) });
     Object.defineProperty(page, "scrollHeight", { configurable: true, get: () => 5000 });
     Object.defineProperty(page, "clientHeight", { configurable: true, get: () => 600 });
+  });
+
+  it("reads the whole pictures of the records before and after the one shown ahead, so a step shows the whole one at once, never a small copy first", async () => {
+    const read: string[] = [];
+    vi.stubGlobal(
+      "Image",
+      class {
+        src = "";
+        decode() {
+          read.push(this.src);
+          return Promise.resolve();
+        }
+      },
+    );
+    const source = memorySource({ files: true });
+    source.files!.small = async (path: string, longest: number) => `small:${path}:${longest}`;
+    const posters = ["Arches", "Bridges", "Canyons", "Dunes"].map((title, i) => ({ id: `p${i}`, title, image: `uploads/p${i}.png` }));
+    source.set("studio::archive", { posters });
+    function Posters() {
+      const archive = useView("studio::archive");
+      return <Cards view={archive} list="posters" columns={{ title: "Title" }} picture="image" link="/posters/:poster" />;
+    }
+    function Poster() {
+      const archive = useView("studio::archive");
+      const { poster } = useParams();
+      return (
+        <>
+          <p>Showing {poster}</p>
+          <StepLink view={archive} list="posters" to="/posters/:poster" opened picture="image" keys={["left"]}>
+            Previous
+          </StepLink>
+          <StepLink view={archive} list="posters" to="/posters/:poster" next opened picture="image" keys={["right"]}>
+            Next
+          </StepLink>
+          <Picture source={`uploads/${poster}.png`} fit alone />
+        </>
+      );
+    }
+    const screens = [defineScreen({ title: "Posters", route: "/posters" }, () => <Posters />), defineScreen({ title: "Poster", route: "/posters/:poster" }, () => <Poster />)];
+    const drawn = render(<App name="studio" screens={screens} ui={plain} data={source} location="/posters" />);
+    await waitFor(() => expect(drawn.getByText("Bridges")).toBeTruthy());
+    fireEvent.click(drawn.getByText("Bridges"));
+    await waitFor(() => expect(drawn.container.querySelector("p")?.textContent).toBe("Showing p1"));
+    // The ones before and after, whole, decoded.
+    await waitFor(() => expect(read).toEqual(expect.arrayContaining(["memory:uploads/p0.png", "memory:uploads/p2.png"])));
+    // Every picture shown from here on.
+    const shown: string[] = [];
+    const watching = new MutationObserver(() => {
+      const src = drawn.container.querySelector(".one-picture-alone img")?.getAttribute("src");
+      if (src && shown.at(-1) !== src) shown.push(src);
+    });
+    watching.observe(drawn.container, { subtree: true, childList: true, attributes: true, attributeFilter: ["src"] });
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    // The first picture drawn on the next one's screen is its whole one.
+    await waitFor(() => expect(drawn.container.querySelector("p")?.textContent).toBe("Showing p2"));
+    expect(drawn.container.querySelector(".one-picture-alone img")?.getAttribute("src")).toBe("memory:uploads/p2.png");
+    watching.disconnect();
+    expect(shown).toEqual(["memory:uploads/p2.png"]);
+    // And on from there, the next one's read ahead.
+    await waitFor(() => expect(read).toContain("memory:uploads/p3.png"));
+    drawn.unmount();
+    vi.unstubAllGlobals();
   });
 
   it("steps by itself while a slideshow plays, reading the next picture ahead, and stops at the end, at a key or a click, and when it's opened afresh", async () => {

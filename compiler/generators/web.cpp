@@ -148,6 +148,7 @@ namespace one::generators {
         bool workspace_ = false;         // the screen being written is laid out as a workspace
         std::optional<std::string> row_named_;  // the row an on open line's where reads, by what it's of
         std::string collage_key_;        // what its collage buttons name its collage by
+        std::string alone_field_;        // the field its picture alone shows, for its steps to read ahead
         std::string paper_key_;          // and its insert buttons its paper
         std::optional<std::string> pictures_key_;  // and what its paste and add pictures buttons go into, a paper or cards that paste, as it has no collage that does
         std::optional<std::string> collage_over_;  // and the pick over it, which they may name
@@ -349,6 +350,7 @@ namespace one::generators {
                 choices_ = choices_in(s->items);
                 workspace_ = (s->layout ? *s->layout : layout_) == "workspace";
                 collage_key_ = route + " collage";
+                alone_field_ = language::alone_field(s->items);
                 collage_over_.reset();
                 collage_ = nullptr;
                 paper_key_ = route + " paper";
@@ -1193,7 +1195,8 @@ namespace one::generators {
                                                             : "";
                         // every 4 seconds while slideshow: by itself, while the toggle's on.
                         std::string every = link->every_while.empty() ? "" : std::format(" every={{{}}} whileOn=", link->every) + web_detail::js_string(route_ + " " + link->every_while);
-                        out.line("<StepLink " + from + "to=" + web_detail::js_string(route_) + (link->step == "next" ? " next" : "") + (link->step_view ? "" : " opened") + every + icon + keys_of(link->keys) +
+                        out.line("<StepLink " + from + "to=" + web_detail::js_string(route_) + (link->step == "next" ? " next" : "") + (link->step_view ? "" : " opened") + every +
+                                 (alone_field_.empty() ? "" : " picture=" + web_detail::js_string(alone_field_)) + icon + keys_of(link->keys) +
                                  ">" + live_text(parts, ns, link->label) + "</StepLink>");
                     } else if (!link->built.empty()) {
                         // What the site was built from: its release's notes, or its commit.

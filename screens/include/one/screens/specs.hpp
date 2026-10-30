@@ -783,6 +783,10 @@ namespace one::screens {
 		// list's end, and as a key is pressed or a click made.
 		double every = 0;
 		std::string while_on = "";
+		// The field the screen's picture alone shows, read from the list's rows for the
+		// record it goes to, so its picture's read ahead, where the list it was opened
+		// from doesn't show one.
+		std::string picture = "";
 	};
 
 	// A chart's run of numbers: by its field and a name in it, like stats.cpu; its

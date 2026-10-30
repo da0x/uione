@@ -1240,8 +1240,8 @@ TEST_CASE("a step steps by itself every so many seconds while a toggle of its sc
     const std::string& native = files["desktop/src/screens/main.cpp"];
     CAPTURE(web);
     CAPTURE(native);
-    CHECK(web.find(R"(<StepLink view={archive} list="pieces" to="/pieces/:piece" next opened every={4} whileOn="/pieces/:piece slideshow" icon="next" keys={["right"]}>Next</StepLink>)") != std::string::npos);
-    CHECK(native.find(R"(step(p, {.view = archive, .list = "pieces", .route = "/pieces/:piece", .next = true, .opened = true, .every = 4, .while_on = "/pieces/:piece slideshow"}, "Next", "next", std::vector<std::string>{"right"}))") != std::string::npos);
+    CHECK(web.find(R"(<StepLink view={archive} list="pieces" to="/pieces/:piece" next opened every={4} whileOn="/pieces/:piece slideshow" picture="image" icon="next" keys={["right"]}>Next</StepLink>)") != std::string::npos);
+    CHECK(native.find(R"(step(p, {.view = archive, .list = "pieces", .route = "/pieces/:piece", .next = true, .opened = true, .every = 4, .while_on = "/pieces/:piece slideshow", .picture = "image"}, "Next", "next", std::vector<std::string>{"right"}))") != std::string::npos);
     // Its toggle is the screen's own, and it waits some time.
     std::string missing = project + pieces;
     missing.replace(missing.find("while slideshow"), std::string("while slideshow").size(), "while playing");

@@ -588,7 +588,7 @@ namespace one::desktop::runtime {
 		// every 4 seconds while slideshow: while its toggle's on, the next step waited for
 		// away from the window's thread, the picture it goes to read meanwhile. Opened
 		// some other way than by its own step, the page starts with it off.
-		void played(page& p, const step_spec& spec, const std::string& to) {
+		void played(page& p, const step_spec& spec) {
 			auto show = p.kept<std::shared_ptr<slideshow>>("slideshow " + spec.while_on, std::make_shared<slideshow>()).peek();
 			bool on = p.toggled(spec.while_on);
 			if (!std::exchange(show->begun, true) && on && shown_next != p.address()) {
@@ -602,7 +602,6 @@ namespace one::desktop::runtime {
 			playing = {show, &p, spec.while_on};
 			if (show->waiting || !posting()) return;
 			show->waiting = std::make_shared<bool>(true);
-			if (std::string picture = picture_shown_for(p, to); !picture.empty()) read_ahead(p, picture);
 			auto every = std::chrono::duration<double>(spec.every);
 			std::thread([&p, spec, every, waited = std::weak_ptr(show->waiting)] {
 				std::this_thread::sleep_for(every);
@@ -617,7 +616,8 @@ namespace one::desktop::runtime {
 						p.toggle(spec.while_on);
 						return;
 					}
-					shown_next = last_stepped_to() = next;
+					shown_next = next;
+					stepping(p, next);
 					p.open_instead(next);
 				});
 			}).detach();
@@ -642,11 +642,13 @@ namespace one::desktop::runtime {
 	desktop::view step(page& p, step_spec spec, std::string words, std::string icon, std::vector<std::string> keys) {
 		std::string to = stepped_to(p, spec);
 		bool off = to.empty() || (p.in_group() && p.off());
-		if (spec.every > 0 && !spec.while_on.empty()) played(p, spec, to);
+		if (spec.every > 0 && !spec.while_on.empty()) played(p, spec);
+		// The whole picture of the record it goes to read ahead, so it's drawn at once.
+		if (std::string picture = picture_stepped_to(p, spec, to); !picture.empty()) read_ahead(p, to, picture);
 		// In the record's place, so going back goes where it was opened from.
 		auto go = [&p, to] {
 			if (to.empty()) return;
-			last_stepped_to() = to;
+			stepping(p, to);
 			p.open_instead(to);
 		};
 		// Where it goes, for a swipe across a picture alone to step there too.

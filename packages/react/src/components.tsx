@@ -80,6 +80,7 @@ export function StepLink({
   opened = false,
   every,
   whileOn,
+  picture,
   icon,
   keys,
   children,
@@ -91,6 +92,7 @@ export function StepLink({
   opened?: boolean; // through the list the record was opened from, whichever it was
   every?: number; // every 4 seconds while slideshow: stepped by itself that often while the toggle's on
   whileOn?: string;
+  picture?: string; // the field the screen's picture alone shows, read ahead for the record it goes to from the list's rows
   icon?: string;
   keys?: string[];
   children: ReactNode;
@@ -110,6 +112,11 @@ export function StepLink({
     lastStep = { to: target, at: Date.now() };
     void navigate(target, { replace: true });
   };
+  // The whole picture of the record it goes to, read ahead, so it's drawn at once: as the
+  // list it was opened from shows it, or from its own list's rows.
+  const row = !target || !picture || view?.status !== "live" ? undefined : rowsOf(view.data?.[list]).find((r) => rowLink(to, r, params) === target);
+  const ahead = target ? ((opened ? pictureShownFor(here, target) : undefined) ?? (row && typeof row[picture!] === "string" ? (row[picture!] as string) : undefined)) : undefined;
+  useReadAhead(next ? "next" : "previous", ahead);
   useSlideshow(whileOn && every ? { toggle: whileOn, every, here, target, off } : undefined, () => {
     if (target) shownNext = target;
     go();
@@ -132,6 +139,21 @@ export function StepLink({
   );
 }
 
+// The whole pictures read ahead, the one before and the one after the record shown, each
+// decoded; one stepped away from is let go as another takes its place.
+const readAhead = new Map<string, HTMLImageElement>();
+function useReadAhead(way: string, path: string | undefined): void {
+  const addresses = useAddresses(path ? [{ id: path, path }] : [], "path");
+  const reading = path ? addresses[path] : undefined;
+  useEffect(() => {
+    if (!reading || typeof Image === "undefined" || readAhead.get(way)?.src === reading) return;
+    const picture = new Image();
+    picture.src = reading;
+    void picture.decode?.().catch(() => {});
+    readAhead.set(way, picture);
+  }, [way, reading]);
+}
+
 // Where a slideshow last stepped, where it carries on; and where any step last went, and
 // when, which a picture alone shows the last picture on until its own is read.
 let shownNext = "";
@@ -149,15 +171,6 @@ function useSlideshow(show: { toggle: string; every: number; here: string; targe
     if (show && playing && shownNext !== show.here) setToggled(show.toggle, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const ahead = on && show?.target ? pictureShownFor(show.here, show.target) : undefined;
-  const addresses = useAddresses(ahead ? [{ id: ahead, path: ahead }] : [], "path");
-  const reading = ahead ? addresses[ahead] : undefined;
-  useEffect(() => {
-    if (!reading || typeof Image === "undefined") return;
-    const picture = new Image();
-    picture.src = reading;
-    void picture.decode?.().catch(() => {});
-  }, [reading]);
   useEffect(() => {
     if (!show || !on || show.off) return;
     const timer = window.setTimeout(() => {
@@ -2851,6 +2864,9 @@ export interface Tally {
 // each file.
 // A smaller copy's, no longer on its longer side than `longest`, where that's given and
 // the store makes them, as for cards.
+// Addresses of whole files already worked out, the last few, so one read ahead is there
+// as soon as the page showing it is.
+const addressesKnown = new Map<string, string>();
 function useAddresses(rows: Row[], field: string | undefined, longest?: number): Record<string, string> {
   const store = useFiles();
   const [addresses, setAddresses] = useState<Record<string, string>>({});
@@ -2858,10 +2874,23 @@ function useAddresses(rows: Row[], field: string | undefined, longest?: number):
   useEffect(() => {
     for (const path of held) {
       if (addresses[path] || !store) continue;
-      (longest && store.small ? store.small(path, longest) : store.address(path)).then((address) => setAddresses((now) => ({ ...now, [path]: address })), () => {});
+      (longest && store.small ? store.small(path, longest) : store.address(path)).then((address) => {
+        if (!longest) {
+          addressesKnown.delete(path);
+          addressesKnown.set(path, address);
+          if (addressesKnown.size > 64) addressesKnown.delete(addressesKnown.keys().next().value!);
+        }
+        setAddresses((now) => ({ ...now, [path]: address }));
+      }, () => {});
     }
   }, [held.join("\n")]);
-  return addresses;
+  if (longest) return addresses;
+  const known: Record<string, string> = {};
+  for (const path of held) {
+    const address = addresses[path] ?? addressesKnown.get(path);
+    if (address) known[path] = address;
+  }
+  return known;
 }
 
 let lastAlone: string | undefined;

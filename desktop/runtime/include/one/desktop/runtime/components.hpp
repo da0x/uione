@@ -270,9 +270,14 @@ namespace one::desktop::runtime {
 	// A file's picture as the window draws it, the same way: nothing until it's read,
 	// and an empty one when there's no such file or it isn't a picture.
 	std::optional<desktop::picture> picture_soon(page& p, const std::string& kept, int longest = 0);
-	// The whole of a file's picture read now, away from the window's thread, for a page
-	// about to show it, like the next of a slideshow.
-	void read_ahead(page& p, const std::string& kept);
+	// The whole of the picture of the record at `address`, which a step on the page goes
+	// to, read away from the window's thread, after the page's own, while the page's open.
+	void read_ahead(page& p, const std::string& address, const std::string& kept);
+	// A step from the page to `to`: the whole pictures read for the records it steps away
+	// from let go, so only the one shown and those beside it are kept.
+	void stepping(page& p, const std::string& to);
+	// Whether the whole of a file's picture is read, to be drawn as soon as it's asked for.
+	bool read_whole(page& p, const std::string& kept);
 	// Where a step last went, which a picture alone shows the last picture on until its
 	// own is read.
 	std::string& last_stepped_to();
