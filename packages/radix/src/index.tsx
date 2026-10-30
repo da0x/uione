@@ -20,9 +20,9 @@ import "@fontsource-variable/fraunces/wght.css";
 import "@fontsource-variable/fraunces/wght-italic.css";
 import { Children, Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { CSSProperties, KeyboardEvent as KeyDown, ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { ButtonProps, CardGroup, CardsProps, ChoiceProps, ColorPickerProps, ComponentSet, DatedTimelineProps, OptionsProps, SliderProps } from "@uione/react";
-import { Surface, mosaicRows, mosaicTile } from "@uione/react";
+import { Surface, markLength, marksAlong, mosaicRows, mosaicTile, timelineStep } from "@uione/react";
 import { highlight, highlightCodeBlocks } from "./highlight.js";
 import { MarkdownField, MarkdownText } from "./markdown.js";
 import { nameStyles, setCodeDisplay, tabWidths, useCodeDisplay } from "./display.js";
@@ -589,36 +589,108 @@ function Grouped({ status, cards, mosaic, groups }: CardsProps & { groups: CardG
   );
 }
 
-// The years and months of cards under headings by a date: each year strong with how
-// many it holds, its months under it with theirs, the one in view marked in the accent.
-// Each is a button; the arrows, j and k, Home and End move between them.
-function DatedTimeline({ entries }: DatedTimelineProps) {
-  const moved = (event: KeyDown<HTMLUListElement>) => {
-    const buttons = [...event.currentTarget.querySelectorAll("button")];
-    const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
-    const to = { ArrowDown: at + 1, j: at + 1, ArrowUp: at - 1, k: at - 1, Home: 0, End: buttons.length - 1 }[event.key];
-    if (to === undefined || event.altKey || event.ctrlKey || event.metaKey) return;
-    event.preventDefault();
-    buttons[Math.max(0, Math.min(buttons.length - 1, to))]?.focus();
+// A timeline of cards under headings by a date, drawn along them as a scrollbar is, a
+// narrow strip with no border, as DatedTimelineProps says: its marks drawn on a canvas
+// in the muted ink, again only when they or its size change; each year a line across,
+// its number under it where there's room since the last; where the cards are scrolled
+// to, a line in the accent; and the day pressed or pointed at said beside it, over the
+// cards. It's a slider to the keyboard, saying the day it's at.
+function DatedTimeline({ days, years, at, dayAt, onScrub, onStep }: DatedTimelineProps) {
+  const strip = useRef<HTMLDivElement>(null);
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const [size, setSize] = useState({ wide: 0, tall: 0 });
+  const [pointed, setPointed] = useState<number | null>(null);
+  const [held, setHeld] = useState(false);
+  useEffect(() => {
+    const drawn = strip.current;
+    if (!drawn) return;
+    const sized = () => setSize({ wide: drawn.clientWidth, tall: drawn.clientHeight });
+    sized();
+    if (typeof ResizeObserver === "undefined") return;
+    const watching = new ResizeObserver(sized);
+    watching.observe(drawn);
+    return () => watching.disconnect();
+  }, []);
+  useEffect(() => {
+    const drawn = canvas.current;
+    if (!drawn || size.tall === 0) return;
+    const pen = drawn.getContext("2d");
+    if (!pen) return;
+    const scale = window.devicePixelRatio || 1;
+    drawn.width = Math.round(size.wide * scale);
+    drawn.height = Math.round(size.tall * scale);
+    pen.scale(scale, scale);
+    pen.fillStyle = getComputedStyle(drawn).color;
+    // Clear of the years' numbers at its left.
+    const wide = Math.max(4, size.wide - 36);
+    for (const mark of marksAlong(days, size.tall)) {
+      const long = markLength(mark.count, wide);
+      pen.fillRect(size.wide - long, mark.y, long, 1);
+    }
+  }, [days, size]);
+  const placeOf = (y: number) => {
+    const box = strip.current!.getBoundingClientRect();
+    return Math.min(1, Math.max(0, (y - box.top) / Math.max(1, box.height)));
   };
+  let free = -Infinity;
+  const labeled = years.map((year) => {
+    const top = year.at * size.tall;
+    const shown = top + 2 >= free;
+    if (shown) free = top + 2 + 16;
+    return { ...year, shown };
+  });
+  const there = held || pointed !== null ? (pointed ?? at) : null;
   return (
-    <ul className="flex flex-col text-sm" onKeyDown={moved}>
-      {entries.map((entry, i) => (
-        <li key={entry.key} className={entry.year && i > 0 ? "mt-2" : undefined}>
-          <button
-            type="button"
-            aria-current={entry.current || undefined}
-            onClick={entry.onChoose}
-            className={`flex w-full items-center justify-between gap-3 rounded-control py-1.5 text-left focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-hidden ${
-              entry.year ? "px-2 font-semibold" : "pr-2 pl-5"
-            } ${entry.current ? "bg-accent/15 text-ink" : "hover:bg-sunken"}`}
-          >
-            {entry.title}
-            <span className="text-muted tabular-nums">{entry.count}</span>
-          </button>
-        </li>
+    <div
+      ref={strip}
+      data-strip=""
+      role="slider"
+      tabIndex={0}
+      aria-label="Timeline"
+      aria-orientation="vertical"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(at * 100)}
+      aria-valuetext={dayAt(at)}
+      className="relative h-full w-18 shrink-0 cursor-pointer touch-none text-muted select-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-hidden focus-visible:ring-inset"
+      onPointerDown={(event) => {
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+        const place = placeOf(event.clientY);
+        setHeld(true);
+        setPointed(place);
+        onScrub(place);
+      }}
+      onPointerMove={(event) => {
+        const place = placeOf(event.clientY);
+        setPointed(place);
+        if (held) onScrub(place);
+      }}
+      onPointerUp={(event) => {
+        setHeld(false);
+        const box = event.currentTarget.getBoundingClientRect();
+        if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) setPointed(null);
+      }}
+      onPointerLeave={() => !held && setPointed(null)}
+      onKeyDown={(event) => {
+        const to = timelineStep(event.key);
+        if (!to || event.altKey || event.ctrlKey || event.metaKey) return;
+        event.preventDefault();
+        onStep(to);
+      }}
+    >
+      <canvas ref={canvas} aria-hidden="true" className="absolute inset-0 h-full w-full" />
+      {labeled.map((year) => (
+        <div key={year.title} aria-hidden="true" className="absolute inset-x-0 border-t border-ink/50" style={{ top: `${year.at * 100}%` }}>
+          {year.shown && <span className="absolute top-0.5 left-1 text-xs leading-none text-muted tabular-nums">{year.title}</span>}
+        </div>
       ))}
-    </ul>
+      <div aria-hidden="true" className="absolute inset-x-0 h-0.5 -translate-y-1/2 rounded-full bg-accent" style={{ top: `${at * 100}%` }} />
+      {there !== null && (
+        <div aria-hidden="true" className="pointer-events-none absolute right-full z-10 mr-2 -translate-y-1/2 rounded-control bg-ink px-2 py-1 text-xs whitespace-nowrap text-page" style={{ top: `${there * 100}%` }}>
+          {dayAt(there)}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -2471,7 +2543,10 @@ export const radix: ComponentSet = {
     );
     // An open drawer stays over a picture alone while the rest rests.
     const stays = alone?.drawers?.includes("side") && !alone.awake;
-    const side = regions.side && <aside className={`w-72 shrink-0 overflow-y-auto border-l border-line p-3 ${over} ${stays ? "visible" : ""}`}>{regions.side}</aside>;
+    // A side holding only a strip, like a timeline drawn along the cards as a scrollbar
+    // is, is that strip alone at the work's edge: not scrolled, padded or set apart.
+    const strip = "has-[>[data-strip]:only-child]:w-auto has-[>[data-strip]:only-child]:overflow-visible has-[>[data-strip]:only-child]:border-0 has-[>[data-strip]:only-child]:bg-transparent has-[>[data-strip]:only-child]:p-0";
+    const side = regions.side && <aside className={`w-72 shrink-0 overflow-y-auto border-l border-line p-3 ${over} ${strip} ${stays ? "visible" : ""}`}>{regions.side}</aside>;
     const status = regions.status && <div className={`flex shrink-0 items-center gap-4 overflow-hidden whitespace-nowrap border-t border-line px-3 py-1 text-xs text-muted ${over}`}>{regions.status}</div>;
     // Only its picture, all of the window on black, the rest over it while it's awake:
     // what's between them is the picture's to point at.

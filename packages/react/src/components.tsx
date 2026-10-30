@@ -16,8 +16,8 @@ import { useSaying } from "./said.js";
 import { PictureAlone, stepped, useAwakeOn, useSwipeStep } from "./alone.js";
 import { pictureSize } from "./vectors.js";
 import { cameraOf, factsOf, takenAt } from "./exif.js";
-import { timeGroups, within, yearsOf } from "./contract.js";
-import type { BoardCard, CanvasRegion, CardGroup, ChartProps, FieldProps, Filtered, Hue, LandingFeature, LandingProps, LinkProps, PipelineRow, TimeUnit, TrackStep } from "./contract.js";
+import { dayTitle, rulerOf, timeGroups } from "./contract.js";
+import type { BoardCard, CanvasRegion, CardGroup, ChartProps, FieldProps, Filtered, Hue, LandingFeature, LandingProps, LinkProps, PipelineRow, TimelineStep, TimeUnit, TrackStep } from "./contract.js";
 import { readValue, scaleTop, seriesOf, toneOfState, valueAt, type ChartUnit } from "./series.js";
 import { calendarGo, calendarOf, dateOf, dayOf, movedTo } from "./calendar.js";
 import { fileName, useAuth, useFiles, useRunner, useSearch } from "./data.js";
@@ -2984,7 +2984,6 @@ export function Cards({
   );
   // Its headings, worked out once each time the list changes.
   const groups = useMemo(() => (by ? timeGroups(rowsOf(listed), by.field, by.unit) : undefined), [listed, by?.field, by?.unit]);
-  useDatedInView(name ?? "", groups);
   // Hidden when empty is hidden until there's something to show, not drawn while it loads.
   if (hideEmpty && (view.status !== "live" || rows.length === 0)) return null;
   const sum = (card: Row) => {
@@ -3034,49 +3033,54 @@ export function Cards({
   return taking ? taking(shown, rows.length === 0) : shown;
 }
 
-// What cards under headings by a date and their timeline share, by the cards' name: their
-// headings' keys, and the one at the top of what's in view as they're scrolled.
-interface Dated {
-  keys: string[];
-  inView: string;
-  listening: Set<() => void>;
-}
-const datedByName = new Map<string, Dated>();
-function datedOf(name: string): Dated {
-  let found = datedByName.get(name);
-  if (!found) datedByName.set(name, (found = { keys: [], inView: "", listening: new Set() }));
-  return found;
-}
+// What a timeline scrolls to: a heading of cards under headings by a date, by the
+// cards' name and the heading's key.
 function datedId(name: string, key: string): string {
   return `dated-${encodeURIComponent(name)}-${key}`;
 }
-function tellInView(dated: Dated, key: string) {
-  if (dated.inView === key) return;
-  dated.inView = key;
-  for (const changed of dated.listening) changed();
-}
 
-// Watches what scrolls the cards, and tells which heading reaches the top of it, a
-// little under it, at most once a frame.
-function useDatedInView(name: string, groups: { key: string }[] | undefined) {
+// timeline library.photos by picture_date: the cards under headings by that date on the
+// same screen, named `cards`, drawn along as a ruler, as DatedTimelineProps says. Its
+// days are worked out once each time the list changes; where each heading's part of the
+// cards lies down what scrolls them is read again only once that's laid out otherwise,
+// and where it's scrolled to at most once a frame. The same as the desktop's.
+export function DatedTimeline({ view, list, by, unit = "month", cards }: { view: ViewState; list: string; by: string; unit?: TimeUnit; cards: string }) {
+  const ui = useUI();
+  const listed = view.data?.[list];
+  const groups = useMemo(() => timeGroups(rowsOf(listed), by, unit), [listed, by, unit]);
+  const ruler = useMemo(() => rulerOf(rowsOf(listed), by, unit), [listed, by, unit]);
+  const scroller = useRef<HTMLElement | null>(null);
+  const [laid, setLaid] = useState<{ length: number; tops: number[]; bottoms: number[] }>();
+  const [at, setAt] = useState(0);
   useEffect(() => {
-    if (!groups || groups.length === 0) return;
-    const dated = datedOf(name);
-    dated.keys = groups.map((g) => g.key);
+    if (groups.length === 0) return;
     let asked = 0;
+    let shape = "";
     const look = () => {
       asked = 0;
-      const first = document.getElementById(datedId(name, groups[0]!.key));
-      if (!first) return;
-      let scroller: HTMLElement | null = first.parentElement;
-      while (scroller && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement;
-      const top = scroller ? scroller.getBoundingClientRect().top : 0;
-      let seen = groups[0]!.key;
-      for (const g of groups) {
-        const heading = document.getElementById(datedId(name, g.key));
-        if (heading && heading.getBoundingClientRect().top <= top + 24) seen = g.key;
+      const headings = groups.map((g) => document.getElementById(datedId(cards, g.key)));
+      if (!headings[0]) return;
+      let found: HTMLElement | null = headings[0].parentElement;
+      while (found && !/(auto|scroll)/.test(getComputedStyle(found).overflowY)) found = found.parentElement;
+      const into = found ?? (document.scrollingElement as HTMLElement | null) ?? document.documentElement;
+      scroller.current = into;
+      const length = Math.max(into.scrollHeight, into.clientHeight, 1);
+      setAt(into.scrollTop / length);
+      // Where all it holds starts, so each place is the same however it's scrolled.
+      const start = (found ? found.getBoundingClientRect().top : 0) - into.scrollTop;
+      const last = headings[headings.length - 1]?.getBoundingClientRect().top ?? 0;
+      const now = `${length} ${into.clientHeight} ${last - start}`;
+      if (now === shape) return;
+      shape = now;
+      const tops: number[] = [];
+      const bottoms: number[] = [];
+      // Each from its heading's top to the foot of the part it heads.
+      for (const heading of headings) {
+        const box = heading?.getBoundingClientRect();
+        tops.push((box?.top ?? start) - start);
+        bottoms.push((heading?.closest("section")?.getBoundingClientRect().bottom ?? box?.bottom ?? start) - start);
       }
-      tellInView(dated, seen);
+      setLaid({ length, tops, bottoms });
     };
     const soon = () => {
       if (!asked) asked = requestAnimationFrame(look);
@@ -3089,43 +3093,46 @@ function useDatedInView(name: string, groups: { key: string }[] | undefined) {
       document.removeEventListener("scroll", soon, true);
       window.removeEventListener("resize", soon);
     };
-  }, [name, groups]);
-}
-
-// timeline library.photos by picture_date: the years and months of the cards under
-// headings by that date on the same screen, named `cards`, each with how many it holds,
-// the one in view marked. One chosen scrolls the cards so its first heading is at the
-// top, placed from the counts above it, without what's above it drawn. The same as the
-// desktop's.
-export function DatedTimeline({ view, list, by, unit = "month", cards }: { view: ViewState; list: string; by: string; unit?: TimeUnit; cards: string }) {
-  const ui = useUI();
-  const listed = view.data?.[list];
-  const entries = useMemo(() => yearsOf(timeGroups(rowsOf(listed), by, unit), unit), [listed, by, unit]);
-  const dated = datedOf(cards);
-  const inView = useSyncExternalStore(
-    (changed) => {
-      dated.listening.add(changed);
-      return () => dated.listening.delete(changed);
-    },
-    () => dated.inView,
-  );
-  if (view.status !== "live" || entries.length === 0) return null;
-  const choose = (entry: string) => {
-    const key = dated.keys.find((k) => within(k, entry));
-    if (key === undefined) return;
-    document.getElementById(datedId(cards, key))?.scrollIntoView({ block: "start" });
-    tellInView(dated, key);
+  }, [groups, cards]);
+  // Each day's place down it, from where the cards are laid out.
+  const days = useMemo(() => {
+    if (!laid) return [];
+    return ruler.days.map((d) => {
+      const top = laid.tops[d.group] ?? 0;
+      return { at: (top + d.along * ((laid.bottoms[d.group] ?? top) - top)) / laid.length, count: d.count };
+    });
+  }, [laid, ruler]);
+  const years = useMemo(() => ruler.years.map((y) => ({ title: String(y.year), at: days[y.first]?.at ?? 0 })), [ruler, days]);
+  if (view.status !== "live" || ruler.days.length === 0) return null;
+  // The day at a place down it: the last that starts there or above.
+  const dayAt = (place: number) => {
+    let low = 0;
+    let high = days.length;
+    while (low < high) {
+      const middle = (low + high) >> 1;
+      if (days[middle]!.at <= place + 0.5 / Math.max(1, laid?.length ?? 1)) low = middle + 1;
+      else high = middle;
+    }
+    return dayTitle(ruler.days[Math.max(0, low - 1)]!.day);
   };
-  return (
-    <ui.DatedTimeline
-      entries={entries.map((entry, i) => ({
-        ...entry,
-        // A month, or a year when that's all it lists.
-        current: within(inView, entry.key) && (!entry.year || i + 1 === entries.length || entries[i + 1]!.year),
-        onChoose: () => choose(entry.key),
-      }))}
-    />
-  );
+  const scrub = (place: number) => {
+    if (scroller.current && laid) scroller.current.scrollTop = Math.min(1, Math.max(0, place)) * laid.length;
+  };
+  // Where each heading or year starts, the next past one just under the top.
+  const step = (to: TimelineStep) => {
+    const into = scroller.current;
+    if (!into || !laid) return;
+    const now = into.scrollTop;
+    if (to === "first") into.scrollTop = 0;
+    else if (to === "last") into.scrollTop = laid.length;
+    else {
+      const stops = to === "next" || to === "previous" ? laid.tops : years.map((y) => y.at * laid.length);
+      const back = to === "previous" || to === "previous year";
+      const found = back ? stops.filter((y) => y < now - 1).pop() : stops.find((y) => y > now + 24);
+      if (found !== undefined || back) into.scrollTop = found ?? 0;
+    }
+  };
+  return <ui.DatedTimeline days={days} years={years} at={at} dayAt={dayAt} onScrub={scrub} onStep={step} />;
 }
 
 // Pictures dropped, pasted or chosen on cards, each a record made by their command, given

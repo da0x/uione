@@ -250,19 +250,29 @@ describe("cards under a heading for each month", () => {
     expect(september.style.contentVisibility).toBe("auto");
     const tiles = within(september).getAllByRole("article");
     expect([tiles[0]!.style.gridColumn, tiles[0]!.style.gridRow]).toEqual(["1 / span 1", "1 / span 2"]);
-    // The timeline's, not the page's own.
-    const buttons = screen.getAllByRole("button").filter((b) => /\d/.test(b.textContent ?? ""));
-    expect(buttons.map((b) => b.textContent)).toEqual(["20265", "October2", "September3"]);
-    // jsdom lays nothing out, so every heading is at the top, and the last is the one in view.
-    await waitFor(() => expect(buttons.map((b) => b.getAttribute("aria-current"))).toEqual([null, null, "true"]));
-    expect(buttons[2]!.className).toContain("bg-accent/15");
-    expect(buttons[1]!.className).toContain("focus-visible:ring-2");
-    buttons[0]!.focus();
-    fireEvent.keyDown(buttons[0]!, { key: "j" });
-    fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
-    expect(document.activeElement).toBe(buttons[2]);
-    fireEvent.keyDown(document.activeElement!, { key: "Home" });
-    expect(document.activeElement).toBe(buttons[0]);
+    // The timeline, a strip down the side that's a slider to the keyboard, its year said on it.
+    const ruler = screen.getByRole("slider", { name: "Timeline" });
+    expect(ruler.hasAttribute("data-strip")).toBe(true);
+    expect(ruler.className).toContain("focus-visible:ring-2");
+    expect(ruler.textContent).toBe("2026");
+    // jsdom lays nothing out, so every day is at its top: the last of them is said there.
+    expect(ruler.getAttribute("aria-valuetext")).toBe("September 1, 2026");
+    // Pressed, the day there is said beside it, until it's let go away from it.
+    if (!globalThis.PointerEvent) globalThis.PointerEvent = class extends MouseEvent {} as unknown as typeof PointerEvent;
+    fireEvent.pointerDown(ruler, { button: 0, clientX: 0, clientY: 0, pointerId: 1 });
+    expect(ruler.textContent).toBe("2026September 1, 2026");
+    fireEvent.pointerUp(ruler, { button: 0, clientX: -50, clientY: 0, pointerId: 1 });
+    expect(ruler.textContent).toBe("2026");
+    fireEvent.keyDown(ruler, { key: "End" });
+  });
+});
+
+describe("a workspace's side", () => {
+  it("is a panel beside the work, or, holding only a strip like a timeline, that strip alone at its edge", () => {
+    const Layout = radix.Layout;
+    const drawn = render(<Layout name="workspace" regions={{ main: <p>The work</p>, side: <div data-strip="" /> }} />);
+    const side = drawn.container.querySelector("aside")!;
+    expect(side.className.split(" ")).toEqual(expect.arrayContaining(["w-72", "has-[>[data-strip]:only-child]:w-auto", "has-[>[data-strip]:only-child]:border-0"]));
   });
 });
 

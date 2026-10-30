@@ -156,6 +156,19 @@ namespace one::desktop {
 		}
 	}
 
+	std::optional<element::scroll_place> element::scrolled() const {
+		for (const element* e = parent; e; e = e->parent) {
+			if (auto place = e->scroll_here()) return place;
+		}
+		return std::nullopt;
+	}
+
+	void element::scroll_to(float down) {
+		for (element* e = parent; e; e = e->parent) {
+			if (e->scroll_here_to(down)) return;
+		}
+	}
+
 	namespace {
 
 		// A circle of no color, as a toolbar's swatch shows clear: a checkerboard of these
@@ -493,6 +506,19 @@ namespace one::desktop {
 				return true;
 			}
 
+			std::optional<scroll_place> scroll_here() const override {
+				if (across_) return std::nullopt;
+				return scroll_place{offset_, length_, viewport_.height, viewport_.y - offset_};
+			}
+
+			bool scroll_here_to(float down) override {
+				if (across_) return false;
+				wanted_ = -1;
+				offset_ = std::clamp(down, 0.f, std::max(0.f, length_ - viewport_.height));
+				place_content(viewport_);
+				return true;
+			}
+
 		private:
 			void restore(float visible) {
 				if (wanted_ < 0 || length_ - visible < wanted_) return;
@@ -631,7 +657,7 @@ namespace one::desktop {
 			}
 
 			// Which row the pointer is over, for the hover tint.
-			void pointing(std::optional<point> at) {
+			void pointing(std::optional<point> at) override {
 				hovered_.clear();
 				if (!at) return;
 				for (std::size_t i = 0; i < children.size(); ++i) {
@@ -1266,10 +1292,5 @@ namespace one::desktop {
 	view drawing(std::function<void(canvas&, rect)> paint, drawing_pointer pointer) { return made<drawing_element>(std::move(paint), std::move(pointer)); }
 	view divider() { return made<rule_element>(); }
 	view spacer() { return std::move(made<element>()).grow(1); }
-
-	// For a list under the pointer: which row it's over.
-	void point_at_list(element& e, std::optional<point> at) {
-		if (auto* l = dynamic_cast<list_element*>(&e)) l->pointing(at);
-	}
 
 }  // namespace one::desktop

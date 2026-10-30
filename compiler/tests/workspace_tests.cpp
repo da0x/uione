@@ -960,7 +960,7 @@ TEST_CASE("cards set as a mosaic of their pictures say so to both runtimes, and 
     CHECK(messages(fitted) == std::vector<std::string>{"31: a mosaic's pictures each fill their tile, so its picture line says fill, or nothing"});
 }
 
-TEST_CASE("cards under a heading for each month of a date, and the timeline of their years and months beside them, say so to both runtimes, and say why when they can't be") {
+TEST_CASE("cards under a heading for each month of a date, and the timeline drawn along them, say so to both runtimes, at a workspace's side while a toggle is on, and say why when they can't be") {
     const std::string pieces = R"(namespace studio at / {
 	entity poster {
 		title  text
@@ -1028,6 +1028,28 @@ TEST_CASE("cards under a heading for each month of a date, and the timeline of t
     (void)parse("main.one", week, said);
     CHECK(!said.empty());
     if (!said.empty()) CHECK(said.front().message == "expected year, month or day, as in by picture_date month, found 'week'");
+    // In a workspace, at the side of its work while a toggle in its toolbar is on.
+    std::string side = project + pieces;
+    side.replace(side.find("	screen \"Clippings\" /posters/:poster {"), std::string("	screen \"Clippings\" /posters/:poster {").size(), R"(	screen "Clippings" /posters/:poster {
+		layout workspace
+		toolbar {
+			group "View" small at end {
+				toggle timeline "Timeline" icon timeline key t
+				full screen "Full screen" icon fullscreen key f11
+			}
+		}
+		main {)");
+    side.replace(side.find("		timeline poster_page.clippings by picture_date"), std::string("		timeline poster_page.clippings by picture_date").size(), R"(		}
+		side when timeline {
+			timeline poster_page.clippings by picture_date
+		})");
+    CAPTURE(side);
+    CHECK(messages(side).empty());
+    auto sided = built(side);
+    CAPTURE(sided["desktop/src/screens/main.cpp"]);
+    CHECK(sided["desktop/src/screens/main.cpp"].find(R"(region{"side", [&] { if ((p.toggled("/posters/:poster timeline"))) return items(dated_timeline(p, {.view = poster_page)") != std::string::npos);
+    CAPTURE(sided["web/src/screens/main.tsx"]);
+    CHECK(sided["web/src/screens/main.tsx"].find(R"(<Toggle name="/posters/:poster timeline" label="Timeline" icon="timeline" keys={["t"]} />)") != std::string::npos);
 }
 
 TEST_CASE("a record's screen steps to the one before or after it in a list's own order, in its place, and says why when it can't") {

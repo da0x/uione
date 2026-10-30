@@ -766,8 +766,9 @@ namespace one::screens {
 		bool paste = false;
 	};
 
-	// The years and months of cards set under headings by a date, each with how many it
-	// holds: the one in view marked, and one chosen scrolled to the top of the cards.
+	// A timeline of cards set under headings by a date, drawn along them as a scrollbar
+	// is: a mark for each day as long as how many it holds, each year marked, and where
+	// they're scrolled to; pressed or dragged, it scrolls them there, saying the day.
 	struct dated_timeline_spec {
 		state<view_state> view;
 		std::string list;

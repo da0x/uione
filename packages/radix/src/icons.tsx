@@ -188,6 +188,14 @@ export const buttonIcons: Record<string, ReactNode> = {
       <path d="M5 3.5v9l7-4.5z" />
     </svg>
   ),
+  // A timeline drawn as a ruler: its edge, a mark for each day as long as how many, and
+  // where it's scrolled to.
+  timeline: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M13.5 1.5v13M13.5 3.5h-3M13.5 6h-5M13.5 10.5h-2M13.5 13h-4" />
+      <path d="M2.5 8.25h11" />
+    </svg>
+  ),
   // A table of contents: headings, and what's under them set in.
   contents: (
     <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

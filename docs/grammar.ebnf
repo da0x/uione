@@ -350,8 +350,10 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? ("icon" NAME)? ("color" N
                  | "confirm" qualified STRING END
                  | "thread" qualified "." NAME END
                  | "timeline" qualified "." NAME STRING? ("link" ROUTE)? ("{" NEWLINE timeline_line* "}")? END
-                 /* the years and months of the screen's cards under headings by the date, each with how many it
-                    holds, the one in view marked; one chosen scrolls the cards to its heading */
+                 /* the screen's cards under headings by the date as a ruler along them, as a scrollbar is: a mark
+                    for each day as long as how many it holds, each year marked, and where they're scrolled to;
+                    pressed or dragged, it scrolls them there, saying the day; alone in a workspace's side, the
+                    side is that strip at the work's edge */
                  | "timeline" qualified "." NAME "by" NAME END
                  | "copy" qualified STRING? END
                  | "themes" END

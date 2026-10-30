@@ -413,66 +413,137 @@ export interface TimeGroup {
   count: number;
 }
 const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+// The day a time says as it's read here, as a number like 20261012, or 0 when it says none.
+function dayNumber(said: unknown): number {
+  const when = said instanceof Date ? said : typeof said === "string" && said ? new Date(said) : undefined;
+  if (!when || Number.isNaN(when.getTime())) return 0;
+  // A day alone is that day wherever it's read, as a calendar places it.
+  const alone = when.getUTCHours() === 0 && when.getUTCMinutes() === 0 && when.getUTCSeconds() === 0 && when.getUTCMilliseconds() === 0;
+  const y = alone ? when.getUTCFullYear() : when.getFullYear();
+  const m = (alone ? when.getUTCMonth() : when.getMonth()) + 1;
+  const d = alone ? when.getUTCDate() : when.getDate();
+  return y * 10000 + m * 100 + d;
+}
+const divisors: Record<TimeUnit, number> = { year: 10000, month: 100, day: 1 };
 export function timeGroups(rows: Record<string, unknown>[], field: string, unit: TimeUnit): TimeGroup[] {
   const out: TimeGroup[] = [];
   const pad = (n: number, width = 2) => String(n).padStart(width, "0");
+  // What the last heading is of, as a number, so a row under it is only counted.
+  let last = -1;
   rows.forEach((row, i) => {
-    const said = row[field];
-    const when = said instanceof Date ? said : typeof said === "string" && said ? new Date(said) : undefined;
+    const day = dayNumber(row[field]);
+    const of = day === 0 ? 0 : 1 + Math.floor(day / divisors[unit]);
+    if (out.length > 0 && of === last) {
+      out[out.length - 1]!.count += 1;
+      return;
+    }
+    last = of;
     let key = "none";
     let title = "No date";
-    if (when && !Number.isNaN(when.getTime())) {
-      // A day alone is that day wherever it's read, as a calendar places it.
-      const alone = when.getUTCHours() === 0 && when.getUTCMinutes() === 0 && when.getUTCSeconds() === 0 && when.getUTCMilliseconds() === 0;
-      const y = alone ? when.getUTCFullYear() : when.getFullYear();
-      const m = (alone ? when.getUTCMonth() : when.getMonth()) + 1;
-      const d = alone ? when.getUTCDate() : when.getDate();
+    if (of !== 0) {
+      const y = Math.floor(day / 10000);
+      const m = Math.floor(day / 100) % 100;
       if (unit === "year") (key = pad(y, 4)), (title = String(y));
       else if (unit === "month") (key = `${pad(y, 4)}-${pad(m)}`), (title = `${monthNames[m - 1]} ${y}`);
-      else (key = `${pad(y, 4)}-${pad(m)}-${pad(d)}`), (title = `${monthNames[m - 1]} ${d}, ${y}`);
+      else (key = `${pad(y, 4)}-${pad(m)}-${pad(day % 100)}`), (title = dayTitle(day));
     }
-    const last = out[out.length - 1];
-    if (last && last.key === key) last.count += 1;
-    else out.push({ key, title, first: i, count: 1 });
+    out.push({ key, title, first: i, count: 1 });
   });
   return out;
 }
-// What a timeline of them lists: each year, with how many it holds, and under it its
-// months, each with its own count, as the list orders them; only the years when the
-// headings are a year's. A month of headings by day is all of its days.
-export interface DatedEntry {
-  key: string;
-  title: string;
+// What a timeline drawn along them as a ruler marks: each day that holds any, in the
+// list's order, as a number like 20261012, the heading it's under, how far into that
+// heading's rows it starts, from 0 to 1, and how many it holds; and each year and its
+// first day. Rows that don't say a date are no day. Worked out once each time the list
+// changes, in one pass. The same as the desktop's.
+export interface RulerDay {
+  day: number;
+  group: number;
+  along: number;
   count: number;
-  year: boolean;
 }
-export function yearsOf(groups: TimeGroup[], unit: TimeUnit): DatedEntry[] {
-  const out: DatedEntry[] = [];
-  let yearAt = -1;
-  for (const g of groups) {
-    const year = g.key === "none" ? "none" : g.key.slice(0, 4);
-    if (yearAt < 0 || out[yearAt]!.key !== year) {
-      yearAt = out.length;
-      out.push({ key: year, title: year === "none" ? g.title : year, count: 0, year: true });
+export interface DatedRuler {
+  days: RulerDay[];
+  years: { year: number; first: number }[];
+}
+export function rulerOf(rows: Record<string, unknown>[], field: string, unit: TimeUnit): DatedRuler {
+  const out: DatedRuler = { days: [], years: [] };
+  // The headings are as timeGroups makes them: the runs of rows of the same year, month
+  // or day, or of no date. Each day is how far into its heading's rows it starts, made a
+  // share of them once the heading's last row is passed.
+  let heading = -1;
+  let last = -1;
+  let group = 0;
+  let first = 0;
+  let opened = 0;
+  const ended = (end: number) => {
+    for (let d = opened; d < out.days.length; d++) out.days[d]!.along /= end - first;
+  };
+  rows.forEach((row, i) => {
+    const day = dayNumber(row[field]);
+    const of = day === 0 ? 0 : 1 + Math.floor(day / divisors[unit]);
+    if (i === 0 || of !== heading) {
+      if (i > 0) ended(i), (group += 1);
+      (heading = of), (first = i), (opened = out.days.length);
     }
-    out[yearAt]!.count += g.count;
-    if (unit === "year" || year === "none") continue;
-    const month = g.key.slice(0, 7);
-    if (out[out.length - 1]!.key !== month) out.push({ key: month, title: monthNames[Number(month.slice(5)) - 1]!, count: 0, year: false });
-    out[out.length - 1]!.count += g.count;
+    if (day === last && day !== 0) {
+      out.days[out.days.length - 1]!.count += 1;
+      return;
+    }
+    last = day;
+    if (day === 0) return;
+    const year = Math.floor(day / 10000);
+    if (out.years.length === 0 || out.years[out.years.length - 1]!.year !== year) out.years.push({ year, first: out.days.length });
+    out.days.push({ day, group, along: i - first, count: 1 });
+  });
+  if (rows.length > 0) ended(rows.length);
+  return out;
+}
+// What a day like 20261012 says: October 12, 2026.
+export function dayTitle(day: number): string {
+  return `${monthNames[(Math.floor(day / 100) % 100) - 1]} ${day % 100}, ${Math.floor(day / 10000)}`;
+}
+// How long a day's mark is on a ruler `wide` across: a few pixels for one, and the same
+// few longer each time it holds twice as many, so most days read apart and one of
+// hundreds is at most the ruler's width.
+export function markLength(count: number, wide: number): number {
+  return Math.min(wide, 3 + 5 * Math.log2(1 + count));
+}
+// The marks of a ruler `tall` high, each day at its place down it, from 0 to 1: days
+// closer than two pixels are one mark of them all.
+export function marksAlong(days: { at: number; count: number }[], tall: number): { y: number; count: number }[] {
+  const out: { y: number; count: number }[] = [];
+  for (const d of days) {
+    const y = Math.round(d.at * tall);
+    const last = out[out.length - 1];
+    if (last && y - last.y < 2) last.count += d.count;
+    else out.push({ y, count: d.count });
   }
   return out;
 }
-// Whether a heading's key is in what a timeline's entry names, as 2026-10-12 is in
-// 2026-10 and in 2026.
-export function within(key: string, entry: string): boolean {
-  return key.startsWith(entry) && (key.length === entry.length || key[entry.length] === "-");
-}
 
-// The years and months of cards under headings by a date, each with how many it holds:
-// the one in view marked, and one chosen scrolls the cards to its heading.
+// A timeline of cards under headings by a date, drawn along them as a scrollbar is: as
+// tall as what scrolls them, its top their top. Each day that has any, where it is down
+// it, from 0 to 1, and how many it holds, each a mark from its right edge as long as
+// markLength says, merged by marksAlong; each year, a line across with its number under
+// it; and where they're scrolled to, a line across in the accent. Pressed or dragged,
+// onScrub scrolls them to a place down it as it moves, and dayAt says the day there,
+// shown beside it while it's pressed or pointed at. With the keyboard, onStep goes to
+// the heading or year after or before, or to either end.
+export type TimelineStep = "next" | "previous" | "next year" | "previous year" | "first" | "last";
 export interface DatedTimelineProps {
-  entries: (DatedEntry & { current: boolean; onChoose: () => void })[];
+  days: { at: number; count: number }[];
+  years: { title: string; at: number }[];
+  at: number;
+  dayAt: (at: number) => string;
+  onScrub: (at: number) => void;
+  onStep: (to: TimelineStep) => void;
+}
+// The keys that move a timeline: the arrows, j and k, to the heading after or before;
+// Page Down and Page Up to the year; Home and End to either end.
+const timelineSteps: Record<string, TimelineStep> = { ArrowDown: "next", j: "next", ArrowUp: "previous", k: "previous", PageDown: "next year", PageUp: "previous year", Home: "first", End: "last" };
+export function timelineStep(key: string): TimelineStep | undefined {
+  return timelineSteps[key];
 }
 
 // Where the nth card of a mosaic goes, in its columns and rows, counted from 0: every 8

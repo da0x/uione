@@ -87,6 +87,9 @@ namespace one::desktop {
 			    {"info", {ring(8, 8, 6.5f), path("M8 7.25V11.5M8 4.75v.5")}},
 			    // Play: a triangle pointing on.
 			    {"play", {path("M5 3.5v9l7-4.5z")}},
+			    // A timeline drawn as a ruler: its edge, a mark for each day as long as how many,
+			    // and where it's scrolled to.
+			    {"timeline", {path("M13.5 1.5v13M13.5 3.5h-3M13.5 6h-5M13.5 10.5h-2M13.5 13h-4"), path("M2.5 8.25h11")}},
 			    // A table of contents: headings, and what's under them set in.
 			    {"contents", {path("M2.5 3.5h11M5 6.5h8.5M5 9.5h8.5M2.5 12.5h11")}},
 			    // What a picture's toolbar does to it: crop or copy it, turn or flip it, raise

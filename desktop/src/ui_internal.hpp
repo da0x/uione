@@ -47,8 +47,3 @@ namespace one::desktop::detail {
 	element* focused_in(element& root);
 
 }  // namespace one::desktop::detail
-
-namespace one::desktop {
-	// For a list under the pointer: which row it's over, or none when it's left.
-	void point_at_list(element& e, std::optional<point> at);
-}  // namespace one::desktop

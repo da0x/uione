@@ -47,6 +47,6 @@ export { readValue, scaleTop, seriesOf, toneOfState, valueAt } from "./series.js
 export type { ChartUnit } from "./series.js";
 
 export type * from "./contract.js";
-export { buildLinks, mosaicRows, mosaicTile, timeGroups, within, yearsOf } from "./contract.js";
+export { buildLinks, dayTitle, markLength, marksAlong, mosaicRows, mosaicTile, rulerOf, timeGroups, timelineStep } from "./contract.js";
 export { generate as paletteTheme, named as paletteNamed, nameOf as paletteName, schemeTitle as paletteSchemeTitle, schemes as paletteSchemes, written as writtenTheme } from "./palette.js";
 export type { PaletteTheme, Scheme as PaletteScheme } from "./palette.js";
