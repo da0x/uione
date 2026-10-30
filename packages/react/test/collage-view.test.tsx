@@ -199,6 +199,27 @@ describe("a crop and words, in place", () => {
     expect(sent).toMatchObject({ id: "w1", words: "Harbor!", size: 96, x: 120, y: 600 });
     expect(sent["w"]).toBeGreaterThan(300);
   });
+
+  it("gives the keyboard to the words being written, as a phone shows one only for a place to type, and takes what its keyboard typed", async () => {
+    const source = memorySource({ commands: { "studio::layer::write": (input) => ({ id: String(input["id"]) }) } });
+    const drawn = renderPoster(source);
+    await waitFor(() => expect(drawn.container.querySelector(".one-collage")).toBeTruthy());
+    act(() => setPicked("/ layer", "w1"));
+    fireEvent.click(drawn.getByRole("button", { name: "Edit" }));
+    const typer = drawn.getByLabelText("Words being written") as HTMLTextAreaElement;
+    expect(document.activeElement).toBe(typer);
+    await act(async () => {});
+    expect(typer.value).toBe("Harbor");
+    // A phone's keyboard names no key, and types into what has the keyboard.
+    fireEvent.keyDown(typer, { key: "Unidentified" });
+    typer.value = "Harbor lights";
+    typer.setSelectionRange(13, 13);
+    fireEvent.input(typer);
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(source.runs.length).toBe(1));
+    expect(source.runs[0]!.input).toMatchObject({ id: "w1", words: "Harbor lights" });
+    await waitFor(() => expect(document.activeElement).not.toBe(typer));
+  });
 });
 
 describe("a layer drawn on a collage", () => {
