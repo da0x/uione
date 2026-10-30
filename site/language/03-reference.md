@@ -2587,7 +2587,10 @@ board project_page.issues by stage over project_page.stages link /:project/issue
 - `messages`, in a status line, says what was just done, or why a command was
   turned down, until the next thing is.
 - `full screen "Full screen" icon fullscreen key f11` fills the screen with the
-  window, and back. A terminal is already its whole window, so it draws nothing.
+  window, and back. A workspace filling it is only its `main`, with one button at its
+  top right, and Escape, to leave. Where a browser won't give a page the screen, as an
+  iPhone's won't, the workspace fills the window instead, the same way. A terminal is
+  already its whole window, so it draws nothing.
 - `pick layer from poster_page.layers` names a row of a view's list that the screen
   holds, picked with a click on a table or a board of that list, the one picked
   marked and its link no longer followed by the click, `pick poster from posters` for
