@@ -10,6 +10,8 @@ import { App, Paper, PaperButton, memorySource, screen as defineScreen, useView 
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
 import { pagesOf } from "../src/paper-view.js";
+import { kindOf } from "../src/paper/index.js";
+import { renderToStaticMarkup } from "react-dom/server";
 
 const parts = { words: "words", kind: "kind", align: "align", position: "position", face: "face" };
 
@@ -148,6 +150,50 @@ describe("a paper", () => {
     } finally {
       window.matchMedia = was;
     }
+  });
+
+  it("writes an equation apart with keys for all the notation writes, each put at the caret or around what's chosen", async () => {
+    const was = window.matchMedia;
+    window.matchMedia = ((query: string) => ({ matches: true, media: query, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia;
+    try {
+      const source = sourceWith([
+        { id: "b1", kind: "text", words: "Before", position: 1, align: "left" },
+        { id: "b2", kind: "math", words: "x = ", position: 2, align: "center" },
+      ]);
+      const drawn = renderPaper(source);
+      await waitFor(() => expect(blocks(drawn).length).toBe(2));
+      act(() => blocks(drawn)[0]!.focus());
+      act(() => blocks(drawn)[1]!.focus());
+      const sheet = await drawn.findByRole("dialog", { name: "Equation" });
+      const words = sheet.querySelector("textarea")!;
+      words.setSelectionRange(4, 4);
+      fireEvent.click(drawn.getByRole("tab", { name: "Powers" }));
+      fireEvent.click(drawn.getByRole("button", { name: "Square root" }));
+      expect(words.value).toBe("x = sqrt()");
+      expect(words.selectionStart).toBe(9);
+      fireEvent.click(drawn.getByRole("tab", { name: "Greek" }));
+      fireEvent.click(drawn.getByRole("button", { name: "pi" }));
+      expect(words.value).toBe("x = sqrt(pi)");
+      // Around what's chosen; a name after a letter apart from it.
+      words.setSelectionRange(9, 11);
+      fireEvent.click(drawn.getByRole("tab", { name: "Powers" }));
+      fireEvent.click(drawn.getByRole("button", { name: "Squared" }));
+      expect(words.value).toBe("x = sqrt((pi)^2)");
+      words.setSelectionRange(0, 1);
+      fireEvent.click(drawn.getByRole("tab", { name: "Greek" }));
+      fireEvent.click(drawn.getByRole("button", { name: "theta" }));
+      expect(words.value).toBe("theta = sqrt((pi)^2)");
+      expect(sheet.querySelector("svg[role=img]")?.getAttribute("aria-label")).toBe("theta = sqrt((pi)^2)");
+    } finally {
+      window.matchMedia = was;
+    }
+  });
+
+  it("sets the face of every equation key, as the notation reads it", () => {
+    const tabs = kindOf("math").apart?.keys ?? [];
+    expect(tabs.map((t) => t.name)).toEqual(["Basic", "Powers", "Greek", "Calculus", "Functions", "Layout"]);
+    const unset = tabs.flatMap((t) => t.keys.filter((k) => !renderToStaticMarkup(<>{k.face}</>).includes('role="img"')).map((k) => `${t.name}: ${k.name}`));
+    expect(unset).toEqual([]);
   });
 
   it("keeps the lines of words pasted into code", async () => {

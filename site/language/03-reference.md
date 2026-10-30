@@ -2427,7 +2427,10 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     the caret leaves; it keeps the room of the larger, so the page doesn't move. On a
     phone it's written on a sheet over the page instead, its equation at the top as
     it's typed, where the keyboard leaves it in sight, and kept with Accept or let go
-    with Cancel. In a code block, Enter starts a new line, and Enter on an empty last
+    with Cancel. Under its words are keys for all the notation writes, a tab of them
+    at a time: Basic, Powers, Greek, Calculus, Functions and Layout. Each puts its
+    words at the caret, the caret then where the next thing goes, and with words
+    chosen it's put around them, so √ makes `x+1` into `sqrt(x+1)`. In a code block, Enter starts a new line, and Enter on an empty last
     line leaves it for text after it. Words pasted over several lines are a block a
     paragraph, but in code, which keeps its lines.
   - `insert "Equation" icon equation { kind = kind::math }`, a button anywhere on the

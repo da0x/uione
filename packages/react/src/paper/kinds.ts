@@ -66,9 +66,17 @@ export interface BlockKind {
   // What it shows besides its words; its words alone when it doesn't say.
   showing?(asked: ShowingAsked): Showing;
   // On a phone, written apart, on a sheet over the page: what it makes of its words
-  // shown above them as they're typed, then kept or let go. Its name, and what's wrong
-  // with words it can't make anything of yet.
-  apart?: { name: string; problem?(words: string): string | undefined };
+  // shown above them as they're typed, then kept or let go. Its name, what's wrong
+  // with words it can't make anything of yet, and the keys that write what it can.
+  apart?: { name: string; problem?(words: string): string | undefined; keys?: ApartKeys[] };
+}
+
+// A row of keys on the sheet a block's written apart on, under a tab of its name. Each
+// puts its words at the caret, the caret then where ‸ is, or after them; with words
+// chosen, it's put around them, where § is, when it says how.
+export interface ApartKeys {
+  name: string;
+  keys: { name: string; face: ReactNode; put: string; around?: string }[];
 }
 
 // The family a page's face is: a book's serif, the app's own text face, a lyric's

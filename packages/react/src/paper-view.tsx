@@ -1297,6 +1297,31 @@ function Apart({ block, words, zoom, retyped, done }: { block?: Block; words: st
   const align = "center" as CSSProperties["textAlign"];
   const made = kind.showing?.({ parts: block?.parts ?? {}, across: 320, tall: 320, words, focused: false, readOnly: true, zoom, align, toWords: () => {} });
   const wrong = kind.apart?.problem?.(words);
+  // Its keys, a tab at a time: each put at the caret, or around what's chosen, the
+  // caret then where it says, and the keyboard kept up as it's pressed.
+  const tabs = kind.apart?.keys ?? [];
+  const [tab, setTab] = useState(0);
+  const area = useRef<HTMLTextAreaElement>(null);
+  const caretNext = useRef<number | undefined>(undefined);
+  useLayoutEffect(() => {
+    const at = caretNext.current;
+    if (at === undefined || !area.current) return;
+    caretNext.current = undefined;
+    area.current.setSelectionRange(at, at);
+  });
+  const press = (key: { put: string; around?: string }) => {
+    const t = area.current;
+    const from = t?.selectionStart ?? words.length, to = t?.selectionEnd ?? words.length;
+    const chosen = words.slice(from, to);
+    let put = chosen && key.around ? key.around.replace("§", chosen) : key.put;
+    if (!put.includes("‸")) put += "‸";
+    // A name put after a letter is apart from it, as letters together are one name.
+    if (/[A-Za-z]$/.test(words.slice(0, from)) && /^[A-Za-z]/.test(put)) put = " " + put;
+    caretNext.current = from + put.indexOf("‸");
+    retyped(words.slice(0, from) + put.replace("‸", "") + words.slice(to));
+    t?.focus();
+  };
+  const keep = (e: { preventDefault(): void }) => e.preventDefault();
   const button: CSSProperties = { font: "inherit", fontSize: 15, padding: "6px 12px", border: "none", borderRadius: 8, background: "transparent", color: "var(--color-accent, #2457d6)", cursor: "pointer" };
   return (
     <div role="dialog" aria-label={kind.apart?.name} style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", flexDirection: "column", background: "var(--color-surface, #ffffff)", color: "var(--color-ink, #1b2230)" }}>
@@ -1313,6 +1338,7 @@ function Apart({ block, words, zoom, retyped, done }: { block?: Block; words: st
         {made?.over && !wrong ? <div style={{ display: "grid" }}>{made.over}</div> : <span style={{ fontSize: 13, color: "var(--color-muted, #5b6577)" }}>{wrong ?? "\u00a0"}</span>}
       </div>
       <textarea
+        ref={area}
         autoFocus
         value={words}
         aria-label={kind.apart?.name}
@@ -1330,6 +1356,42 @@ function Apart({ block, words, zoom, retyped, done }: { block?: Block; words: st
         }}
         style={{ margin: "0 12px", padding: 12, fontSize: 16, fontFamily: "var(--font-mono, ui-monospace, monospace)", border: "1px solid var(--color-line, #dde2ea)", borderRadius: 8, background: "var(--color-sunken, #f1f3f7)", color: "inherit", resize: "none", outline: "none" }}
       />
+      {tabs.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "10px 12px", minHeight: 0, overflowY: "auto" }}>
+          <div role="tablist" aria-label={`${kind.apart?.name} keys`} style={{ display: "flex", gap: 4, overflowX: "auto", flexShrink: 0 }}>
+            {tabs.map((t, i) => (
+              <button
+                key={t.name}
+                type="button"
+                role="tab"
+                aria-selected={i === tab}
+                onPointerDown={keep}
+                onMouseDown={keep}
+                onClick={() => setTab(i)}
+                style={{ ...button, fontSize: 13, padding: "4px 10px", flexShrink: 0, color: i === tab ? "var(--color-accent-ink, #ffffff)" : "var(--color-muted, #5b6577)", background: i === tab ? "var(--color-accent, #2457d6)" : "transparent", borderRadius: 999 }}
+              >
+                {t.name}
+              </button>
+            ))}
+          </div>
+          <div role="tabpanel" aria-label={tabs[tab]?.name} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(52px, 1fr))", gap: 6 }}>
+            {tabs[tab]?.keys.map((k) => (
+              <button
+                key={k.name}
+                type="button"
+                aria-label={k.name}
+                title={k.name}
+                onPointerDown={keep}
+                onMouseDown={keep}
+                onClick={() => press(k)}
+                style={{ display: "grid", placeItems: "center", height: 44, padding: "0 4px", overflow: "hidden", font: "inherit", fontSize: 14, color: "inherit", background: "var(--color-sunken, #f1f3f7)", border: "1px solid var(--color-line, #dde2ea)", borderRadius: 8, cursor: "pointer", touchAction: "manipulation" }}
+              >
+                {k.face}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
