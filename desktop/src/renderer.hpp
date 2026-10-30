@@ -31,6 +31,12 @@ namespace one::desktop {
 		vk::DeviceSize size = 0;
 	};
 
+	// A turn about a point in pixels, by an angle in radians, clockwise; none by default.
+	struct turn {
+		point about;
+		float radians = 0;
+	};
+
 	class renderer {
 	public:
 		renderer(gpu::device& gpu, vk::Format target);
@@ -48,21 +54,22 @@ namespace one::desktop {
 		void box(const rect& area, color fill, color edge, float radius, float border, float blur, const rect& clip);
 		// A segment with round ends, from a to b, in pixels.
 		void line(point a, point b, float half_width, color tint, const rect& clip);
-		void glyph(const fonts::face* face, std::uint32_t id, float x, float baseline, color tint, const rect& clip);
+		void glyph(const fonts::face* face, std::uint32_t id, float x, float baseline, color tint, const rect& clip, turn turned = {});
 		// The part of a picture `from` names, as fractions of it, in an area in pixels,
 		// as much of it showing as `opacity` says, its corners rounded by `radius` pixels.
-		void picture(const one::desktop::picture& p, const rect& area, const rect& from, float opacity, float radius, const rect& clip);
+		void picture(const one::desktop::picture& p, const rect& area, const rect& from, float opacity, float radius, const rect& clip, turn turned = {});
 
 	private:
 		struct box_instance {
 			float bounds[4], fill[4], edge[4], shape[4], clip[4];
 		};
+		// A glyph's, and how it's turned: about x y, by the cosine and sine of its angle.
 		struct glyph_instance {
-			float bounds[4], source[4], tint[4], clip[4];
+			float bounds[4], source[4], tint[4], clip[4], turned[4];
 		};
 		// A picture's: a glyph's, and its corners' radius in pixels, first of shape.
 		struct picture_instance {
-			float bounds[4], source[4], tint[4], clip[4], shape[4];
+			float bounds[4], source[4], tint[4], clip[4], shape[4], turned[4];
 		};
 		// A picture's texture: its image with its smaller copies, and the descriptor
 		// it's drawn with. Kept while the picture is drawn, then let go once no frame

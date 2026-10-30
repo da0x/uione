@@ -284,6 +284,7 @@ namespace one::generators {
             out += ", .fields = {" + kept + "}";
             if (c.place) out += ", .place = " + str(screens::full_command(ns, *c.place));
             if (c.reshape) out += ", .reshape = " + str(screens::full_command(ns, *c.reshape));
+            if (c.rotate) out += ", .rotate = " + str(screens::full_command(ns, *c.rotate));
             if (c.group) out += ", .group = " + str(screens::full_command(ns, *c.group));
             if (c.order) out += ", .order = " + str(screens::full_command(ns, *c.order));
             if (c.snap) out += ", .snap = true";

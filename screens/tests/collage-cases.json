@@ -2436,6 +2436,18 @@
         50
       ],
       "svg": "<path d=\"M 10 20 L 110 70 C 60 20 35 70 10 45 Z\" fill=\"#ffd23f\" stroke=\"none\" stroke-width=\"1.5\"/>"
-    }
+    },
+    {"what": "turned_bounds", "note": "a quarter turn: as wide as it was high, about the same middle", "box": [0, 0, 100, 50], "degrees": 90, "bounds": [25, -25, 50, 100]},
+    {"what": "turned_bounds", "note": "unturned: itself", "box": [10, 20, 30, 40], "degrees": 0, "bounds": [10, 20, 30, 40]},
+    {"what": "turned_bounds", "note": "an eighth of a turn: a square's corners reach out half its diagonal", "box": [0, 0, 100, 100], "degrees": 45, "bounds": [-20.710678, -20.710678, 141.421356, 141.421356]},
+    {"what": "turn_to", "note": "from its right to below it: a quarter turn clockwise", "box": [0, 0, 100, 100], "degrees": 0, "from": [150, 50], "to": [50, 150], "snaps": false, "now": 90},
+    {"what": "turn_to", "note": "from its right to above it: three quarters, never less than 0", "box": [0, 0, 100, 100], "degrees": 0, "from": [150, 50], "to": [50, -50], "snaps": false, "now": 270},
+    {"what": "turn_to", "note": "42 degrees on, snapped: 45", "box": [0, 0, 100, 100], "degrees": 0, "from": [150, 50], "to": [150, 140], "snaps": true, "now": 45},
+    {"what": "turn_to", "note": "already turned 300, a quarter more, snapped: 30 past a whole turn, so 45", "box": [0, 0, 100, 100], "degrees": 300, "from": [150, 50], "to": [50, 150], "snaps": true, "now": 45},
+    {"what": "turned_about", "note": "a quarter turn about a point to its right: carried above it, and turned as much", "box": [0, 0, 20, 20], "degrees": 0, "about": [50, 10], "turn": 90, "carried_to": [40, -40, 20, 20], "now": 90},
+    {"what": "resized_turned", "note": "unturned: as resized", "from": [0, 0, 100, 50], "degrees": 0, "corner": 2, "by": [50, 25], "keep_shape": false, "box": [0, 0, 150, 75]},
+    {"what": "resized_turned", "note": "a quarter turn: its bottom right dragged down its own width and across its height, the top left staying where it's shown", "from": [0, 0, 100, 50], "degrees": 90, "corner": 2, "by": [-25, 50], "keep_shape": false, "box": [-37.5, 12.5, 150, 75]},
+    {"what": "path_turned", "note": "a line across, turned a quarter about its start: down", "path": "M 0 0 L 10 0", "about": [0, 0], "degrees": 90, "turned_path": "M 0 0 L 0 10"},
+    {"what": "svg_document", "note": "a shape turned a quarter about its middle", "size": [100, 100], "layers": [{"kind": "shape", "box": [10, 20, 50, 30], "degrees": 90, "shape": {"kind": "rectangle", "points": "", "fill": "#2e86de", "stroke": "none", "stroke_width": 0, "corners": 0}}], "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"100\" height=\"100\" viewBox=\"0 0 100 100\">\n<g transform=\"rotate(90 35 35)\"><rect x=\"10\" y=\"20\" width=\"50\" height=\"30\" rx=\"0\" fill=\"#2e86de\" stroke=\"none\" stroke-width=\"0\"/></g>\n</svg>\n"}
   ]
 }

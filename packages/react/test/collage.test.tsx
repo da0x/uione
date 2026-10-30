@@ -7,7 +7,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { around, boardOf, carried, colorShifter, polygonPoints, zoomed, svgElement, cornerAt, cropEdgesAt, cropped, drawn, drawnLine, freehand, penPath, pathBounds, pathFractions, pathHandleMoved, pathHandles, pathMoved, pathNodes, pathReaches, svgDocument, halo, harmonicFill, matched, moved, resized, shifted, sitting, snapLines, statsOf, wholeOf } from "../src/collage.js";
+import { around, boardOf, carried, pathTurned, resizedTurned, turnedAbout, turnedBounds, turnTo, colorShifter, polygonPoints, zoomed, svgElement, cornerAt, cropEdgesAt, cropped, drawn, drawnLine, freehand, penPath, pathBounds, pathFractions, pathHandleMoved, pathHandles, pathMoved, pathNodes, pathReaches, svgDocument, halo, harmonicFill, matched, moved, resized, shifted, sitting, snapLines, statsOf, wholeOf } from "../src/collage.js";
 import type { Box, Guided } from "../src/collage.js";
 
 type Numbers = number[];
@@ -34,6 +34,7 @@ interface Case {
     corners?: number;
     svg?: string;
     natural?: Numbers;
+    degrees?: number;
   }[];
   covered?: Numbers[]; // harmonic_fill: x, y and three channels of each covered cell
   cells?: Numbers[]; // halo: x, y and three channels of each of the picture's cells; stats_of: three channels of each
@@ -100,6 +101,14 @@ interface Case {
   guide_x?: number;
   guide_y?: number;
   guide_corner?: Numbers[];
+  degrees?: number;
+  bounds?: Numbers;
+  snaps?: boolean;
+  now?: number;
+  about?: Numbers;
+  turn?: number;
+  carried_to?: Numbers;
+  turned_path?: string;
 }
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -186,6 +195,23 @@ describe("where a collage's layers go", () => {
       }
       case "around":
         expect(same(around(k.boxes!.map(boxOf)), boxOf(k.box!))).toBe(true);
+        break;
+      case "turned_bounds":
+        expect(same(turnedBounds(boxOf(k.box!), k.degrees!), boxOf(k.bounds!))).toBe(true);
+        break;
+      case "turn_to":
+        expect(near(turnTo(boxOf(k.box!), k.degrees!, { x: k.from![0]!, y: k.from![1]! }, { x: k.to![0]!, y: k.to![1]! }, k.snaps!), k.now!)).toBe(true);
+        break;
+      case "turned_about": {
+        const got = turnedAbout(boxOf(k.box!), k.degrees!, { x: k.about![0]!, y: k.about![1]! }, k.turn!);
+        expect([same(got.at, boxOf(k.carried_to!)), near(got.degrees, k.now!)]).toEqual([true, true]);
+        break;
+      }
+      case "resized_turned":
+        expect(same(resizedTurned(boxOf(k.from!), k.degrees!, k.corner!, k.by![0]!, k.by![1]!, k.keep_shape!), boxOf(k.box!))).toBe(true);
+        break;
+      case "path_turned":
+        expect(pathTurned(k.path!, { x: k.about![0]!, y: k.about![1]! }, k.degrees!)).toBe(k.turned_path);
         break;
       case "carried":
         expect(same(carried(boxOf(k.one!), boxOf(k.from!), boxOf(k.to!)), boxOf(k.box!))).toBe(true);
@@ -294,6 +320,7 @@ describe("where a collage's layers go", () => {
           corners: l.corners,
           svg: l.svg,
           natural: l.natural && boxOf(l.natural),
+          degrees: l.degrees,
         }));
         expect(svgDocument(b.width, b.height, layers)).toBe(k.svg);
         break;

@@ -875,6 +875,11 @@ namespace one::language {
                 field("around", "the field saying what's drawn around a picture, like around");
                 return true;
             }
+            if (at_word("rotated") && peek(1).kind == token_kind::identifier) {
+                advance();
+                field("rotation", "the field keeping how far a layer's turned, in degrees, like rotation");
+                return true;
+            }
             if (at_word("rounded") && peek(1).kind == token_kind::identifier) {
                 advance();
                 field("corners", "the field keeping how round a picture's corners are, like corners");
@@ -2475,6 +2480,9 @@ namespace one::language {
                     } else if (at_word("reshape") && peek(1).kind == token_kind::identifier) {
                         advance();
                         collage.reshape = parse_qualified_name("the command a path's nodes moved are sent to, like layer::reshape");
+                    } else if (at_word("rotate") && peek(1).kind == token_kind::identifier) {
+                        advance();
+                        collage.rotate = parse_qualified_name("the command a layer turned is sent to, like layer::rotate");
                     } else if (at_word("add") && peek(1).kind == token_kind::identifier) {
                         advance();
                         collage.add = parse_qualified_name("the command that makes its layers, like layer::create");

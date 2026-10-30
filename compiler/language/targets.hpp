@@ -97,6 +97,7 @@ namespace one::language {
         drawn_by{"collage.draw_hand", "a collage's paths drawn by hand", "web desktop"},
         drawn_by{"collage.draw_points", "a collage's paths drawn node by node, as a pen does", "web desktop"},
         drawn_by{"collage.reshape", "a collage's paths reshaped by their nodes", "web desktop"},
+        drawn_by{"collage.rotate", "a collage's layers turned by a drag past a corner", "web desktop"},
         drawn_by{"collage.group", "a collage's layers in groups, picked, moved and resized as one", "web desktop"},
         drawn_by{"collage.zoom", "a collage zoomed and moved as it's looked at", "web desktop"},
         drawn_by{"collage.order", "a collage's layers raised and lowered", "web desktop"},
@@ -402,6 +403,7 @@ namespace one::language {
                         if (n.crop) use("collage.crop");
                         if (!n.draws.empty()) use("collage.draw");
                         if (n.reshape) use("collage.reshape");
+                        if (n.rotate) use("collage.rotate");
                         if (n.group) use("collage.group");
                         if (n.order) use("collage.order");
                         if (std::ranges::any_of(n.draws, [](const auto& d) { return d.by == "line"; })) use("collage.draw_line");

@@ -112,7 +112,7 @@ namespace one::desktop {
 		                                                                              .pSetLayouts = &*atlas_set_layout_,
 		                                                                              .pushConstantRangeCount = 1,
 		                                                                              .pPushConstantRanges = &viewport}};
-		glyph_pipeline_ = pipeline(device, glyph_layout_, target, glyph_vertex, glyph_fragment, 4);
+		glyph_pipeline_ = pipeline(device, glyph_layout_, target, glyph_vertex, glyph_fragment, 5);
 
 		// The atlas: one channel of coverage, sampled exactly, as glyphs land on whole pixels.
 		atlas_ = vk::raii::Image{device, vk::ImageCreateInfo{.imageType = vk::ImageType::e2D,
@@ -152,7 +152,7 @@ namespace one::desktop {
 
 		// Pictures: drawn with the glyphs' layout, a texture each, sampled smoothly and
 		// between their smaller copies when shown smaller, with their corners' radius.
-		picture_pipeline_ = pipeline(device, glyph_layout_, target, picture_vertex, picture_fragment, 5);
+		picture_pipeline_ = pipeline(device, glyph_layout_, target, picture_vertex, picture_fragment, 6);
 		smooth_ = vk::raii::Sampler{device, vk::SamplerCreateInfo{.magFilter = vk::Filter::eLinear,
 		                                                          .minFilter = vk::Filter::eLinear,
 		                                                          .mipmapMode = vk::SamplerMipmapMode::eLinear,
@@ -259,7 +259,13 @@ namespace one::desktop {
 		return placed_.emplace(key, p).first->second;
 	}
 
-	void renderer::glyph(const fonts::face* face, std::uint32_t id, float x, float baseline, color tint, const rect& clip) {
+	namespace {
+		void put_turn(float (&out)[4], turn t) {
+			out[0] = t.about.x, out[1] = t.about.y, out[2] = std::cos(t.radians), out[3] = std::sin(t.radians);
+		}
+	}  // namespace
+
+	void renderer::glyph(const fonts::face* face, std::uint32_t id, float x, float baseline, color tint, const rect& clip, turn turned) {
 		// Drawn at a quarter pixel's precision across, on whole pixels down.
 		float whole = std::floor(x);
 		int bin = static_cast<int>(std::lround((x - whole) * 4));
@@ -271,6 +277,7 @@ namespace one::desktop {
 		g.source[0] = p.u0, g.source[1] = p.v0, g.source[2] = p.u1, g.source[3] = p.v1;
 		put(g.tint, tint);
 		put_clip(g.clip, clip);
+		put_turn(g.turned, turned);
 		glyphs_.push_back(g);
 		add(kind::glyphs);
 	}
@@ -329,7 +336,7 @@ namespace one::desktop {
 		return made;
 	}
 
-	void renderer::picture(const one::desktop::picture& p, const rect& area, const rect& from, float opacity, float radius, const rect& clip) {
+	void renderer::picture(const one::desktop::picture& p, const rect& area, const rect& from, float opacity, float radius, const rect& clip, turn turned) {
 		texture* t = texture_of(p);
 		if (!t) return;
 		t->used = frame_;
@@ -339,6 +346,7 @@ namespace one::desktop {
 		put(g.tint, color{1, 1, 1, std::clamp(opacity, 0.f, 1.f)});
 		put_clip(g.clip, clip);
 		g.shape[0] = std::clamp(radius, 0.f, std::min(area.width, area.height) / 2);
+		put_turn(g.turned, turned);
 		pictures_.push_back(g);
 		add(kind::pictures, t);
 	}
@@ -541,16 +549,29 @@ namespace one::desktop {
 		}
 	}
 
+	namespace {
+		// The turn in force, in pixels; none when there's none.
+		turn turn_in_pixels(const std::vector<canvas::turning>& turns, double scale) {
+			if (turns.empty() || turns.back().degrees == 0) return {};
+			auto s = static_cast<float>(scale);
+			return {{turns.back().about.x * s, turns.back().about.y * s}, turns.back().degrees * std::numbers::pi_v<float> / 180};
+		}
+	}  // namespace
+
 	void canvas::picture(const one::desktop::picture& p, const rect& area, const rect& from, float opacity, float radius) {
 		if (!p) return;
-		renderer_.picture(p, in_pixels(area, scale()), from, opacity, radius * static_cast<float>(scale()), clip_in_pixels(clips_, renderer_));
+		// Turned, it's placed as it is, not on whole pixels, which would wobble it.
+		auto s = static_cast<float>(scale());
+		rect at = turns_.empty() || turns_.back().degrees == 0 ? in_pixels(area, scale()) : rect{area.x * s, area.y * s, area.width * s, area.height * s};
+		renderer_.picture(p, at, from, opacity, radius * s, clip_in_pixels(clips_, renderer_), turn_in_pixels(turns_, scale()));
 	}
 
 	void canvas::text(const text_layout& laid, point at) {
 		auto s = static_cast<float>(scale());
 		float x = std::round(at.x * s), y = std::round(at.y * s);
 		rect clip = clip_in_pixels(clips_, renderer_);
-		for (const auto& g : laid.glyphs()) renderer_.glyph(static_cast<const fonts::face*>(g.face), g.id, x + g.x, y + g.y, g.color, clip);
+		turn turned = turn_in_pixels(turns_, scale());
+		for (const auto& g : laid.glyphs()) renderer_.glyph(static_cast<const fonts::face*>(g.face), g.id, x + g.x, y + g.y, g.color, clip, turned);
 		for (const auto& rule : laid.rules()) renderer_.box({x + rule.x, y + rule.y, rule.width, rule.thickness}, rule.color, {0, 0, 0, 0}, 0, 0, 0, clip);
 	}
 
@@ -568,5 +589,12 @@ namespace one::desktop {
 	}
 
 	canvas::clip_scope::~clip_scope() { owner_.clips_.pop_back(); }
+
+	canvas::turn_scope canvas::turned(point about, float degrees) {
+		turns_.push_back({about, degrees});
+		return turn_scope{*this};
+	}
+
+	canvas::turn_scope::~turn_scope() { owner_.turns_.pop_back(); }
 
 }  // namespace one::desktop

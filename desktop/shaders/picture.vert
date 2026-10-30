@@ -9,6 +9,7 @@ layout(location = 1) in vec4 source;    // u0, v0, u1, v1 of the picture: the pa
 layout(location = 2) in vec4 tint;      // how much of it shows, premultiplied
 layout(location = 3) in vec4 clip;
 layout(location = 4) in vec4 shape;     // its corners' radius, in pixels
+layout(location = 5) in vec4 turned;    // about x, y, in pixels, then the cosine and sine of its angle
 
 layout(push_constant) uniform frame { vec2 viewport; } screen;
 
@@ -17,12 +18,18 @@ layout(location = 1) flat out vec4 color;
 layout(location = 2) flat out vec4 clip_out;
 layout(location = 3) flat out vec4 rounded;  // where it is, in pixels
 layout(location = 4) flat out float radius;
+layout(location = 5) out vec2 inside;        // where in it, in pixels, as if unturned
+layout(location = 6) flat out float turning;  // whether it's turned
 
 const vec2 corners[6] = vec2[](vec2(0, 0), vec2(1, 0), vec2(0, 1), vec2(1, 0), vec2(1, 1), vec2(0, 1));
 
 void main() {
 	vec2 corner = corners[gl_VertexIndex];
 	vec2 at = bounds.xy + corner * bounds.zw;
+	vec2 from = at - turned.xy;
+	at = turned.xy + vec2(from.x * turned.z - from.y * turned.w, from.x * turned.w + from.y * turned.z);
+	inside = corner * bounds.zw;
+	turning = turned.w != 0.0 || turned.z != 1.0 ? 1.0 : 0.0;
 	uv = mix(source.xy, source.zw, corner);
 	color = tint;
 	clip_out = clip;

@@ -357,6 +357,120 @@ describe("a layer drawn on a collage", () => {
     expect(source.runs[4]).toMatchObject({ command: "studio::layer::delete", input: { id: "g" } });
   });
 
+  it("turns a layer by a drag just past a corner, drawn turned as it goes, and once turned picks and resizes it in its own frame", async () => {
+    act(() => setPicked("/ layer", undefined));
+    // What the canvas is turned by, as it's drawn.
+    const turns: number[] = [];
+    const recording: unknown = new Proxy(() => recording, {
+      get: (_, key) => (key === "measureText" ? () => ({ width: 0 }) : key === "rotate" ? (by: number) => void turns.push(by) : recording),
+      set: () => true,
+    });
+    HTMLCanvasElement.prototype.getContext = (() => recording) as unknown as HTMLCanvasElement["getContext"];
+    const reply = (input: Record<string, unknown>) => ({ id: String(input["id"]) });
+    const source = memorySource({ commands: { "studio::layer::rotate": reply, "studio::layer::place": reply } });
+    const layer = (rotation: number) => ({ id: "l1", shape: "rectangle", fill: "#ff0000", x: 400, y: 200, w: 200, h: 100, rotation });
+    source.set("studio::poster_page", { width: 1000, height: 500, layers: [layer(0)] }, "p1");
+    const fields = { ...namedLikeParts, shape: "shape", fill: "fill", rotation: "rotation" };
+    function Poster() {
+      const page = useView("studio::poster_page", "p1");
+      return (
+        <>
+          <Collage view={page} list="layers" width="width" height="height" fields={fields} pick="/ layer" name="/ layer" place="studio::layer::place" rotate="studio::layer::rotate" />
+          <Picked />
+        </>
+      );
+    }
+    const only = defineScreen({ title: "Poster", route: "/" }, () => <Poster />);
+    const drawn = render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
+    await waitFor(() => expect(drawn.container.querySelector("canvas")).toBeTruthy());
+    const canvas = drawn.container.querySelector("canvas")!;
+    await act(async () => {});
+    const press = (x: number, y: number) => {
+      fireEvent.pointerDown(canvas, { clientX: 32 + x, clientY: 32 + y, pointerId: 1, detail: 1 });
+      fireEvent.pointerUp(canvas, { clientX: 32 + x, clientY: 32 + y, pointerId: 1 });
+    };
+    press(500, 250);
+    await waitFor(() => expect(drawn.getByTestId("picked").textContent).toBe("l1"));
+    await act(async () => {});
+    // From just past its lower right corner, a quarter of the way round its middle at
+    // 500 250: drawn turned as it goes, and kept a quarter turned, where it was.
+    turns.length = 0;
+    fireEvent.pointerDown(canvas, { clientX: 32 + 616, clientY: 32 + 316, pointerId: 1, detail: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 32 + 434, clientY: 32 + 366, pointerId: 1 });
+    expect(turns.some((by) => Math.abs(by - Math.PI / 2) < 1e-6)).toBe(true);
+    fireEvent.pointerUp(canvas, { clientX: 32 + 434, clientY: 32 + 366, pointerId: 1 });
+    await waitFor(() => expect(source.runs.length).toBe(1));
+    expect(source.runs[0]).toMatchObject({ command: "studio::layer::rotate", input: { id: "l1", x: 400, y: 200 } });
+    expect(source.runs[0]!.input["rotation"]).toBeCloseTo(90, 6);
+    // Turned, it stands from 450 150 to 550 350: picked there, not where its box was.
+    act(() => source.set("studio::poster_page", { width: 1000, height: 500, layers: [layer(90)] }, "p1"));
+    await act(async () => {});
+    press(420, 250);
+    await waitFor(() => expect(drawn.getByTestId("picked").textContent).toBe(""));
+    press(500, 160);
+    await waitFor(() => expect(drawn.getByTestId("picked").textContent).toBe("l1"));
+    await act(async () => {});
+    // Its own lower right corner, turned to 450 350, dragged 40 left and down: 40 longer
+    // and wider in its own frame, its own top left corner still shown at 550 150.
+    fireEvent.pointerDown(canvas, { clientX: 32 + 450, clientY: 32 + 350, pointerId: 1, detail: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 32 + 430, clientY: 32 + 370, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 32 + 410, clientY: 32 + 390, pointerId: 1 });
+    await waitFor(() => expect(source.runs.length).toBe(2));
+    expect(source.runs[1]!.command).toBe("studio::layer::place");
+    const { x, y, w, h } = source.runs[1]!.input as Record<string, number>;
+    expect([x, y, w, h].map((n) => Math.round(n! * 1000) / 1000)).toEqual([360, 200, 240, 140]);
+  });
+
+  it("turns a group by a drag past its corner, all it holds about its middle, a path by its points, in one step", async () => {
+    act(() => setPicked("/ layer", undefined));
+    const reply = (input: Record<string, unknown>) => ({ id: String(input["id"]) });
+    const source = memorySource({ commands: { "studio::layer::rotate": reply, "studio::layer::reshape": reply } });
+    source.set("studio::poster_page", {
+      width: 1000,
+      height: 500,
+      layers: [
+        { id: "g", x: 0, y: 0, w: 0, h: 0 },
+        { id: "a", shape: "rectangle", fill: "#2e86de", x: 100, y: 100, w: 100, h: 100, group: "g" },
+        { id: "b", shape: "path", points: "M 0 0 L 1 1", stroke: "#1d1d1f", stroke_width: 4, x: 300, y: 100, w: 100, h: 100, group: "g" },
+      ],
+    }, "p1");
+    const fields = { ...namedLikeParts, shape: "shape", fill: "fill", points: "points", stroke: "stroke", stroke_width: "stroke_width", group: "group", rotation: "rotation" };
+    function Poster() {
+      const page = useView("studio::poster_page", "p1");
+      return (
+        <>
+          <Collage view={page} list="layers" width="width" height="height" fields={fields} pick="/ layer" name="/ layer" place="studio::layer::place" reshape="studio::layer::reshape" rotate="studio::layer::rotate" group="studio::layer::group" />
+          <Picked />
+        </>
+      );
+    }
+    const only = defineScreen({ title: "Poster", route: "/" }, () => <Poster />);
+    const drawn = render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
+    await waitFor(() => expect(drawn.container.querySelector("canvas")).toBeTruthy());
+    const canvas = drawn.container.querySelector("canvas")!;
+    await act(async () => {});
+    fireEvent.pointerDown(canvas, { clientX: 32 + 150, clientY: 32 + 150, pointerId: 1, detail: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 32 + 150, clientY: 32 + 150, pointerId: 1 });
+    await waitFor(() => expect(drawn.getByTestId("picked").textContent).toBe("g"));
+    await act(async () => {});
+    // Around all it holds, 100 100 to 400 200: a quarter turn about 250 150.
+    fireEvent.pointerDown(canvas, { clientX: 32 + 416, clientY: 32 + 216, pointerId: 1, detail: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 32 + 184, clientY: 32 + 316, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 32 + 184, clientY: 32 + 316, pointerId: 1 });
+    await waitFor(() => expect(source.runs.length).toBe(2));
+    const by = Object.fromEntries(source.runs.map((r) => [r.input["id"], r]));
+    expect(by["a"]!.command).toBe("studio::layer::rotate");
+    expect(by["a"]!.input["rotation"]).toBeCloseTo(90, 6);
+    expect(by["a"]!.input["x"]).toBeCloseTo(200, 6);
+    expect(by["a"]!.input["y"]).toBeCloseTo(0, 6);
+    // The path's ends, 300 100 and 400 200, are at 300 200 and 200 300.
+    expect(by["b"]!.command).toBe("studio::layer::reshape");
+    expect(by["b"]!.input).toMatchObject({ points: "M 1 0 L 0 1" });
+    expect(by["b"]!.input["x"]).toBeCloseTo(200, 6);
+    expect(by["b"]!.input["y"]).toBeCloseTo(200, 6);
+    expect(source.runs[1]!.input["one:history"]).toBe("joined");
+  });
+
   it("zooms in about its middle, so what's on it is picked where it's now shown, and back to fit", async () => {
     act(() => setPicked("/ layer", undefined));
     const source = memorySource();

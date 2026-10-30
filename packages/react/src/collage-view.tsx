@@ -16,7 +16,7 @@
 
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
-import { colorShifter, cornerAt, pathIn, cropEdgesAt, cropped, drawn, drawnLine, freehand, halo, penPath, haloInside, haloReach, harmonicFill, matched, matchingCast, matchingStrength, moved, resized, sitting, pathBounds, pathFractions, around, boardOf, carried, polygonPoints, zoomed, pathHandleMoved, pathHandles, pathMoved, pathNodes, pathReaches, snapLines, statsOf, svgDocument, wholeOf } from "./collage.js";
+import { colorShifter, cornerAt, pathIn, pathTurned, resizedTurned, turned, turnedAbout, turnedBounds, turnTo, cropEdgesAt, cropped, drawn, drawnLine, freehand, halo, penPath, haloInside, haloReach, harmonicFill, matched, matchingCast, matchingStrength, moved, resized, sitting, pathBounds, pathFractions, around, boardOf, carried, polygonPoints, zoomed, pathHandleMoved, pathHandles, pathMoved, pathNodes, pathReaches, snapLines, statsOf, svgDocument, wholeOf } from "./collage.js";
 import type { Box, ColorShift, ColorStats, Guided, Lines, PenNode, Point, SavedLayer, ViewAt } from "./collage.js";
 import { useFiles, useRunner } from "./data.js";
 import { pictureSize, svgIn, svgShapes, svgSize } from "./vectors.js";
@@ -32,6 +32,28 @@ const handle = 10; // a corner's handle, in the window
 const num = (v: unknown, otherwise = 0) => (typeof v === "number" && Number.isFinite(v) ? v : typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v)) ? Number(v) : otherwise);
 const str = (v: unknown) => (typeof v === "string" ? v : "");
 const boxOf = (l: Row): Box => ({ x: num(l["x"]), y: num(l["y"]), w: num(l["w"]), h: num(l["h"]) });
+// How far a layer's turned about its middle, in degrees clockwise.
+const degreesOf = (l: Row) => num(l["rotation"]);
+const middleOf = (b: Box): Point => ({ x: b.x + b.w / 2, y: b.y + b.h / 2 });
+// Whether a point, in the window and in a layer's own frame, its box `on`, is just past
+// one of its corners, where a drag turns it; its handle's as far out each way. The same
+// as the desktop's.
+const turnReach = 28, turnKnob = 16;
+const pastCorner = (on: Box, p: Point) =>
+  !inside(on, p) &&
+  [
+    [on.x, on.y],
+    [on.x + on.w, on.y],
+    [on.x + on.w, on.y + on.h],
+    [on.x, on.y + on.h],
+  ].some(([x, y]) => Math.hypot(p.x - x!, p.y - y!) <= turnReach);
+// Drawn from here turned by `degrees` about `about`, until restored.
+function turnedOn(c: CanvasRenderingContext2D, about: Point, degrees: number) {
+  if (!degrees) return;
+  c.translate(about.x, about.y);
+  c.rotate((degrees * Math.PI) / 180);
+  c.translate(-about.x, -about.y);
+}
 const cropOf = (l: Row): Box => ({ x: num(l["crop_x"], 0), y: num(l["crop_y"], 0), w: num(l["crop_w"], 1), h: num(l["crop_h"], 1) });
 // What a layer is: a picture, when it has one; words, when it has those; or else a shape,
 // as its parts say (decision 0025). The same as the desktop's.
@@ -520,7 +542,7 @@ async function drawnWhole(layers: Row[], W: number, H: number, scale: number, ad
     return p !== "reading" && p !== "failed" && p !== "vector" ? p : undefined;
   };
   const one = only ? layers.find((l) => l["id"] === only) : undefined;
-  const area = one ? boxOf(one) : { x: 0, y: 0, w: W, h: H };
+  const area = one ? turnedBounds(boxOf(one), degreesOf(one)) : { x: 0, y: 0, w: W, h: H };
   const made = document.createElement("canvas");
   made.width = Math.max(1, Math.round(area.w * scale));
   made.height = Math.max(1, Math.round(area.h * scale));
@@ -547,30 +569,20 @@ async function drawnWhole(layers: Row[], W: number, H: number, scale: number, ad
   }
   for (const l of layers) {
     if (only && l["id"] !== only) continue;
-    if (isWords(l)) {
-      const b = at(boxOf(l));
-      paintWords(c, l, str(l["words"]), num(l["size"]) * scale, b.x, b.y);
-      continue;
-    }
-    if (isShape(l)) {
-      const b = boxOf(l);
-      paintShape(c, l, only ? { x: 0, y: 0, w: made.width, h: made.height } : at(b), b);
-      continue;
-    }
-    const v = vectors.get(str(l["picture"]));
-    if (v) {
-      const b = only ? { x: 0, y: 0, w: made.width, h: made.height } : at(boxOf(l));
-      c.save();
+    const b = at(boxOf(l)), v = vectors.get(str(l["picture"])), seen = looks.get(l);
+    c.save();
+    turnedOn(c, middleOf(b), degreesOf(l));
+    if (isWords(l)) paintWords(c, l, str(l["words"]), num(l["size"]) * scale, b.x, b.y);
+    else if (isShape(l)) paintShape(c, l, b, boxOf(l));
+    else if (v) {
       c.globalAlpha = opacityOf(l);
       c.drawImage(v, b.x, b.y, b.w, b.h);
-      c.restore();
-      continue;
+    } else if (seen) {
+      // A layer copied alone is drawn without what it would leave around it.
+      if (only) c.drawImage(seen.picture, b.x, b.y, b.w, b.h);
+      else paintPicture(c, l, seen, board, b);
     }
-    const seen = looks.get(l);
-    if (!seen) continue;
-    // A layer copied alone is drawn without what it would leave around it.
-    if (only) c.drawImage(seen.picture, 0, 0, made.width, made.height);
-    else paintPicture(c, l, seen, board, at(boxOf(l)));
+    c.restore();
   }
   return made;
 }
@@ -580,7 +592,7 @@ async function drawnWhole(layers: Row[], W: number, H: number, scale: number, ad
 // the desktop's.
 async function svgOf(layers: Row[], W: number, H: number, address: ((path: string) => Promise<string>) | undefined, only?: string[]): Promise<string> {
   const ones = only ? layers.filter((l) => only.includes(str(l["id"]))) : [];
-  const area = ones.length > 0 ? around(ones.map(boxOf)) : { x: 0, y: 0, w: W, h: H };
+  const area = ones.length > 0 ? around(ones.map((l) => turnedBounds(boxOf(l), degreesOf(l)))) : { x: 0, y: 0, w: W, h: H };
   const saved: SavedLayer[] = [];
   const groupOf = groupsOf(layers);
   // A group's all it holds.
@@ -590,12 +602,12 @@ async function svgOf(layers: Row[], W: number, H: number, address: ((path: strin
     if (only && !only.some((o) => o === id || inGroup(groupOf, id, o))) continue;
     const b = boxOf(l);
     const at = { x: b.x - area.x, y: b.y - area.y, w: b.w, h: b.h };
-    const opacity = opacityOf(l);
+    const opacity = opacityOf(l), degrees = degreesOf(l);
     if (isWords(l)) {
-      saved.push({ kind: "words", at, opacity, words: str(l["words"]), color: str(l["color"]), family: wordsFamily(), size: num(l["size"]), weight: weightOf(l), italic: num(l["italic"]) !== 0 });
+      saved.push({ kind: "words", at, opacity, degrees, words: str(l["words"]), color: str(l["color"]), family: wordsFamily(), size: num(l["size"]), weight: weightOf(l), italic: num(l["italic"]) !== 0 });
     } else if (isShape(l)) {
       const drawn = { kind: str(l["shape"]) || "rectangle", points: str(l["points"]), fill: str(l["fill"]), stroke: str(l["stroke"]), strokeWidth: str(l["stroke"]) ? num(l["stroke_width"]) : 0, corners: num(l["corners"]), sides: num(l["sides"], 5), spoke: num(l["spoke"], 0.5) };
-      saved.push({ kind: "shape", at, opacity, drawn });
+      saved.push({ kind: "shape", at, opacity, degrees, drawn });
     } else if (address) {
       const path = str(l["picture"]);
       const blob = await address(path).then((url) => fetch(url)).then((r) => r.blob()).catch(() => undefined);
@@ -603,14 +615,14 @@ async function svgOf(layers: Row[], W: number, H: number, address: ((path: strin
       const svg = await svgIn(blob);
       if (svg !== undefined) {
         const natural = svgSize(svg);
-        saved.push({ kind: "svg", at, opacity, svg, natural: natural && { x: 0, y: 0, w: natural.w, h: natural.h } });
+        saved.push({ kind: "svg", at, opacity, degrees, svg, natural: natural && { x: 0, y: 0, w: natural.w, h: natural.h } });
       } else {
         const href = await new Promise<string>((done) => {
           const reader = new FileReader();
           reader.onload = () => done(String(reader.result));
           reader.readAsDataURL(blob);
         });
-        saved.push({ kind: "picture", at, opacity, href, crop: cropOf(l), turns: num(l["turns"]), mirrored: num(l["mirrored"]) !== 0, corners: num(l["corners"]) });
+        saved.push({ kind: "picture", at, opacity, degrees, href, crop: cropOf(l), turns: num(l["turns"]), mirrored: num(l["mirrored"]) !== 0, corners: num(l["corners"]) });
       }
     }
   }
@@ -719,7 +731,7 @@ export function CollageButton({ collage, does, label, icon, keys }: { collage: s
 
 // What the pointer is doing to a layer, from where it was and where the pointer was.
 interface Gesture {
-  what: "moving" | "resizing" | "cropping" | "shifting" | "drawing" | "reshaping" | "selecting" | "panning";
+  what: "moving" | "resizing" | "cropping" | "shifting" | "drawing" | "reshaping" | "selecting" | "panning" | "rotating";
   id: string;
   from: Box;
   at: Point;
@@ -727,6 +739,7 @@ interface Gesture {
   edges: number;
   keptFrom?: Box;
   free?: boolean; // a shape, resized freely, its shape kept only with Shift
+  degrees?: number; // how far it was turned as it began
 }
 
 // Where the collage was last drawn, how much smaller than itself, what the pointer is
@@ -754,6 +767,9 @@ interface Placed {
   reshaped?: { id: string; outline: string };
   // The picked path's node last pressed, whose control points show, by its id.
   node?: { id: string; at: number };
+  // A layer being turned, or a group, and all it holds carried round with it: how far
+  // it's turned now, and by how much more than it was, about where.
+  turning?: { id: string; about: Point; by: number; degrees: number };
   // While a group is moved or resized, where it and each it holds were as it began.
   carried?: { id: string; group: Box; from: Map<string, Box> }; // the group carried, or "chosen"
   // A group gone into by pressing it twice: what's pressed in it is picked from among
@@ -798,6 +814,7 @@ export function Collage({
   fields,
   place,
   reshape,
+  rotate,
   group,
   order,
   snap = false,
@@ -833,6 +850,7 @@ export function Collage({
   fields: Record<string, string>; // the field each of its parts is kept in, like words: "caption"
   place?: string; // the command a layer moved or resized is sent to, with x y w h
   reshape?: string; // and the one a path's nodes moved are, with its points and x y w h
+  rotate?: string; // and the one a layer turned is, with its rotation and x y
   group?: string; // and the one that puts a layer in a group, or takes it out, by its group
   order?: string; // and the one a layer's depth is sent to, raised or lowered
   snap?: boolean;
@@ -1356,6 +1374,14 @@ export function Collage({
     }
     return b;
   };
+  // Where each layer is and how far it's turned: as it says, or while it's turned, as far
+  // as it's turned now, one a group holds carried round with it.
+  const turnOf = (l: Row): { at: Box; degrees: number } => {
+    const b = whereIs(l), t = w.turning, id = str(l["id"]);
+    if (t && id === t.id) return { at: b, degrees: t.degrees };
+    if (t && inGroup(groupOf, id, t.id)) return turnedAbout(b, degreesOf(l), t.about, t.by);
+    return { at: b, degrees: degreesOf(l) };
+  };
   // A crop begun on a picture where it is, and the whole picture behind it.
   const cropBegun = (l: Row): NonNullable<Placed["crop"]> => {
     const kept = boxOf(l);
@@ -1403,6 +1429,7 @@ export function Collage({
     const shifts = shiftsOf(layers, matchColors, address);
     let framed: Box | undefined;
     let framedRadius = 0;
+    let framedTurn = 0; // and it turns as far as it does
     let nodes: Box[] = []; // a picked path's, drawn instead of its frame
     let levers: Box[] = []; // its chosen node's control points
     let chosenNode: Box | undefined;
@@ -1427,12 +1454,17 @@ export function Collage({
       if (fill) c.drawImage(fill, board.x, board.y, bw, bh);
     }
     for (const l of layers) {
-      let b = onBoard(whereIs(l));
+      const turn = turnOf(l);
+      let b = onBoard(turn.at);
       // A group draws nothing of its own; picked, it's framed around all it holds.
       if (holdsOthers(l)) {
-        if (l["id"] === picked && !full) framed = b;
+        if (l["id"] === picked && !full) (framed = b), (framedTurn = turn.degrees);
         continue;
       }
+      // Turned about its middle; cropped, it's shown unturned, as its crop's edges are.
+      const degrees = w.crop?.id === l["id"] ? 0 : turn.degrees;
+      c.save();
+      turnedOn(c, middleOf(b), degrees);
       if (isWords(l)) {
         // Being written: as typed so far, with its caret, all of it marked while the
         // first key would replace it; being resized, its letters as large.
@@ -1499,8 +1531,9 @@ export function Collage({
           }
         }
       }
+      c.restore();
       if (l["id"] === picked && !full) {
-        framed = b;
+        (framed = b), (framedTurn = degrees);
         // A picture's frame follows its corners, round as they are.
         framedRadius = isWords(l) || (w.crop && w.crop.id === l["id"]) ? 0 : Math.min(num(l["corners"]) * Math.min(b.w, b.h), Math.min(b.w, b.h) / 2);
       }
@@ -1644,6 +1677,8 @@ export function Collage({
         c.stroke();
       }
     } else if (framed) {
+      c.save();
+      turnedOn(c, middleOf(framed), framedTurn);
       c.strokeStyle = accent;
       c.lineWidth = 2;
       if (framedRadius > 0) {
@@ -1663,6 +1698,27 @@ export function Collage({
         c.fillRect(x - handle / 2, y - handle / 2, handle, handle);
         c.strokeRect(x - handle / 2, y - handle / 2, handle, handle);
       }
+      c.restore();
+    }
+    // Just past its lower right corner, a round handle that turns it, as a drag past any
+    // corner does.
+    if (framed && chosen && !w.crop && !w.editing && (nodes.length ? reshape : rotate)) {
+      c.save();
+      turnedOn(c, middleOf(framed), framedTurn);
+      const x = framed.x + framed.w, y = framed.y + framed.h;
+      c.strokeStyle = accent;
+      c.lineWidth = 1;
+      c.beginPath();
+      c.moveTo(x, y);
+      c.lineTo(x + turnKnob, y + turnKnob);
+      c.stroke();
+      c.lineWidth = 1.5;
+      c.fillStyle = "#fff";
+      c.beginPath();
+      c.arc(x + turnKnob, y + turnKnob, handle / 2, 0, 2 * Math.PI);
+      c.fill();
+      c.stroke();
+      c.restore();
     }
     setFrame((was) => (was && framed && was.x === framed.x && was.y === framed.y && was.w === framed.w && was.h === framed.h ? was : framed));
   };
@@ -1801,7 +1857,7 @@ export function Collage({
     snapLines(
       W,
       H,
-      layers.filter((l) => l["id"] !== moving && !inGroup(groupOf, str(l["id"]), moving) && !w.carried?.from.has(str(l["id"])) && !holdsOthers(l)).map((l) => whereIs(l)),
+      layers.filter((l) => l["id"] !== moving && !inGroup(groupOf, str(l["id"]), moving) && !w.carried?.from.has(str(l["id"])) && !holdsOthers(l)).map((l) => turnedBounds(whereIs(l), degreesOf(l))),
     );
   // The collage's delete of a group, run by a button over it, deletes all it holds with
   // it, in one step.
@@ -1822,7 +1878,7 @@ export function Collage({
     w.carried = { id: group, group: from, from: new Map(layers.filter((l) => !holdsOthers(l) && carriedOne(str(l["id"]))).map((l) => [str(l["id"]), boxOf(l)])) };
   };
   // The box around what's chosen, where each is.
-  const chosenBox = () => around(layers.filter((l) => w.chosen.includes(str(l["id"]))).map(whereIs));
+  const chosenBox = () => around(layers.filter((l) => w.chosen.includes(str(l["id"]))).map((l) => turnedBounds(whereIs(l), degreesOf(l))));
   // What's chosen made the screen's pick: one alone is picked; several, none is, and
   // they're drawn chosen.
   const pickChosen = () => {
@@ -1847,23 +1903,62 @@ export function Collage({
       paint();
     }
   };
+  // A turn by a drag past a corner, the pointer now at `p`: about its middle, by 45
+  // degrees at a time with Shift.
+  const turnToward = (p: Point, snapping: boolean) => {
+    const g = w.now, t = w.turning;
+    if (!g || !t || w.scale <= 0) return;
+    t.degrees = turnTo(g.from, g.degrees ?? 0, onCollage(g.at), onCollage(p), snapping);
+    t.by = t.degrees - (g.degrees ?? 0);
+  };
+  // A turn let go, kept: each layer turned sends how far it's turned and where it is, a
+  // path its points turned instead, and a group all it holds, as one step to undo. Once
+  // the last is answered, it's drawn from the view again. The same as the desktop's.
+  const turnKept = async () => {
+    const t = w.turning;
+    if (!t || t.by === 0) return void (w.turning = undefined);
+    const sent: [string, Row][] = [];
+    for (const l of layers) {
+      const id = str(l["id"]);
+      if (holdsOthers(l) || (id !== t.id && !inGroup(groupOf, id, t.id))) continue;
+      const b = whereIs(l);
+      if (isPath(l) && reshape) {
+        const { points, box } = reshapedAs(pathTurned(outlineOf(l, b), t.about, t.by));
+        sent.push([reshape, { id, points, x: box.x, y: box.y, w: box.w, h: box.h }]);
+      } else if (rotate) {
+        const now = turnedAbout(b, degreesOf(l), t.about, t.by);
+        sent.push([rotate, { id, rotation: now.degrees, x: now.at.x, y: now.at.y }]);
+      }
+    }
+    try {
+      for (const [i, [command, fields]] of sent.entries()) await send(command, { ...fields, ...(i > 0 ? { "one:history": "joined" } : {}) });
+    } finally {
+      w.turning = undefined;
+      paint();
+    }
+  };
   const goingTo = (p: Point, e: { altKey: boolean; shiftKey: boolean }): Box => {
     const g = w.now!;
     const dx = (p.x - g.at.x) / w.scale, dy = (p.y - g.at.y) / w.scale, close = 8 / w.scale;
     if (g.what === "cropping" && w.crop) return cropped(g.from, g.edges, dx, dy, w.crop.whole);
     const snaps = snap && !e.altKey;
+    // One turned resizes in its own frame, snapping to nothing.
     const to =
       g.what === "moving"
         ? moved(g.from, dx, dy, w.lines, W, H, close, snaps)
-        : resized(g.from, g.corner, dx, dy, g.free ? e.shiftKey : !e.shiftKey, w.lines, close, snaps);
+        : g.degrees
+          ? { at: resizedTurned(g.from, g.degrees, g.corner, dx, dy, g.free ? e.shiftKey : !e.shiftKey) }
+          : resized(g.from, g.corner, dx, dy, g.free ? e.shiftKey : !e.shiftKey, w.lines, close, snaps);
     w.guide = to;
     return to.at;
   };
   const pickRow = (id: string) => pick && setPicked(pick, id || undefined);
   // Whether a press at `p`, in the window, reaches a layer, its box `b`: a path by its
   // stroke, 6 pixels around it and half its width, or inside it while it's filled;
-  // anything else within its box. The same as the desktop's.
+  // anything else within its box; one turned, in its own frame. The same as the
+  // desktop's.
   const hits = (l: Row, b: Box, p: Point) => {
+    if (degreesOf(l)) p = turned(p, middleOf(onBoard(b)), -degreesOf(l));
     if (!isPath(l)) return inside(onBoard(b), p);
     const reach = 6 / w.scale + (str(l["stroke"]) ? num(l["stroke_width"]) / 2 : 0);
     return pathReaches(outlineOf(l, b), onCollage(p), reach, /^#[0-9a-fA-F]{6}$/.test(str(l["fill"])));
@@ -2043,15 +2138,24 @@ export function Collage({
         return;
       }
     }
-    // A corner of the picked one resizes it; a path has nodes, not corners.
-    if (chosen && (!isPath(chosen) || holdsOthers(chosen)) && (isWords(chosen) ? write : place)) {
-      const b = whereIs(chosen);
-      const corner = cornerAt(onBoard(b), p, handle);
+    // A corner of the picked one resizes it; a path has nodes, not corners. Just past a
+    // corner, a drag turns it, a path by its points.
+    if (chosen) {
+      const path = isPath(chosen) && !holdsOthers(chosen);
+      const { at: b, degrees } = turnOf(chosen);
+      const shown = onBoard(b), own = turned(p, middleOf(shown), -degrees);
+      const corner = !path && (isWords(chosen) ? write : place) ? cornerAt(shown, own, handle) : -1;
       if (corner >= 0) {
         // A group keeps its shape unless Shift, as a picture does.
-        w.now = { what: "resizing", id: picked, from: b, at: p, corner, edges: 0, free: isShape(chosen) && !holdsOthers(chosen) };
+        w.now = { what: "resizing", id: picked, from: b, at: p, corner, edges: 0, free: isShape(chosen) && !holdsOthers(chosen), degrees };
         if (holdsOthers(chosen)) carryFrom(picked, b);
         w.lines = linesFor(picked);
+        e.currentTarget.setPointerCapture(e.pointerId);
+        return;
+      }
+      if ((path ? reshape : rotate) && pastCorner(shown, own)) {
+        w.now = { what: "rotating", id: picked, from: b, at: p, corner: 0, edges: 0, degrees };
+        w.turning = { id: picked, about: middleOf(b), by: 0, degrees };
         e.currentTarget.setPointerCapture(e.pointerId);
         return;
       }
@@ -2142,6 +2246,11 @@ export function Collage({
       paint();
       return;
     }
+    if (g.what === "rotating") {
+      turnToward(p, e.shiftKey);
+      paint();
+      return;
+    }
     if (g.what === "reshaping") {
       w.reshaped = { id: g.id, outline: reshapedBy(w.reshapeFrom ?? "", g, (p.x - g.at.x) / w.scale, (p.y - g.at.y) / w.scale) };
       paint();
@@ -2184,7 +2293,7 @@ export function Collage({
       w.marquee = undefined;
       if (!m || (m.w * w.scale < 3 && m.h * w.scale < 3)) return paint();
       for (const l of layers) {
-        const id = str(l["id"]), b = whereIs(l);
+        const id = str(l["id"]), b = turnedBounds(whereIs(l), degreesOf(l));
         if (str(l["group"]) !== (w.entered ?? "")) continue;
         if (b.x >= m.x && b.y >= m.y && b.x + b.w <= m.x + m.w && b.y + b.h <= m.y + m.h && !w.chosen.includes(id)) w.chosen = [...w.chosen, id];
       }
@@ -2194,6 +2303,12 @@ export function Collage({
       move(e);
       w.now = undefined;
       return;
+    }
+    if (g.what === "rotating") {
+      turnToward(at(e), e.shiftKey);
+      w.now = undefined;
+      void turnKept();
+      return paint();
     }
     if (g.what === "reshaping") {
       w.now = undefined;
@@ -2292,9 +2407,12 @@ export function Collage({
     } else if (w.editing) cursor = "text";
     else if (draws.some((d) => d.when !== false)) cursor = drawingNow()?.by === "typing" ? "text" : "crosshair";
     else {
-      const corner = chosen && !isPath(chosen) && (isWords(chosen) ? write : place) ? cornerAt(onBoard(whereIs(chosen)), p, handle) : -1;
+      const path = chosen && isPath(chosen) && !holdsOthers(chosen);
+      const shown = chosen && onBoard(whereIs(chosen)), own = shown ? turned(p, middleOf(shown), -degreesOf(chosen!)) : p;
+      const corner = shown && !path && (isWords(chosen!) ? write : place) ? cornerAt(shown, own, handle) : -1;
       if (corner === 0 || corner === 2) cursor = "nwse-resize";
       else if (corner === 1 || corner === 3) cursor = "nesw-resize";
+      else if (shown && (path ? reshape : rotate) && pastCorner(shown, own)) cursor = "grab";
       else if (layers.some((l) => hits(l, whereIs(l), p))) cursor = place ? "all-scroll" : "pointer"; // four arrows; many themes draw move as a hand
     }
     e.currentTarget.style.cursor = cursor;
@@ -2925,8 +3043,8 @@ export function inLayers(objects: Row[], layers: Row[], field: string): Row[] {
 
 // A collage's layers with their groups worked out: one that others name as their group
 // holds them, "holds" saying how many, and its place is the box around all it holds,
-// however deep; one naming a group that isn't there, or itself, is in none. The same as
-// the desktop's.
+// however deep, each turned as far as its rotation says; one naming a group that isn't
+// there, or itself, is in none. The same as the desktop's.
 export function grouped(layers: Row[]): Row[] {
   const ids = new Set(layers.map((l) => str(l["id"])));
   const rows = layers.map((l) => {
@@ -2940,7 +3058,7 @@ export function grouped(layers: Row[]): Row[] {
   const boxOfRow = (r: Row): Box => {
     const id = str(r["id"]);
     const inside = held.get(id);
-    if (!inside || working.has(id)) return { x: num(r["x"]), y: num(r["y"]), w: num(r["w"]), h: num(r["h"]) };
+    if (!inside || working.has(id)) return turnedBounds({ x: num(r["x"]), y: num(r["y"]), w: num(r["w"]), h: num(r["h"]) }, num(r["rotation"]));
     working.add(id);
     const b = around(inside.map(boxOfRow));
     working.delete(id);

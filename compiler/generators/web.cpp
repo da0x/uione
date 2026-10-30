@@ -1542,6 +1542,7 @@ namespace one::generators {
                     line += " fields={{ " + kept + " }}";
                     if (c->place) line += " place=" + web_detail::js_string(full_command(ns, *c->place));
                     if (c->reshape) line += " reshape=" + web_detail::js_string(full_command(ns, *c->reshape));
+                    if (c->rotate) line += " rotate=" + web_detail::js_string(full_command(ns, *c->rotate));
                     if (c->group) line += " group=" + web_detail::js_string(full_command(ns, *c->group));
                     if (c->order) line += " order=" + web_detail::js_string(full_command(ns, *c->order));
                     if (c->snap) line += " snap";

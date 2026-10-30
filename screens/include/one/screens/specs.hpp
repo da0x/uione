@@ -11,7 +11,9 @@
 #include <functional>
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <map>
+#include <numbers>
 #include <optional>
 #include <set>
 #include <string>
@@ -416,6 +418,7 @@ namespace one::screens {
 		std::map<std::string, std::string> fields = {};
 		std::string place = "";  // the command a layer moved or resized is sent to, with x y w h
 		std::string reshape = "";  // and the one a path's nodes moved are, with its points and x y w h
+		std::string rotate = "";   // and the one a layer turned is, with its rotation and x y
 		std::string group = "";    // and the one that puts a layer in a group, or takes it out, by its group
 		std::string order = "";    // and the one a layer's depth is sent to, raised or lowered
 		bool snap = false;       // to the collage's edges and middle, and every other layer's
@@ -573,7 +576,8 @@ namespace one::screens {
 
 	// A collage's layers with their groups worked out: one that others name as their
 	// group holds them, "holds" saying how many, and its place is the box around all it
-	// holds, however deep; one naming a group that isn't there, or itself, is in none.
+	// holds, however deep, each turned as far as its rotation says; one naming a group
+	// that isn't there, or itself, is in none.
 	inline value grouped(const value& layers) {
 		std::vector<value> rows = layers.as_array();
 		std::map<std::string, std::size_t> at;
@@ -593,7 +597,12 @@ namespace one::screens {
 			const value& r = rows[i];
 			std::array<double, 4> own{r["x"].as_double(), r["y"].as_double(), r["w"].as_double(), r["h"].as_double()};
 			auto inside = held.find(r["id"].as_string());
-			if (inside == held.end() || working.contains(i)) return own;
+			if (inside == held.end() || working.contains(i)) {
+				double turn = r["rotation"].as_double() * std::numbers::pi / 180;
+				if (turn == 0) return own;
+				double across = std::abs(own[2] * std::cos(turn)) + std::abs(own[3] * std::sin(turn)), down = std::abs(own[2] * std::sin(turn)) + std::abs(own[3] * std::cos(turn));
+				return {own[0] + (own[2] - across) / 2, own[1] + (own[3] - down) / 2, across, down};
+			}
 			working.insert(i);
 			double left = 0, top = 0, right = 0, bottom = 0;
 			bool first = true;
