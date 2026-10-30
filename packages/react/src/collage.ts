@@ -772,6 +772,79 @@ export function carried(one: Box, from: Box, to: Box): Box {
   return { x: to.x + (one.x - from.x) * sx, y: to.y + (one.y - from.y) * sy, w: one.w * sx, h: one.h * sy };
 }
 
+// Turned by `degrees` clockwise about `about`, as y runs down a screen.
+export function turned(at: Point, about: Point, degrees: number): Point {
+  const a = (degrees * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a);
+  const x = at.x - about.x, y = at.y - about.y;
+  return { x: about.x + x * c - y * s, y: about.y + x * s + y * c };
+}
+
+const middleOf = (b: Box): Point => ({ x: b.x + b.w / 2, y: b.y + b.h / 2 });
+// From 0 up to 360, and a whisker from a whole degree made whole.
+function wholeTurn(degrees: number): number {
+  let d = degrees % 360;
+  if (d < 0) d += 360;
+  if (Math.abs(d - Math.round(d)) < 1e-9) d = Math.round(d);
+  return d >= 360 ? 0 : d;
+}
+
+// The box around one turned by `degrees` about its middle; itself unturned.
+export function turnedBounds(b: Box, degrees: number): Box {
+  if (wholeTurn(degrees) === 0) return b;
+  const m = middleOf(b);
+  return around(
+    [
+      { x: b.x, y: b.y },
+      { x: b.x + b.w, y: b.y },
+      { x: b.x + b.w, y: b.y + b.h },
+      { x: b.x, y: b.y + b.h },
+    ].map((p) => ({ ...turned(p, m, degrees), w: 0, h: 0 })),
+  );
+}
+
+// How far one turned by `degrees` is turned after a drag about its middle from `from` to
+// `to`: from 0 up to 360, on a multiple of 45 when it `snaps`.
+export function turnTo(b: Box, degrees: number, from: Point, to: Point, snaps: boolean): number {
+  const m = middleOf(b);
+  const by = ((Math.atan2(to.y - m.y, to.x - m.x) - Math.atan2(from.y - m.y, from.x - m.x)) * 180) / Math.PI;
+  const now = wholeTurn(degrees + by);
+  return snaps ? wholeTurn(Math.round(now / 45) * 45) : now;
+}
+
+// One turned by `degrees`, as a group it's in turns `by` about `about`: its middle
+// carried round, and it turned as much more.
+export function turnedAbout(b: Box, degrees: number, about: Point, by: number): { at: Box; degrees: number } {
+  const m = turned(middleOf(b), about, by);
+  return { at: { x: m.x - b.w / 2, y: m.y - b.h / 2, w: b.w, h: b.h }, degrees: wholeTurn(degrees + by) };
+}
+
+// One turned by `degrees` resized by a corner, dragged dx and dy across the screen, in its
+// own turned frame: the opposite corner staying put where it's shown, its shape kept
+// unless not `keepShape`.
+export function resizedTurned(from: Box, degrees: number, corner: number, dx: number, dy: number, keepShape: boolean): Box {
+  // The drag in its own frame, resized there, then put back where the opposite corner
+  // was shown.
+  const along = turned({ x: dx, y: dy }, { x: 0, y: 0 }, -degrees);
+  const r = resized(from, corner, along.x, along.y, keepShape, { across: [], down: [] }, 0, false).at;
+  const cornerOf = (b: Box, k: number): Point => ({ x: k === 1 || k === 2 ? b.x + b.w : b.x, y: k >= 2 ? b.y + b.h : b.y });
+  const stays = (corner + 2) % 4;
+  const was = turned(cornerOf(from, stays), middleOf(from), degrees), now = turned(cornerOf(r, stays), middleOf(r), degrees);
+  return { x: r.x + was.x - now.x, y: r.y + was.y - now.y, w: r.w, h: r.h };
+}
+
+// A path, where it is, turned by `degrees` about `about`, every point of it.
+export function pathTurned(absolute: string, about: Point, degrees: number): string {
+  const commands = commandsOf(absolute);
+  for (const c of commands) {
+    for (let i = 0; i + 1 < c.numbers.length; i += 2) {
+      const t = turned({ x: c.numbers[i]!, y: c.numbers[i + 1]! }, about, degrees);
+      c.numbers[i] = t.x;
+      c.numbers[i + 1] = t.y;
+    }
+  }
+  return writtenOf(commands);
+}
+
 // A path's nodes, where it is, written as pathIn writes it: where each of its segments
 // ends, M, L and C alike, in order.
 export function pathNodes(absolute: string): Point[] {
@@ -939,6 +1012,7 @@ export interface SavedLayer {
   corners?: number;
   svg?: string;
   natural?: Box;
+  degrees?: number; // turned clockwise about its middle
 }
 
 // Words as XML holds them.
@@ -986,7 +1060,9 @@ function saved(l: SavedLayer, index: number): string {
 export function svgDocument(width: number, height: number, layers: SavedLayer[]): string {
   let out = `<svg xmlns="http://www.w3.org/2000/svg" width="${said(width)}" height="${said(height)}" viewBox="0 0 ${said(width)} ${said(height)}">\n`;
   layers.forEach((l, i) => {
-    const one = saved(l, i);
+    let one = saved(l, i);
+    const d = wholeTurn(l.degrees ?? 0);
+    if (d !== 0) one = `<g transform="rotate(${said(d)} ${said(l.at.x + l.at.w / 2)} ${said(l.at.y + l.at.h / 2)})">${one}</g>`;
     out += ((l.opacity ?? 1) < 1 ? `<g opacity="${said(Math.max(0, l.opacity ?? 1))}">${one}</g>` : one) + "\n";
   });
   return out + "</svg>\n";

@@ -67,6 +67,8 @@ namespace studio at / {
 		stroke   text
 		stroke_width  number  = 0
 		hidden   number  = 0
+		// How far it's turned about its middle, in degrees clockwise.
+		rotation number  = 0
 		// The group it's in, another layer, drawn, moved and resized with it as one.
 		group    layer
 	}
@@ -134,6 +136,9 @@ namespace studio at / {
 	command layer::reshape {
 		changes points x y w h
 	}
+	command layer::rotate {
+		changes rotation x y
+	}
 	// A shape's colors.
 	command layer::paint {
 		changes fill stroke
@@ -165,7 +170,7 @@ namespace studio at / {
 		title  color  width  height  matched
 		layers = each layer in poster {
 			order by depth
-			picture  crop_x  crop_y  crop_w  crop_h  around  corners  words  size  weight  depth  x  y  w  h  fill  shape  points  stroke  stroke_width  hidden  group
+			picture  crop_x  crop_y  crop_w  crop_h  around  corners  words  size  weight  depth  x  y  w  h  fill  shape  points  stroke  stroke_width  hidden  rotation  group
 		}
 	}
 
@@ -353,6 +358,7 @@ namespace studio at / {
 				draw layer::create { shape = shape::path  stroke = "#1d1d1f"  stroke_width = 4 } by points when tool == tool::pen
 				place layer::place
 				reshape layer::reshape
+				rotate layer::rotate
 				group layer::group
 				order layer::update
 				crop layer::crop

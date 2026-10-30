@@ -856,6 +856,7 @@ namespace one::language {
         location size_where;
         std::optional<qualified_name> place;  // place layer::place: a layer moved or resized, kept
         std::optional<qualified_name> reshape;  // reshape layer::reshape: a path's nodes moved, its points and box kept
+        std::optional<qualified_name> rotate;   // rotate layer::rotate: a layer turned by a drag past a corner, its rotation and x y kept
         std::optional<qualified_name> group;  // group layer::group: what puts a layer in a group, or takes it out
         std::optional<qualified_name> order;  // order layer::update: what a layer's depth is sent to, raised or lowered
         std::optional<qualified_name> add;    // add layer::create: what makes new layers, like words added
@@ -1594,6 +1595,8 @@ namespace one::language {
             {"shape", "rectangle ellipse path polygon star"}, {"points", "text"}, {"fill", "text"}, {"stroke", "text"}, {"stroke_width", "number"}, {"opacity", "number"},
             // A polygon's or a star's corners, and how far in a star's go, of the way out.
             {"sides", "number"}, {"spoke", "number"},
+            // How far it's turned about its middle, in degrees clockwise.
+            {"rotation", "number"},
             // Whether it's hidden: not drawn, picked or saved while it's anything but 0.
             {"hidden", "number"},
             // What it's called in a list of the layers, in place of what it is.

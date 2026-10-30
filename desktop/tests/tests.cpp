@@ -113,6 +113,37 @@ TEST("a drawing takes the space it's given, and paints there") {
 	CHECK(at(100, 2)[1] != 0);  // the text above it isn't painted over
 }
 
+TEST("a picture and text turned are drawn turned about where they're turned, and the rest as it was") {
+	// A red bar 80 wide and 10 high across the middle, turned a quarter about its middle:
+	// it stands up, so its middle's red, above and below it are red, and its ends aren't.
+	std::vector<std::uint8_t> red;
+	for (int i = 0; i < 8 * 8; ++i) red.insert(red.end(), {255, 0, 0, 255});
+	auto bar = one::desktop::picture::of(8, 8, red);
+	auto drawn = one::desktop::offscreen::draw({100, 100}, 1, one::desktop::color::hex(0xffffff), [&](one::desktop::canvas& c) {
+		auto turned = c.turned({50, 50}, 90);
+		c.picture(bar, {10, 45, 80, 10});
+	});
+	auto at = [&](int x, int y) { return &drawn.rgba[static_cast<std::size_t>((y * drawn.width + x) * 4)]; };
+	CHECK(at(50, 50)[1] < 40);
+	CHECK(at(50, 15)[1] < 40);
+	CHECK(at(50, 85)[1] < 40);
+	CHECK(at(15, 50)[1] > 200);
+	CHECK(at(85, 50)[1] > 200);
+	// Text turned a quarter reaches down from where it begins, not across.
+	auto words = one::desktop::offscreen::draw({100, 100}, 1, one::desktop::color::hex(0xffffff), [&](one::desktop::canvas& c) {
+		auto turned = c.turned({50, 10}, 90);
+		c.text(one::desktop::lay_out(one::desktop::text_span{"Mmmmm", {.size = 16, .color = one::desktop::color::hex(0x000000)}}, 200, 1), {50, 10});
+	});
+	auto inked = [&](int x0, int y0, int x1, int y1) {
+		int n = 0;
+		for (int y = y0; y < y1; ++y)
+			for (int x = x0; x < x1; ++x) n += words.rgba[static_cast<std::size_t>((y * words.width + x) * 4)] < 128;
+		return n;
+	};
+	CHECK(inked(25, 20, 50, 60) > 20);
+	CHECK(inked(55, 5, 100, 25) == 0);
+}
+
 namespace {
 
 	// Red, green, blue and white, a pixel each, left to right and top to bottom.

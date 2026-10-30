@@ -81,11 +81,31 @@ namespace one::desktop {
 		};
 		[[nodiscard]] clip_scope clip(const rect& area);
 
+		// Draws pictures and text turned by `degrees` clockwise about `about` until the
+		// scope ends; boxes, lines and fills stay as they are.
+		class turn_scope {
+		public:
+			~turn_scope();
+			turn_scope(const turn_scope&) = delete;
+			turn_scope& operator=(const turn_scope&) = delete;
+
+		private:
+			friend class canvas;
+			explicit turn_scope(canvas& c) : owner_(c) {}
+			canvas& owner_;
+		};
+		[[nodiscard]] turn_scope turned(point about, float degrees);
+		struct turning {
+			point about;
+			float degrees = 0;
+		};
+
 		explicit canvas(renderer& r) : renderer_(r) {}
 
 	private:
 		renderer& renderer_;
 		std::vector<rect> clips_;
+		std::vector<turning> turns_;
 		std::vector<std::function<void(canvas&)>> later_;
 	};
 

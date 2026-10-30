@@ -592,6 +592,20 @@ TEST("a collage's layers go where collage-cases.json says, as they do on the web
 			std::vector<c::box> boxes;
 			for (const auto& b : k["boxes"].as_array()) boxes.push_back(box_of(b));
 			check::verify(same(c::around(boxes), box_of(k["box"])), "around", note);
+		} else if (what == "turned_bounds") {
+			check::verify(same(c::turned_bounds(box_of(k["box"]), k["degrees"].as_double()), box_of(k["bounds"])), "turned_bounds", note);
+		} else if (what == "turn_to") {
+			double got = c::turn_to(box_of(k["box"]), k["degrees"].as_double(), {n(k["from"], 0), n(k["from"], 1)}, {n(k["to"], 0), n(k["to"], 1)}, k["snaps"].as_bool());
+			check::verify(near(got, k["now"].as_double()), "turn_to", note + ": " + std::format("{}", got));
+		} else if (what == "turned_about") {
+			auto got = c::turned_about(box_of(k["box"]), k["degrees"].as_double(), {n(k["about"], 0), n(k["about"], 1)}, k["turn"].as_double());
+			check::verify(same(got.at, box_of(k["carried_to"])) && near(got.degrees, k["now"].as_double()), "turned_about", note + ": " + said(got.at));
+		} else if (what == "resized_turned") {
+			auto got = c::resized_turned(box_of(k["from"]), k["degrees"].as_double(), static_cast<int>(k["corner"].as_integer()), n(k["by"], 0), n(k["by"], 1), k["keep_shape"].as_bool());
+			check::verify(same(got, box_of(k["box"])), "resized_turned", note + ": " + said(got));
+		} else if (what == "path_turned") {
+			std::string got = c::path_turned(k["path"].as_string(), {n(k["about"], 0), n(k["about"], 1)}, k["degrees"].as_double());
+			check::verify(got == k["turned_path"].as_string(), "path_turned", note + ": " + got);
 		} else if (what == "carried") {
 			check::verify(same(c::carried(box_of(k["one"]), box_of(k["from"]), box_of(k["to"])), box_of(k["box"])), "carried", note);
 		} else if (what == "path_bounds") {
@@ -746,6 +760,7 @@ TEST("a collage's layers go where collage-cases.json says, as they do on the web
 				if (!l["corners"].is_null()) saved.corners = l["corners"].as_double();
 				saved.svg = l["svg"].as_string();
 				if (!l["natural"].is_null()) saved.natural = box_of(l["natural"]);
+				if (!l["degrees"].is_null()) saved.degrees = l["degrees"].as_double();
 				layers.push_back(std::move(saved));
 			}
 			std::string got = c::svg_document(width, height, layers);

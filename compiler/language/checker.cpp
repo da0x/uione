@@ -4185,9 +4185,10 @@ namespace one::language {
             if (kept.contains("picture_width") != kept.contains("picture_height")) error(collage.list_where, "a picture's own size is its picture_width and picture_height together");
             // Placed, cropped, written and made by commands on what its layers are.
             if (collage.reshape && !kept.contains("points")) error(collage.reshape->where, "a path's nodes are kept in its points, which " + layer->name + " doesn't have; add points text to it, or say its field");
+            if (collage.rotate && !kept.contains("rotation")) error(collage.rotate->where, "how far a layer's turned is kept in its rotation, which " + layer->name + " doesn't have; add rotation number to it, or say its field, like rotated angle");
             if (collage.order && !kept.contains("depth")) error(collage.order->where, "a layer's place in the stack is kept in its depth, which " + layer->name + " doesn't have; add depth number to it, or say its field, like stacked by order");
             if (collage.group && !kept.contains("group")) error(collage.group->where, "the group a layer is in is kept in its group, another " + layer->name + ", which it doesn't have; add group " + layer->name + " to it, or say its field");
-            for (const auto& [command, like] : {std::pair{&collage.place, "place"}, {&collage.reshape, "reshape"}, {&collage.crop, "crop"}, {&collage.write, "write"}, {&collage.add, "create"}, {&collage.remove, "delete"}, {&collage.group, "group"}, {&collage.order, "update"}}) {
+            for (const auto& [command, like] : {std::pair{&collage.place, "place"}, {&collage.reshape, "reshape"}, {&collage.rotate, "rotate"}, {&collage.crop, "crop"}, {&collage.write, "write"}, {&collage.add, "create"}, {&collage.remove, "delete"}, {&collage.group, "group"}, {&collage.order, "update"}}) {
                 if (!*command) continue;
                 verify_command_use(ns, **command);
                 const entity_declaration* on = find_command(ns, **command);

@@ -238,7 +238,7 @@ given          ::= "{" NEWLINE? ((NAME "=" expression)+ END)* "}"
 /* opacity from 0 to 1: on a screen's button, any value along a slider, its command run as it's let go;
    fill any color: any color, chosen with a color picker */
 button_given   ::= "{" NEWLINE? ((NAME ("=" expression | "from" "-"? NUMBER "to" "-"? NUMBER ("by" NUMBER)? | "any" "color"))+ END)* "}"
-collage_line   ::= ("place" qualified | "reshape" qualified | "group" qualified | "order" qualified | "add" qualified | "crop" qualified | "write" qualified | "delete" qualified
+collage_line   ::= ("place" qualified | "reshape" qualified | "rotate" qualified | "group" qualified | "order" qualified | "add" qualified | "crop" qualified | "write" qualified | "delete" qualified
                   | "snap" "to" "edges" | "clear" | "match" "colors" "when" expression | "empty" STRING | "over" NAME screen_block
                   /* its objects held in layers, another list of its view, each naming its own by a field */
                   | "in" qualified "." NAME "by" NAME
@@ -252,7 +252,7 @@ collage_line   ::= ("place" qualified | "reshape" qualified | "group" qualified 
                   | "paste"
                   /* the fields playing its parts, each kept in the field named like it unless one of these says another */
                   | "at" NAME NAME ("size" NAME NAME)? | "size" NAME NAME | "stacked" "by" NAME
-                  | "picture" NAME ("sized" NAME NAME)? | "cropped" "to" NAME NAME NAME NAME | "turned" NAME | "mirrored" NAME | "around" NAME | "rounded" NAME
+                  | "picture" NAME ("sized" NAME NAME)? | "cropped" "to" NAME NAME NAME NAME | "turned" NAME | "mirrored" NAME | "around" NAME | "rounded" NAME | "rotated" NAME
                   | "words" NAME ("sized" NAME)? ("colored" NAME)? ("weighing" NAME)? ("slanted" NAME)?
                   /* a small picture of it, drawn once changes settle, sent to a command on what the view is per */
                   | "keep" "preview" qualified "into" NAME NUMBER "wide") END

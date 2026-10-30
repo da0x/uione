@@ -232,6 +232,27 @@ namespace one::screens::collage {
 	// and as big for its size, so moved it moves with it, and resized it's resized.
 	box carried(const box& one, const box& from, const box& to);
 
+	// Turned by `degrees` clockwise about `about`, as y runs down a screen.
+	point turned(point at, point about, double degrees);
+	// The box around one turned by `degrees` about its middle; itself unturned.
+	box turned_bounds(box b, double degrees);
+	// How far one turned by `degrees` is turned after a drag about its middle from `from`
+	// to `to`: from 0 up to 360, on a multiple of 45 when it `snaps`.
+	double turn_to(box b, double degrees, point from, point to, bool snaps);
+	// One turned by `degrees`, as a group it's in turns `by` about `about`: its middle
+	// carried round, and it turned as much more.
+	struct turned_box {
+		box at;
+		double degrees = 0;
+	};
+	turned_box turned_about(box b, double degrees, point about, double by);
+	// One turned by `degrees` resized by a corner, dragged dx and dy across the screen,
+	// in its own turned frame: the opposite corner staying put where it's shown, its
+	// shape kept unless not `keep_shape`.
+	box resized_turned(box from, double degrees, int corner, double dx, double dy, bool keep_shape);
+	// A path, where it is, turned by `degrees` about `about`, every point of it.
+	std::string path_turned(std::string_view absolute, point about, double degrees);
+
 	// A path's nodes, where it is, written as path_in writes it: where each of its
 	// segments ends, M, L and C alike, in order.
 	std::vector<point> path_nodes(std::string_view absolute);
@@ -288,6 +309,7 @@ namespace one::screens::collage {
 		double corners = 0;
 		std::string svg = "";
 		box natural = {};
+		double degrees = 0;  // turned clockwise about its middle
 	};
 
 	// A drawing saved as SVG: `width` by `height` in its own units, its layers lowest

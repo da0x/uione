@@ -723,6 +723,68 @@ namespace one::screens::collage {
 		return {to.x + (one.x - from.x) * sx, to.y + (one.y - from.y) * sy, one.w * sx, one.h * sy};
 	}
 
+	point turned(point at, point about, double degrees) {
+		double a = degrees * std::numbers::pi / 180, c = std::cos(a), s = std::sin(a);
+		double x = at.x - about.x, y = at.y - about.y;
+		return {about.x + x * c - y * s, about.y + x * s + y * c};
+	}
+
+	namespace {
+		point middle_of(box b) { return {b.x + b.w / 2, b.y + b.h / 2}; }
+		// From 0 up to 360, and a whisker from a whole degree made whole.
+		double whole_turn(double degrees) {
+			double d = std::fmod(degrees, 360);
+			if (d < 0) d += 360;
+			if (std::abs(d - std::round(d)) < 1e-9) d = std::round(d);
+			return d >= 360 ? 0 : d;
+		}
+	}  // namespace
+
+	box turned_bounds(box b, double degrees) {
+		if (whole_turn(degrees) == 0) return b;
+		point m = middle_of(b);
+		std::vector<box> corners;
+		for (point p : {point{b.x, b.y}, point{b.x + b.w, b.y}, point{b.x + b.w, b.y + b.h}, point{b.x, b.y + b.h}}) {
+			point t = turned(p, m, degrees);
+			corners.push_back({t.x, t.y, 0, 0});
+		}
+		return around(corners);
+	}
+
+	double turn_to(box b, double degrees, point from, point to, bool snaps) {
+		point m = middle_of(b);
+		double by = (std::atan2(to.y - m.y, to.x - m.x) - std::atan2(from.y - m.y, from.x - m.x)) * 180 / std::numbers::pi;
+		double now = whole_turn(degrees + by);
+		return snaps ? whole_turn(std::round(now / 45) * 45) : now;
+	}
+
+	turned_box turned_about(box b, double degrees, point about, double by) {
+		point m = turned(middle_of(b), about, by);
+		return {{m.x - b.w / 2, m.y - b.h / 2, b.w, b.h}, whole_turn(degrees + by)};
+	}
+
+	box resized_turned(box from, double degrees, int corner, double dx, double dy, bool keep_shape) {
+		// The drag in its own frame, resized there, then put back where the opposite
+		// corner was shown.
+		point along = turned({dx, dy}, {0, 0}, -degrees);
+		box r = resized(from, corner, along.x, along.y, keep_shape, {}, 0, false).at;
+		auto corner_of = [](box b, int k) { return point{k == 1 || k == 2 ? b.x + b.w : b.x, k >= 2 ? b.y + b.h : b.y}; };
+		int stays = (corner + 2) % 4;
+		point was = turned(corner_of(from, stays), middle_of(from), degrees), now = turned(corner_of(r, stays), middle_of(r), degrees);
+		return {r.x + was.x - now.x, r.y + was.y - now.y, r.w, r.h};
+	}
+
+	std::string path_turned(std::string_view absolute, point about, double degrees) {
+		auto commands = commands_of(absolute);
+		for (auto& c : commands) {
+			for (std::size_t i = 0; i + 1 < c.numbers.size(); i += 2) {
+				point t = turned({c.numbers[i], c.numbers[i + 1]}, about, degrees);
+				c.numbers[i] = t.x, c.numbers[i + 1] = t.y;
+			}
+		}
+		return written(commands);
+	}
+
 	std::vector<point> path_nodes(std::string_view absolute) {
 		std::vector<point> out;
 		for (const auto& c : commands_of(absolute)) {
@@ -911,6 +973,10 @@ namespace one::screens::collage {
 		std::string out = std::format(R"(<svg xmlns="http://www.w3.org/2000/svg" width="{}" height="{}" viewBox="0 0 {} {}">)", said(width), said(height), said(width), said(height)) + "\n";
 		for (std::size_t i = 0; i < layers.size(); ++i) {
 			std::string one = saved(layers[i], i);
+			if (double d = whole_turn(layers[i].degrees); d != 0) {
+				const box& b = layers[i].at;
+				one = std::format(R"svg(<g transform="rotate({} {} {})">{}</g>)svg", said(d), said(b.x + b.w / 2), said(b.y + b.h / 2), one);
+			}
 			if (layers[i].opacity < 1) one = std::format(R"(<g opacity="{}">{}</g>)", said(std::max(0.0, layers[i].opacity)), one);
 			out += one + "\n";
 		}

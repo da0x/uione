@@ -412,6 +412,7 @@ namespace one::screens {
 		std::map<std::string, std::string> fields = {};
 		std::string place = "";  // the command a layer moved or resized is sent to, with x y w h
 		std::string reshape = "";  // and the one a path's nodes moved are, with its points and x y w h
+		std::string rotate = "";   // and the one a layer turned is, with its rotation and x y
 		std::string group = "";    // and the one that puts a layer in a group, or takes it out, by its group
 		std::string order = "";    // and the one a layer's depth is sent to, raised or lowered
 		bool snap = false;       // to the collage's edges and middle, and every other layer's
