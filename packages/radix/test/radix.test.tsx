@@ -835,6 +835,38 @@ describe("a front page's new parts", () => {
     }
   });
 
+  it("opens what an offering links to from anywhere on it, in every design", () => {
+    const linked = (design: string) => (
+      <Landing
+        design={design}
+        name="apps"
+        title="The apps."
+        text={[]}
+        links={[]}
+        features={[
+          { title: "The apps", text: [], features: [{ title: "mural", icon: "layers", text: "Pictures and words.", features: [], link: { href: "https://mural.example.com", external: true, label: "Open mural" } }] },
+          { title: "notes", icon: "text", text: "Words.", features: [], link: { href: "/notes", label: "Open notes" } },
+        ]}
+        steps={[]}
+        asks={[]}
+      />
+    );
+    for (const design of ["folio", "waveform", "studio", "aurora", "grid", "relay", "constellation"]) {
+      const { unmount } = render(linked(design));
+      for (const [name, href] of [["mural", "https://mural.example.com"], ["notes", "/notes"]] as const) {
+        const link = screen.queryByRole("link", { name });
+        expect([design, name, link !== null]).toEqual([design, name, true]);
+        if (!link) continue;
+        expect([design, link.getAttribute("href")]).toEqual([design, href]);
+        // Stretched over whatever holds it, which is placed for it.
+        expect(link.className).toContain("after:inset-0");
+        expect([design, link.parentElement?.closest(".relative, .one-constellation-card, [style*=relative]") !== null]).toEqual([design, true]);
+      }
+      expect(screen.getByRole("link", { name: "mural" }).getAttribute("target")).toBe("_blank");
+      unmount();
+    }
+  });
+
   it("in constellation, names the site in two tones, lights its statement a word at a time, and numbers its steps", () => {
     const { container } = render(page("constellation"));
     expect(screen.getByRole("heading", { level: 1 }).getAttribute("aria-label")).toBe("xr soft");

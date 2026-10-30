@@ -12,7 +12,7 @@ import type { CSSProperties, ReactNode } from "react";
 import type { LandingFeature, LandingProps } from "@uione/react";
 import { Constellation } from "./constellation.js";
 import { Folio } from "./folio.js";
-import { Icon, Over, grouped, heading, titles } from "./parts.js";
+import { Icon, Opens, Over, grouped, heading, opens, titles } from "./parts.js";
 
 const gradient = "linear-gradient(90deg, var(--one-landing-1), var(--color-accent) 55%, var(--one-landing-3))";
 const upright = "linear-gradient(180deg, var(--one-landing-1), var(--color-accent) 55%, var(--one-landing-3))";
@@ -73,8 +73,8 @@ function Held({ features }: { features: LandingFeature[] }) {
   return (
     <ul className="m-0 flex list-none flex-col gap-3 border-t border-line p-0 pt-4">
       {features.map((f, at) => (
-        <li key={at} className="flex flex-col gap-1">
-          <span className="font-semibold text-ink">{f.title}</span>
+        <li key={at} className={`flex flex-col gap-1 ${f.link ? "relative" : ""}`}>
+          <span className="font-semibold text-ink"><Opens link={f.link}>{f.title}</Opens></span>
           <span className="text-sm leading-6 text-muted">{f.text}</span>
         </li>
       ))}
@@ -127,10 +127,10 @@ function Features({ features, card }: { features: LandingFeature[]; card: (at: n
   return (
     <section className="mx-auto grid w-full max-w-6xl gap-5 px-6 sm:grid-cols-2 lg:grid-cols-3">
       {features.map((f, at) => (
-        <div key={at} className="flex flex-col gap-3 rounded-box border border-line p-7" style={card(at)}>
+        <div key={at} className={`flex flex-col gap-3 rounded-box border border-line p-7 ${f.link ? opens : ""}`} style={card(at)}>
           <Icon name={f.icon} className="size-7" />
           <Over>{f.overline}</Over>
-          <h2 className="text-[1.4rem] font-bold tracking-[-0.01em]">{f.title}</h2>
+          <h2 className="text-[1.4rem] font-bold tracking-[-0.01em]"><Opens link={f.link}>{f.title}</Opens></h2>
           <div className="leading-7 text-muted">{f.text}</div>
           <Held features={f.features} />
         </div>
@@ -253,12 +253,14 @@ function Studio(p: LandingProps) {
         cards={(list) => (
           <ol className="mx-auto grid w-full max-w-6xl list-none gap-3 px-6 sm:grid-cols-2 lg:grid-cols-3">
             {list.map((f, at) => (
-              <li key={at} className="flex flex-col gap-3 rounded-box border border-line bg-surface p-6">
+              <li key={at} className={`flex flex-col gap-3 rounded-box border border-line bg-surface p-6 ${f.link ? opens : ""}`}>
                 <span className="flex items-center justify-between font-mono text-xs text-muted">
                   {String(at + 1).padStart(2, "0")}
                   <Icon name={f.icon} className="size-6" />
                 </span>
-                <h2 className="text-[1.3rem] font-bold">{f.title}</h2>
+                <h2 className="text-[1.3rem] font-bold">
+                  <Opens link={f.link}>{f.title}</Opens>
+                </h2>
                 <div className="leading-7 text-muted">{f.text}</div>
                 <Held features={f.features} />
               </li>
@@ -357,12 +359,14 @@ function Grid(p: LandingProps) {
           <div className="mx-auto w-full max-w-6xl px-6">
             <section className="grid gap-px border border-line bg-line sm:grid-cols-2 lg:grid-cols-3">
               {list.map((f, at) => (
-                <div key={at} className="flex flex-col gap-3 bg-page p-8">
+                <div key={at} className={`flex flex-col gap-3 bg-page p-8 ${f.link ? opens : ""}`}>
                   <span className="flex items-center justify-between font-mono text-xs text-accent">
                     [ {String(at + 1).padStart(2, "0")} ]
                     <Icon name={f.icon} className="size-6" />
                   </span>
-                  <h2 className="text-[1.4rem] font-bold">{f.title}</h2>
+                  <h2 className="text-[1.4rem] font-bold">
+                    <Opens link={f.link}>{f.title}</Opens>
+                  </h2>
                   <div className="leading-7 text-muted">{f.text}</div>
                   <Held features={f.features} />
                 </div>
@@ -557,7 +561,7 @@ function Relay(p: LandingProps) {
                   <span className="absolute inset-y-1 left-0 w-[3px] rounded-full" style={{ background: edge(toneOf(at)) }} />
                   <Icon name={f.icon} className="size-6" />
                   <h2 className="m-0 text-[1.2rem] leading-snug font-semibold tracking-[-0.01em] text-ink" style={heading}>
-                    {f.title}
+                    <Opens link={f.link}>{f.title}</Opens>
                   </h2>
                   <div className="max-w-[40ch] leading-7 text-muted">{f.text}</div>
                   <Held features={f.features} />

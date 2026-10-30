@@ -98,22 +98,24 @@ function elementsOf(children: ReactNode): Part[] {
   return Children.toArray(children).filter((part): part is Part => isValidElement(part));
 }
 
-// What a section of words says: the short line over its title, its words, and the
-// sections it holds; or nothing, when it holds anything else.
-function offered(section: Part): LandingFeature | undefined {
+// What a section of words says: the short line over its title, its words, the
+// sections it holds, and the one link it opens; or nothing, when it holds anything else.
+function offered(section: Part, linked: (to: string) => LinkProps): LandingFeature | undefined {
   let overline: ReactNode;
+  let link: LandingFeature["link"];
   const text: ReactNode[] = [];
   const features: LandingFeature[] = [];
   for (const part of elementsOf(section.props.children)) {
     if (part.type === Overline) overline = part.props.children;
     else if (part.type === Text) text.push(part.props.children);
+    else if (part.type === Link && !link) link = { ...linked((part.props as { to?: string }).to ?? "/"), label: part.props.children };
     else if (part.type === Section && !part.props.steps) {
-      const inner = offered(part);
+      const inner = offered(part, linked);
       if (!inner) return undefined;
       features.push(inner);
     } else return undefined;
   }
-  return { title: section.props.title ?? "", ...(overline !== undefined ? { overline } : {}), ...(section.props.icon ? { icon: section.props.icon } : {}), text, features };
+  return { title: section.props.title ?? "", ...(overline !== undefined ? { overline } : {}), ...(section.props.icon ? { icon: section.props.icon } : {}), text, features, ...(link ? { link } : {}) };
 }
 
 export function Landing({ design, children }: { design: string; children?: ReactNode }) {
@@ -166,7 +168,7 @@ export function Landing({ design, children }: { design: string; children?: React
         });
         continue;
       }
-      const feature = offered(child);
+      const feature = offered(child, (to) => link(filled(to)));
       if (feature) {
         order.push("feature");
         features.push(feature);

@@ -2633,7 +2633,8 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   first screen when the page opens on it; and an offering standing alone, with no
   others beside it, as a letter, a narrow column of words; with no motion at all. The design takes the screen's `hero`, with its
   words and links, the first link the one it's for; its sections of words alone, as
-  what the site offers; and its other sections, like one with a form, as what it
+  what the site offers, each opened pressed anywhere on it when it holds a link, like
+  `link "https://notes.example.com" "Open notes"`; and its other sections, like one with a form, as what it
   asks. Anything else, like a table, comes before the design, or, in `relay`, right
   under its board. Each is drawn in the theme's colors, and its motion stops for
   whoever asks for less. A landing page has no `layout`; its design lays it out.

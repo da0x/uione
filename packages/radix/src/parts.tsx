@@ -10,6 +10,25 @@ import { buttonIcons } from "./icons.js";
 
 export const heading = { fontFamily: "var(--font-heading, var(--font-sans))" };
 
+// What an offering opens: its title made the link, stretched over the whole of it, so
+// it's opened pressed anywhere, as a card is. Whatever holds it is `relative`, and
+// marked as it's pointed at.
+export const opens = "relative transition-colors hover:border-accent/60 focus-within:ring-2 focus-within:ring-accent";
+export function Opens({ link, children }: { link?: LandingFeature["link"]; children: ReactNode }) {
+  if (!link) return <>{children}</>;
+  return (
+    <a
+      href={link.href}
+      onClick={link.onClick}
+      {...(link.external ? { target: "_blank", rel: "noreferrer" } : {})}
+      title={typeof link.label === "string" ? link.label : undefined}
+      className="text-inherit no-underline outline-none after:absolute after:inset-0 after:content-['']"
+    >
+      {children}
+    </a>
+  );
+}
+
 // The short line over a title, small, spaced and in the accent.
 export function Over({ children, className = "" }: { children?: ReactNode; className?: string }) {
   if (children === undefined || children === null) return null;
