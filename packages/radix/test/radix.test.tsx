@@ -266,6 +266,10 @@ describe("cards", () => {
     expect([tiles[4]!.style.gridColumn, tiles[4]!.style.gridRow]).toEqual(["3 / span 1", "3 / span 2"]);
     const title = within(tiles[0]!).getByRole("heading", { name: "Clipping 1" });
     expect(title.className.split(" ")).toContain("font-sans");
+    // Set as a printed page is: square cornered, two pixels apart, its region's margin as thin.
+    expect(tiles.every((tile) => !/\brounded/.test(tile.className))).toBe(true);
+    expect(tiles[0]!.parentElement!.className.split(" ")).toContain("gap-[2px]");
+    expect(tiles[0]!.closest("[data-bleed]")).not.toBeNull();
   });
 });
 

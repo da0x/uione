@@ -4431,9 +4431,9 @@ TEST("cards by a date are under a heading for each month, a mosaic's tiles start
 	CHECK(timeline != nullptr);
 	if (mosaics.size() != 4 || !timeline) return;
 	// Each month's mosaic starts with its own tall tile, so its height is its count's.
-	float side = (mosaics[1]->frame.width - 32) / 3;
-	CHECK(std::abs(mosaics[0]->frame.height - (mosaic_rows(24) * side + (mosaic_rows(24) - 1) * 16)) < 2);
-	CHECK(std::abs(mosaics[2]->frame.height - (mosaic_rows(25) * side + (mosaic_rows(25) - 1) * 16)) < 2);
+	float side = (mosaics[1]->frame.width - 4) / 3;
+	CHECK(std::abs(mosaics[0]->frame.height - (mosaic_rows(24) * side + (mosaic_rows(24) - 1) * 2)) < 2);
+	CHECK(std::abs(mosaics[2]->frame.height - (mosaic_rows(25) * side + (mosaic_rows(25) - 1) * 2)) < 2);
 	// A strip at the window's right edge, as tall as what scrolls the cards.
 	auto scrolled = mosaics[0]->scrolled();
 	CHECK(scrolled.has_value());

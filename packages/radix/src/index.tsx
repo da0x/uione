@@ -568,28 +568,30 @@ function ColorPicker({ label, value, disabled, onSettle }: ColorPickerProps) {
   );
 }
 
-// Cards as a mosaic of their pictures, edge to edge but for the gap cards keep, each
-// filling the tile mosaicTile gives it around its middle, its title and what else it
-// shows over its foot on a shade of it, so it reads on any picture. Its rows are as
+// Cards as a mosaic of their pictures, set as a printed page is: square cornered and
+// two pixels apart, the region around them as thin, each filling the tile mosaicTile
+// gives it around its middle, its title and what else it shows across its foot on a
+// shade of it, so it reads on any picture. The one with the keyboard is ringed inside
+// its edges. Its rows are as
 // tall as a column is wide, so it scales as it's resized and no card changes tile;
 // a tile out of view isn't drawn, and its picture isn't fetched, until it's near.
 function Mosaic({ status, cards }: CardsProps) {
   return (
-    <div className="@container" aria-busy={status === "loading"}>
-      <div className="grid grid-cols-3 gap-4" style={{ gridAutoRows: "calc((100cqw - var(--spacing) * 8) / 3)" }}>
+    <div className="@container" data-bleed aria-busy={status === "loading"}>
+      <div className="grid grid-cols-3 gap-[2px]" style={{ gridAutoRows: "calc((100cqw - 4px) / 3)" }}>
         {cards.map((card, n) => {
           const at = mosaicTile(n);
           return (
             <article
               key={card.id}
-              className="relative overflow-hidden rounded-box bg-sunken [contain-intrinsic-size:auto_16rem] [content-visibility:auto]"
+              className="relative overflow-hidden bg-sunken [contain-intrinsic-size:auto_16rem] [content-visibility:auto] has-[a:focus-visible]:after:pointer-events-none has-[a:focus-visible]:after:absolute has-[a:focus-visible]:after:inset-0 has-[a:focus-visible]:after:ring-2 has-[a:focus-visible]:after:ring-inset has-[a:focus-visible]:after:ring-accent"
               style={{ gridColumn: `${at.column + 1} / span ${at.columns}`, gridRow: `${at.row + 1} / span ${at.rows}` }}
             >
               {card.picture?.source && <img src={card.picture.source} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />}
-              <div className="absolute inset-x-2 bottom-2 flex flex-col gap-0.5 rounded-box bg-black/45 px-3 py-2 text-white">
+              <div className="absolute inset-x-0 bottom-0 flex flex-col gap-0.5 bg-black/45 px-3 py-2 text-white">
                 <h2 className="font-sans text-base leading-snug font-semibold">
                   {card.link ? (
-                    <a {...card.link} className="text-white after:absolute after:inset-0 hover:underline">
+                    <a {...card.link} className="text-white outline-none after:absolute after:inset-0 hover:underline">
                       {card.title}
                     </a>
                   ) : (
@@ -613,7 +615,7 @@ function Mosaic({ status, cards }: CardsProps) {
 // heading at once however many are above it.
 function Grouped({ status, cards, mosaic, groups }: CardsProps & { groups: CardGroup[] }) {
   return (
-    <div className="@container flex flex-col gap-8" aria-busy={status === "loading"}>
+    <div className="@container flex flex-col gap-8" data-bleed={mosaic || undefined} aria-busy={status === "loading"}>
       {groups.map((group) => {
         const rows = mosaic ? mosaicRows(group.count) : Math.ceil(group.count / 3);
         const tall = mosaic ? `calc(${rows} * 33cqw + 3rem)` : `calc(${rows} * 22rem + 3rem)`;
@@ -2613,7 +2615,7 @@ export const radix: ComponentSet = {
         {toolbar}
         <div className="flex min-h-0 flex-1">
           {tools}
-          <main className="relative flex min-w-0 flex-1 flex-col gap-4 overflow-auto p-3">{regions.main}</main>
+          <main className="relative flex min-w-0 flex-1 flex-col gap-4 overflow-auto p-3 has-[[data-bleed]]:p-[2px]">{regions.main}</main>
           {side}
         </div>
         {status}

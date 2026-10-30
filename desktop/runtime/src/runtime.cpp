@@ -116,6 +116,7 @@ namespace one::desktop::runtime {
 			const auto& s = nav.site();
 			const auto& shows = nav.shown(p);
 			p.forget_keys();
+			(void)p.take_bleed();
 			typing({});
 			desktop::view built = shows.build ? shows.build(p) : desktop::column();
 			auto around = p.take_around();

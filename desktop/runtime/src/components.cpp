@@ -74,12 +74,13 @@ namespace one::desktop::runtime {
 			std::vector<desktop::view> said;
 			said.push_back(desktop::text(card.title, title));
 			for (const auto& d : card.details) said.push_back(desktop::text(d, rest));
-			return desktop::column(std::move(said)).spacing(2).padding(edges(10, 12)).background({.fill = color::hex(0x000000, 0.45f), .radius = t.corners});
+			return desktop::column(std::move(said)).spacing(2).padding(edges(10, 12)).background({.fill = color::hex(0x000000, 0.45f)});
 		}
 
-		// Cards as a mosaic of their pictures, each in the tile mosaic_tile gives it, filling
-		// it, cropped around its middle, what else it shows over its foot. Its columns share
-		// its width, less the gaps between, and its rows are as tall as a column is wide, so
+		// Cards as a mosaic of their pictures, set as a printed page is: square cornered and
+		// two pixels apart, each in the tile mosaic_tile gives it, filling it, cropped around
+		// its middle, what else it shows across its foot. Its columns share its width, less
+		// the gaps between, and its rows are as tall as a column is wide, so
 		// it scales as it's resized and no card changes tile. Only what's in view, and as
 		// much again around it, is drawn, each picture read and each caption made as it
 		// comes into view, so a mosaic of many thousands is placed from its count alone. One
@@ -125,23 +126,24 @@ namespace one::desktop::runtime {
 					const rect& f = frames_[i];
 					if (f.y > near.y + near.height) break;
 					if (f.y + f.height < near.y) continue;
-					c.box(f, {.fill = t.sunken, .radius = t.corners});
+					c.box(f, {.fill = t.sunken});
 					if (auto shown = picture_soon(p_, tiles_[i].picture, 640); shown && *shown) {
 						float pw = static_cast<float>(shown->width()), ph = static_cast<float>(shown->height());
 						float s = std::max(f.width / pw, f.height / ph);
 						float fw = f.width / (pw * s), fh = f.height / (ph * s);
-						c.picture(*shown, f, {(1 - fw) / 2, (1 - fh) / 2, fw, fh}, 1, t.corners);
+						c.picture(*shown, f, {(1 - fw) / 2, (1 - fh) / 2, fw, fh});
 					}
 					auto& caption = captions_[i];
 					if (!caption) {
 						caption = caption_of(tiles_[i].card).take();
 						caption->parent = this;
 					}
-					extent e = caption->measure(f.width - 2 * inset);
-					caption->place({f.x + inset, f.y + f.height - e.height - inset, f.width - 2 * inset, e.height});
+					extent e = caption->measure(f.width);
+					caption->place({f.x, f.y + f.height - e.height, f.width, e.height});
 					caption->paint(c);
 				}
-				if (shows_focus() && chosen_ < frames_.size()) c.box(frames_[chosen_].inset(-2), {.border = t.accent, .border_width = 2, .radius = t.corners + 2});
+				// The ring inside the chosen tile, square, so it neither rounds nor spills into the gaps.
+				if (shows_focus() && chosen_ < frames_.size()) c.box(frames_[chosen_].inset(1), {.border = t.accent, .border_width = 2});
 			}
 
 			bool handle_key(const key_event& e) override {
@@ -197,8 +199,7 @@ namespace one::desktop::runtime {
 			one::desktop::cursor cursor() const override { return cursor::pointer; }
 
 		private:
-			static constexpr float gap = 16;   // as plain cards are apart
-			static constexpr float inset = 8;  // a caption from its tile's edges
+			static constexpr float gap = 2;  // as photos on a printed page are apart
 			static float column(float width) { return std::max(0.f, (width - 2 * gap) / 3); }
 			// The first tile of the first block of four whose rows reach what's near.
 			std::size_t first_near(const rect& near) const {
@@ -940,6 +941,7 @@ namespace one::desktop::runtime {
 		desktop::view cards_shown(page& p, const cards_spec& spec, std::vector<card_model> made, std::span<const value> rows) {
 			const auto& t = current_theme();
 			if (spec.mosaic) {
+				p.bleed();
 				std::vector<mosaic_element::tile> tiles;
 				for (std::size_t i = 0; i < made.size(); ++i) {
 					std::string address = made[i].address;

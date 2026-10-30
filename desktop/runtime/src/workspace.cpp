@@ -312,8 +312,9 @@ namespace one::desktop::runtime {
 			main = desktop::column(std::move(opened)).spacing(12).align(align::stretch).grow();
 		}
 		bool fills = main.get() && std::ranges::any_of(main.get()->children, [](const auto& c) { return c && c->grow > 0; });
-		if (fills || !main.get()) middle.push_back(std::move(main).padding(edges(12, 12)).grow());
-		else middle.push_back(desktop::scroll(std::move(main).padding(edges(12, 12)), p.where_left().scroll).grow());
+		float margin = p.take_bleed() ? 2 : 12;
+		if (fills || !main.get()) middle.push_back(std::move(main).padding(edges(margin, margin)).grow());
+		else middle.push_back(desktop::scroll(std::move(main).padding(edges(margin, margin)), p.where_left().scroll).grow());
 		if (auto side = taken("side"); side.get()) {
 			// A side holding only something as wide as it says, like a timeline drawn along
 			// the cards as a scrollbar is, is that alone at the work's edge: as tall as it,

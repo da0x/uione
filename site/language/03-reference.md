@@ -2123,8 +2123,12 @@ form step::update "Save" {
   a picture on top of its card, all of it fitted in, or, with `fill` or nothing
   said, filling its place. A terminal draws no pictures, so it can't show one.
   `cards clippings_page.clippings mosaic { picture image ... }` sets them as a mosaic
-  of their pictures instead, each filling its tile, cropped around its middle, its
-  title and what else it shows over the picture's foot. Every eight cards are two
+  of their pictures instead, set as a printed page is: square cornered, two pixels
+  apart, and two pixels from the edges of the region it's in, with no other margin,
+  the one with the keyboard ringed inside its edges. Each fills its tile, cropped
+  around its middle, its title and what else it shows across the picture's foot. Its
+  headings, under `by`, line up with its tiles. Other cards keep their own look.
+  Every eight cards are two
   blocks, one above the other, each three equal columns by two rows as tall as a
   column is wide: in the first, a tile a column wide and both rows tall at the left,
   one two columns wide on the top row at the right, and two small ones under that;

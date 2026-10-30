@@ -233,6 +233,10 @@ namespace one::screens {
 		// Only its picture, edge to edge, its bars drawn over it, as a photo's own screen is.
 		void alone() { alone_ = true; }
 		bool take_alone() { return std::exchange(alone_, false); }
+		// Pictures set as a printed page is, as a mosaic is: the region they're in has a
+		// margin as thin as the gaps between them, rather than its own.
+		void bleed() { bleed_ = true; }
+		bool take_bleed() { return std::exchange(bleed_, false); }
 
 		// The keys its lines are run by, like ctrl+z, gathered each time it's built,
 		// while they're shown: the first said for a key takes it.
@@ -307,6 +311,7 @@ namespace one::screens {
 		bool wide_ = false;
 		bool fill_ = false;
 		bool alone_ = false;
+		bool bleed_ = false;
 		std::vector<std::pair<std::string, std::function<void()>>> keys_;
 		std::optional<bool> in_group_;
 		std::optional<state<bool>> in_options_;

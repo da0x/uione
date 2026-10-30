@@ -75,7 +75,7 @@ const tallyWords: Record<string, string> = { none: "not started", partial: "unde
 function plainCards(status: string, cards: Card[], mosaic: boolean | undefined, under = false) {
   const Title = under ? "h3" : "h2";
   return (
-    <div aria-busy={status === "loading"} style={mosaic ? { display: "grid", gridTemplateColumns: "repeat(3, 1fr)" } : undefined}>
+    <div aria-busy={status === "loading"} style={mosaic ? { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 2 } : undefined}>
       {cards.map((card, n) => (
         <article key={card.id} style={mosaic ? placed(n) : undefined}>
           {card.picture?.source && <img src={card.picture.source} alt="" />}
