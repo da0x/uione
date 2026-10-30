@@ -86,7 +86,7 @@ namespace one::desktop {
 		std::optional<rect> clipped() const { return clips_.empty() ? std::nullopt : std::optional(clips_.back()); }
 
 		// Draws pictures and text turned by `degrees` clockwise about `about` until the
-		// scope ends; boxes, lines and fills stay as they are.
+		// scope ends, or as they are when that's 0; boxes, lines and fills stay as they are.
 		class turn_scope {
 		public:
 			~turn_scope();

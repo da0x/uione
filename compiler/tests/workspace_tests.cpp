@@ -724,6 +724,25 @@ TEST_CASE("a button's value any color, from a color picker, from what it is on t
     CHECK(files["desktop/src/screens/main.cpp"].find(R"(.color = command_color{.field = "name", .now = field_of()") != std::string::npos);
 }
 
+TEST_CASE("a collage's layer turned by a drag past a corner is sent to its rotate, how far it's turned kept in its rotation or the field it names, on the web and the desktop alike") {
+    std::string body = "\t\tcollage poster_page.layers size width height {\n\t\t\tplace layer::place\n\t\t\trotate layer::rotate\n\t\t}\n";
+    std::string source = collage_screen(body);
+    source.replace(source.find("\tcommand layer::create\n"), 0, "\tcommand layer::rotate {\n\t\tchanges x y\n\t}\n");
+    CHECK(messages(source) == std::vector<std::string>{"49: how far a layer's turned is kept in its rotation, which layer doesn't have; add rotation number to it, or say its field, like rotated angle"});
+    source.replace(source.find("\t\th        number  = 300\n"), 0, "\t\tangle    number  = 0\n");
+    source.replace(source.find("\t\tchanges x y\n\t}\n\tcommand layer::create"), 14, "\t\tchanges angle x y\n");
+    source.replace(source.find("around  x  y  w  h"), 0, "angle  ");
+    body = "\t\tcollage poster_page.layers size width height {\n\t\t\tplace layer::place\n\t\t\trotate layer::rotate\n\t\t\trotated angle\n\t\t}\n";
+    source.replace(source.find("\t\tcollage poster_page.layers"), source.find("\t}\n}\n", source.find("\t\tcollage poster_page.layers")) - source.find("\t\tcollage poster_page.layers"), body);
+    CHECK(messages(source).empty());
+    auto files = built(source);
+    CAPTURE(files["desktop/src/screens/main.cpp"]);
+    CHECK(files["desktop/src/screens/main.cpp"].find(R"(.rotate = "studio::layer::rotate")") != std::string::npos);
+    CHECK(files["desktop/src/screens/main.cpp"].find(R"({"rotation", "angle"})") != std::string::npos);
+    CHECK(files["web/src/screens/main.tsx"].find(R"( rotate="studio::layer::rotate")") != std::string::npos);
+    CHECK(files["web/src/screens/main.tsx"].find(R"(rotation: "angle")") != std::string::npos);
+}
+
 TEST_CASE("a collage is a view's list as layers, as big as two of its values, placed by a command, with buttons over the picked layer") {
     const std::string fine = R"(		pick layer from poster_page.layers
 		collage poster_page.layers size width height {

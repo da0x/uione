@@ -33,7 +33,7 @@ namespace {
 	const std::map<std::string, std::string> named_like_parts = {{"x", "x"}, {"y", "y"}, {"w", "w"}, {"h", "h"}, {"depth", "depth"}, {"picture", "picture"}, {"picture_width", "picture_width"}, {"picture_height", "picture_height"},
 	    {"crop_x", "crop_x"}, {"crop_y", "crop_y"}, {"crop_w", "crop_w"}, {"crop_h", "crop_h"}, {"turns", "turns"}, {"mirrored", "mirrored"}, {"around", "around"}, {"corners", "corners"},
 	    {"words", "words"}, {"size", "size"}, {"color", "color"}, {"weight", "weight"}, {"shape", "shape"}, {"points", "points"}, {"fill", "fill"}, {"stroke", "stroke"},
-	    {"stroke_width", "stroke_width"}, {"opacity", "opacity"}, {"hidden", "hidden"}};
+	    {"stroke_width", "stroke_width"}, {"opacity", "opacity"}, {"hidden", "hidden"}, {"rotation", "rotation"}};
 
 	const std::filesystem::path golden_folder = ONE_DESKTOP_TESTS "/golden";
 
@@ -2762,6 +2762,180 @@ TEST("a collage's path shows a node's control points once the node is pressed, a
 	CHECK(data.runs().size() == 1);
 	if (data.runs().empty()) return;
 	CHECK(data.runs().back().fields["points"].as_string() == "M 0 0 C 0 1 0.75 1 1 0");
+}
+
+TEST("a collage's layer is turned by a drag just past a corner, drawn turned as it goes, and once turned is picked, drawn and resized in its own frame") {
+	memory_source data;
+	auto page_turned = [&](double rotation) {
+		data.set("studio::poster_page", "p1",
+		         value(fields{{"width", 1600}, {"height", 900},
+		                      {"layers", list{value(fields{{"id", "l1"}, {"shape", "rectangle"}, {"fill", "#ff0000"}, {"x", 400}, {"y", 300}, {"w", 400}, {"h", 200}, {"rotation", rotation}})}}}));
+	};
+	page_turned(0);
+	data.on("studio::layer::rotate", [](const value& f, memory_source&) -> answer { return f["id"].as_string(); });
+	data.on("studio::layer::place", [](const value& f, memory_source&) -> answer { return f["id"].as_string(); });
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Poster", "/", "", [](page& p) {
+		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .width = "width", .height = "height",
+		                                                                         .fields = named_like_parts, .place = "studio::layer::place", .rotate = "studio::layer::rotate",
+		                                                                         .pick = "/ layer", .fills = true}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	std::function<one::desktop::element*(one::desktop::element&)> drawing = [&](one::desktop::element& e) -> one::desktop::element* {
+		if (e.children.empty() && e.frame.width > 400 && e.frame.height > 200) return &e;
+		for (auto& child : e.children) {
+			if (auto* found = drawing(*child)) return found;
+		}
+		return nullptr;
+	};
+	std::unique_ptr<one::desktop::element> root;
+	one::desktop::element* board = nullptr;
+	one::desktop::offscreen::image shown;
+	auto again = [&] {
+		root = built(nav);
+		board = drawing(*root);
+		shown = one::desktop::offscreen::draw({900, 900}, 1, tested_theme().page, [&](one::desktop::canvas& c) { root->paint(c); });
+	};
+	again();
+	CHECK(board != nullptr);
+	if (!board) return;
+	auto area = board->frame;
+	float scale = std::min((area.width - 64) / 1600.f, (area.height - 64) / 900.f);
+	one::desktop::point origin{area.x + (area.width - 1600 * scale) / 2, area.y + (area.height - 900 * scale) / 2};
+	auto on = [&](double x, double y) { return one::desktop::point{origin.x + static_cast<float>(x) * scale, origin.y + static_cast<float>(y) * scale}; };
+	auto red = [&](double x, double y) {
+		auto at = on(x, y);
+		const auto* px = &shown.rgba[static_cast<std::size_t>((static_cast<int>(at.y) * shown.width + static_cast<int>(at.x)) * 4)];
+		return px[0] > 200 && px[1] < 60 && px[2] < 60;
+	};
+	auto press = [&](one::desktop::point at) {
+		again();
+		bool took = board->press(at, 1);
+		board->release(at, board);
+		return took;
+	};
+	CHECK(red(450, 350));
+	CHECK(!red(600, 250));
+	// Picked, then dragged from just past its lower right corner a quarter of the way
+	// round its middle: drawn standing up as it goes, and kept a quarter turned, where
+	// it was.
+	press(on(600, 400));
+	CHECK(nav.current().picked_id("/ layer") == "l1");
+	again();
+	one::desktop::point middle = on(600, 400), from = on(800, 500);
+	from.x += 16, from.y += 16;
+	one::desktop::point to{middle.x - (from.y - middle.y), middle.y + (from.x - middle.x)};
+	CHECK(board->press(from, 1));
+	board->drag(to);
+	shown = one::desktop::offscreen::draw({900, 900}, 1, tested_theme().page, [&](one::desktop::canvas& c) { root->paint(c); });
+	CHECK(red(600, 250));
+	CHECK(!red(450, 350));
+	board->release(to, board);
+	CHECK(data.runs().size() == 1);
+	if (data.runs().size() != 1) return;
+	CHECK(data.runs().back().command == "studio::layer::rotate");
+	const auto& sent = data.runs().back().fields;
+	CHECK(std::abs(sent["rotation"].as_double() - 90) < 0.5);
+	CHECK(std::abs(sent["x"].as_double() - 400) < 0.01);
+	CHECK(std::abs(sent["y"].as_double() - 300) < 0.01);
+	// Turned, it's drawn standing up, and picked where it is, not where its box was.
+	page_turned(90);
+	press(on(1400, 800));
+	CHECK(nav.current().picked_id("/ layer").empty());
+	CHECK(red(600, 250));
+	CHECK(red(600, 560));
+	CHECK(!red(450, 400));
+	press(on(450, 400));
+	CHECK(nav.current().picked_id("/ layer").empty());
+	press(on(600, 250));
+	CHECK(nav.current().picked_id("/ layer") == "l1");
+	// Its own lower right corner, turned to 500 600, dragged 40 left and down: 40 longer
+	// and wider in its own frame, and its own top left corner where it was shown, at 700
+	// 200.
+	again();
+	CHECK(board->press(on(500, 600), 1));
+	board->drag(on(470, 640));
+	board->release(on(460, 640), board);
+	CHECK(data.runs().size() == 2);
+	if (data.runs().size() != 2) return;
+	CHECK(data.runs().back().command == "studio::layer::place");
+	const auto& placed = data.runs().back().fields;
+	double x = placed["x"].as_double(), y = placed["y"].as_double(), w = placed["w"].as_double(), h = placed["h"].as_double();
+	CHECK(std::abs(w - 440) < 0.01);
+	CHECK(std::abs(h - 240) < 0.01);
+	// Turned a quarter about its middle, its top left is its middle less half its height
+	// across and plus half its width up.
+	CHECK(std::abs(x + w / 2 + h / 2 - 700) < 0.01);
+	CHECK(std::abs(y + h / 2 - w / 2 - 200) < 0.01);
+}
+
+TEST("a collage's group turned by a drag past its corner turns all it holds about its middle, a path by its points, in one step") {
+	memory_source data;
+	data.set("studio::poster_page", "p1",
+	         value(fields{{"width", 1600}, {"height", 900},
+	                      {"layers", list{value(fields{{"id", "g"}, {"x", 0}, {"y", 0}, {"w", 0}, {"h", 0}}),
+	                                      value(fields{{"id", "a"}, {"shape", "rectangle"}, {"fill", "#2e86de"}, {"x", 100}, {"y", 100}, {"w", 100}, {"h", 100}, {"group", "g"}}),
+	                                      value(fields{{"id", "b"}, {"shape", "path"}, {"points", "M 0 0 L 1 1"}, {"stroke", "#1d1d1f"}, {"stroke_width", 4}, {"x", 300}, {"y", 100},
+	                                                   {"w", 100}, {"h", 100}, {"group", "g"}})}}}));
+	data.on("studio::layer::rotate", [](const value& f, memory_source&) -> answer { return f["id"].as_string(); });
+	data.on("studio::layer::reshape", [](const value& f, memory_source&) -> answer { return f["id"].as_string(); });
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	auto parts = named_like_parts;
+	parts["group"] = "group";
+	s.screens.push_back({"Poster", "/", "", [parts](page& p) {
+		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .width = "width", .height = "height",
+		                                                                         .fields = parts, .place = "studio::layer::place", .reshape = "studio::layer::reshape",
+		                                                                         .rotate = "studio::layer::rotate", .group = "studio::layer::group", .pick = "/ layer",
+		                                                                         .fills = true}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	std::function<one::desktop::element*(one::desktop::element&)> drawing = [&](one::desktop::element& e) -> one::desktop::element* {
+		if (e.children.empty() && e.frame.width > 400 && e.frame.height > 200) return &e;
+		for (auto& child : e.children) {
+			if (auto* found = drawing(*child)) return found;
+		}
+		return nullptr;
+	};
+	auto root = built(nav);
+	auto* board = drawing(*root);
+	CHECK(board != nullptr);
+	if (!board) return;
+	(void)one::desktop::offscreen::draw({900, 900}, 1, tested_theme().page, [&](one::desktop::canvas& c) { root->paint(c); });
+	auto area = board->frame;
+	float scale = std::min((area.width - 64) / 1600.f, (area.height - 64) / 900.f);
+	one::desktop::point origin{area.x + (area.width - 1600 * scale) / 2, area.y + (area.height - 900 * scale) / 2};
+	auto on = [&](double x, double y) { return one::desktop::point{origin.x + static_cast<float>(x) * scale, origin.y + static_cast<float>(y) * scale}; };
+	CHECK(board->press(on(150, 150), 1));
+	board->release(on(150, 150), board);
+	CHECK(nav.current().picked_id("/ layer") == "g");
+	// Around all it holds, 100 100 to 400 200: a quarter turn about 250 150.
+	root = built(nav);
+	board = drawing(*root);
+	(void)one::desktop::offscreen::draw({900, 900}, 1, tested_theme().page, [&](one::desktop::canvas& c) { root->paint(c); });
+	one::desktop::point middle = on(250, 150), from = on(400, 200);
+	from.x += 16, from.y += 16;
+	one::desktop::point to{middle.x - (from.y - middle.y), middle.y + (from.x - middle.x)};
+	CHECK(board->press(from, 1));
+	board->drag(to);
+	board->release(to, board);
+	CHECK(data.runs().size() == 2);
+	if (data.runs().size() != 2) return;
+	std::map<std::string, const memory_source::ran*> by;
+	for (const auto& r : data.runs()) by[r.fields["id"].as_string()] = &r;
+	CHECK(by["a"]->command == "studio::layer::rotate");
+	CHECK(std::abs(by["a"]->fields["rotation"].as_double() - 90) < 0.5);
+	CHECK(std::abs(by["a"]->fields["x"].as_double() - 200) < 0.5);
+	CHECK(std::abs(by["a"]->fields["y"].as_double() - 0) < 0.5);
+	// The path's ends, 300 100 and 400 200, are at 300 200 and 200 300.
+	CHECK(by["b"]->command == "studio::layer::reshape");
+	CHECK(std::abs(by["b"]->fields["x"].as_double() - 200) < 0.5);
+	CHECK(std::abs(by["b"]->fields["y"].as_double() - 200) < 0.5);
+	CHECK(by["b"]->fields["points"].as_string() == "M 1 0 L 0 1");
+	CHECK(data.runs()[1].fields["one:history"].as_string() == "joined");
 }
 
 TEST("a collage's group is picked by a press on what it holds, moved as one in one step, and ungrouped; pressed twice, what it holds is picked") {

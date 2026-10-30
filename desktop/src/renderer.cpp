@@ -552,7 +552,7 @@ namespace one::desktop {
 	namespace {
 		// The turn in force, in pixels; none when there's none.
 		turn turn_in_pixels(const std::vector<canvas::turning>& turns, double scale) {
-			if (turns.empty()) return {};
+			if (turns.empty() || turns.back().degrees == 0) return {};
 			auto s = static_cast<float>(scale);
 			return {{turns.back().about.x * s, turns.back().about.y * s}, turns.back().degrees * std::numbers::pi_v<float> / 180};
 		}
@@ -562,7 +562,7 @@ namespace one::desktop {
 		if (!p) return;
 		// Turned, it's placed as it is, not on whole pixels, which would wobble it.
 		auto s = static_cast<float>(scale());
-		rect at = turns_.empty() ? in_pixels(area, scale()) : rect{area.x * s, area.y * s, area.width * s, area.height * s};
+		rect at = turns_.empty() || turns_.back().degrees == 0 ? in_pixels(area, scale()) : rect{area.x * s, area.y * s, area.width * s, area.height * s};
 		renderer_.picture(p, at, from, opacity, radius * s, clip_in_pixels(clips_, renderer_), turn_in_pixels(turns_, scale()));
 	}
 
