@@ -2733,9 +2733,13 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   around = around::harmonize }`. It's drawn pressed while what it would set is already so, on
   the row picked or the entity the address names, or while `on when ...` holds, like
   `on when layer.weight >= 700`.
-- `then open /posters/:poster` after a button that makes something opens it, its id
-  in the route's last parameter: `poster::create "New" { width = screen.width } then
-  open /posters/:poster`.
+- `then open /posters/:poster` after a button opens that address once its command
+  answers. What it answers, the id of what it made or acted on, goes in the parameter
+  named like the command's entity, and every other parameter is the page's own:
+  `poster::create "New" { width = screen.width } then open /posters/:poster` opens the
+  poster made, and `photo::delete "Remove" then open /libraries/:library` on
+  /libraries/:library/photos/:photo opens the library the photo was in. A route with
+  no parameter named like the entity doesn't use the answer.
 - `confirm "..."` on a button asks before it runs, whether it's pressed or its key
   is: `layer::delete "Remove" icon delete key delete confirm "Remove it from
   {poster_page.title}?" then open /posters/:poster`. The question opens over the

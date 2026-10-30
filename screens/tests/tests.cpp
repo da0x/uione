@@ -61,6 +61,15 @@ TEST("a row opens its own address, filled from the screen's and the row's") {
 	CHECK(filled("/:project/settings", {{"project", "atlas"}}) == "/atlas/settings");
 }
 
+TEST("then open puts a command's answer in the parameter named like its entity, and the rest as the page's address has them") {
+	std::map<std::string, std::string> here{{"library", "l1"}, {"photo", "ph7"}};
+	CHECK(made_opens("/libraries/:library", "archive::photo::delete", "ph7", here) == "/libraries/l1");
+	CHECK(made_opens("/libraries/:library", "archive::library::create", "l2", here) == "/libraries/l2");
+	CHECK(made_opens("/libraries/:library/photos/:photo", "archive::photo::create", "ph8", here) == "/libraries/l1/photos/ph8");
+	CHECK(made_opens("/posters/:poster", "studio::poster::create", "p1", {}) == "/posters/p1");
+	CHECK(made_opens("/libraries", "archive::photo::delete", "ph7", here) == "/libraries");
+}
+
 TEST("a file's path pasted on a canvas makes a card of it, named from it, uploaded where it landed") {
 	auto file = std::filesystem::temp_directory_path() / "uione-paste" / "sketch.png";
 	std::filesystem::create_directories(file.parent_path());

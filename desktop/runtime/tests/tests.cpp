@@ -1859,6 +1859,23 @@ TEST("a tool that asks first asks for its key too, over the work, and nothing un
 	CHECK(data.runs().size() == 1);
 }
 
+TEST("a delete that then opens its library opens the library the page is in, not one named by what it deleted") {
+	memory_source data;
+	data.on("archive::photo::delete", [](const value& f, memory_source&) -> answer { return f["id"].as_string(); });
+	site s{.name = "archive", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Library", "/libraries/:library", "", [](page&) { return items(text({words("The library")})); }});
+	s.screens.push_back({"Photo", "/libraries/:library/photos/:photo", "", [](page& p) {
+		                     return items(command(p, {.command = "archive::photo::delete", .label = "Remove", .id = p.param("photo"), .keys = {"delete"}, .then_open = "/libraries/:library"}));
+	                     }});
+	navigator nav(s, data);
+	nav.open("/libraries/l1/photos/ph7");
+	(void)drawn(nav);
+	CHECK(key(nav, one::desktop::key_event{.symbol = one::desktop::keys::delete_key, .text = ""}));
+	CHECK(data.runs().size() == 1);
+	CHECK(nav.current().address() == "/libraries/l1");
+}
+
 TEST("a toolbar is a thin strip while every group it shows is a single row of small tools, and full with any other") {
 	memory_source data;
 	site s{.name = "studio", .id = "org.uione.runtime-tests"};

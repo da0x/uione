@@ -209,8 +209,8 @@ namespace one::terminal::runtime {
 			if (remembers) remember_given(p, name, fields);
 			if (only_remembers) return;
 			if (then.empty()) return p.run(name, fields);
-			p.run(name, fields, [&p, then](const answer& made) {
-				if (made) p.open(then.substr(0, then.rfind(':')) + *made);
+			p.run(name, fields, [&p, then, name](const answer& made) {
+				if (made) p.open(made_opens(then, name, *made, p.params()));
 			});
 		};
 		for (const auto& k : b.keys) p.on_key(k, run);

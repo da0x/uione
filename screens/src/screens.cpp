@@ -304,6 +304,26 @@ namespace one::screens {
 		return out.empty() ? "/" : out;
 	}
 
+	std::string made_opens(const std::string& route, const std::string& command, const std::string& made, const std::map<std::string, std::string>& params) {
+		std::size_t last = command.rfind("::");
+		std::size_t before = last == std::string::npos ? std::string::npos : command.rfind("::", last - 1);
+		std::string entity = last == std::string::npos ? "" : command.substr(before == std::string::npos ? 0 : before + 2, last - (before == std::string::npos ? 0 : before + 2));
+		std::map<std::string, std::string> with = params;
+		if (!entity.empty()) with[entity] = made;
+		std::string out;
+		for (const auto& segment : segments(route)) {
+			if (!segment.starts_with(':')) {
+				out += "/" + segment;
+				continue;
+			}
+			std::string name = segment.substr(1);
+			while (name.ends_with('?') || name.ends_with('*')) name.pop_back();
+			auto found = with.find(name);
+			out += "/" + (found == with.end() ? std::string() : found->second);
+		}
+		return out.empty() ? "/" : out;
+	}
+
 	std::vector<std::pair<std::string, std::string>> query_of(const std::string& address) {
 		std::vector<std::pair<std::string, std::string>> out;
 		std::size_t mark = address.find('?');

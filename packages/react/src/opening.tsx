@@ -8,7 +8,7 @@
 // lines. And how big the screen is, in its own pixels.
 
 import { useEffect, useRef } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useParams } from "react-router";
 import { useRunner } from "./data.js";
 import type { CommandInput } from "./data.js";
 
@@ -23,9 +23,23 @@ export interface OpeningLine {
 // The route with what's opened in its last parameter.
 const opening = (route: string, id: string) => route.replace(/:[a-z_]+\*?$/, encodeURIComponent(id));
 
+// Where `then open` goes once a command answers: its answer, what it made or acted
+// on, in the parameter named like its entity, photo::delete's in :photo, and every
+// other parameter as the page's address has it. A route with no parameter named like
+// the entity doesn't take the answer.
+export function madeOpens(route: string, command: string, made: string | undefined, params: Record<string, string | undefined>): string {
+  const parts = command.split("::");
+  const entity = parts.length > 1 ? parts[parts.length - 2] : "";
+  return route.replace(/:([A-Za-z_]\w*)\*?/g, (written, name: string) => {
+    const value = name === entity ? made : params[name];
+    return value === undefined ? written : encodeURIComponent(value);
+  });
+}
+
 export function OnOpen({ ready, lines }: { ready: boolean; lines: OpeningLine[] }) {
   const runner = useRunner();
   const navigate = useNavigate();
+  const params = useParams();
   const decided = useRef(false);
   useEffect(() => {
     if (decided.current || !ready) return;
@@ -36,7 +50,7 @@ export function OnOpen({ ready, lines }: { ready: boolean; lines: OpeningLine[] 
         const { name, id, given, thenOpen } = line.run;
         // What a screen does as it's opened isn't the person's to undo (decision 0020).
         void runner.reply(name, { ...(given ?? {}), ...(id === undefined ? {} : { id }), "one:history": "apart" }).then((made) => {
-          if (made?.id && thenOpen) void navigate(opening(thenOpen, made.id), { replace: true });
+          if (made?.id && thenOpen) void navigate(madeOpens(thenOpen, name, made.id, params), { replace: true });
         });
         return;
       }

@@ -754,8 +754,8 @@ namespace one::desktop::runtime {
 			if (several) return give(name, fields);
 			if (then.empty()) return p.run(name, fields);
 			// What it made, opened: its id in the route's last parameter.
-			p.run(name, fields, [&p, then](const answer& made) {
-				if (made) p.open(then.substr(0, then.rfind(':')) + *made);
+			p.run(name, fields, [&p, then, name](const answer& made) {
+				if (made) p.open(made_opens(then, name, *made, p.params()));
 			});
 		};
 		if (!off) {

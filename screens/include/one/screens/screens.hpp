@@ -96,6 +96,11 @@ namespace one::screens {
 	                     const std::map<std::string, int>& named = {});
 	// An address with a page's parameters filled in, like /:project/settings.
 	std::string filled(const std::string& route, const std::map<std::string, std::string>& params);
+	// Where `then open` goes once a command answers: its answer, what it made or acted
+	// on, in the parameter named like its entity, photo::delete's in :photo, and every
+	// other parameter as the page's address has it. A route with no parameter named
+	// like the entity doesn't take the answer.
+	std::string made_opens(const std::string& route, const std::string& command, const std::string& made, const std::map<std::string, std::string>& params);
 	// Whether a row is kept by a filter's parts, each a field and what it holds, like
 	// assignees=me, or a time it's before or after, like updated_at>=-7d.
 	bool kept(const value& row, const std::vector<std::pair<std::string, std::string>>& picks, const std::string& me);

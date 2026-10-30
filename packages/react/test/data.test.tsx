@@ -193,6 +193,25 @@ describe("commands", () => {
     await waitFor(() => expect(source.runs).toEqual([{ command: "library::book::withdraw", input: {} }]));
   });
 
+  it("then opens the parameter named like its entity with what it answers, and the rest as the page's address has them", async () => {
+    const source = memorySource({ commands: { "archive::photo::delete": (input) => ({ id: String(input.id) }) } });
+    let at = "";
+    function Where() {
+      at = useLocation().pathname;
+      return null;
+    }
+    const photo = defineScreen({ title: "Photo", route: "/libraries/:library/photos/:photo" }, () => (
+      <>
+        <Command name="archive::photo::delete" id="ph7" label="Remove" thenOpen="/libraries/:library" />
+        <Where />
+      </>
+    ));
+    const library = defineScreen({ title: "Library", route: "/libraries/:library" }, () => <Where />);
+    render(<App name="archive" screens={[photo, library]} ui={plain} data={source} location="/libraries/l1/photos/ph7" />);
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(at).toBe("/libraries/l1"));
+  });
+
   it("asks first when its own button says to, its key too, the answer its own words", async () => {
     const source = memorySource();
     renderScreen(source, () => <Command name="studio::piece::delete" label="Remove" keys={["delete"]} confirm="Remove this piece?" destroys />);

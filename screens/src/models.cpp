@@ -497,12 +497,12 @@ namespace one::screens {
 			if (line.run) {
 				auto shown = command_of(p, *line.run);
 				if (!shown) continue;
-				std::string then = line.run->then_open;
+				std::string then = line.run->then_open, command = line.run->command;
 				// What a screen does as it's opened isn't the person's to undo (decision 0020).
 				value fields = shown->fields;
 				fields.fields["one:history"] = value("apart");
-				p.run(line.run->command, fields, [&p, then](const answer& made) {
-					if (made && !then.empty()) p.open_instead(then.substr(0, then.rfind(':')) + *made);
+				p.run(line.run->command, fields, [&p, then, command](const answer& made) {
+					if (made && !then.empty()) p.open_instead(made_opens(then, command, *made, p.params()));
 				});
 				return false;
 			}
@@ -655,7 +655,7 @@ namespace one::screens {
 		}
 		auto touched = page_.kept<bool>(key_ + ":touched", false);
 		auto opened = page_.kept<bool>(key_ + ":open", false);
-		std::string after = spec_.after, then = spec_.then_open;
+		std::string after = spec_.after, then = spec_.then_open, command = spec_.command;
 		auto on_done = spec_.on_done;
 		std::map<std::string, std::string> params = page_.params();
 		page_base* here = &page_;
@@ -673,7 +673,7 @@ namespace one::screens {
 			if (on_done) on_done();
 			if (!after.empty()) here->open(row_link(after, value::map(), params));
 			// What it made, opened, like a board made from New board.
-			if (!then.empty()) here->open(then.substr(0, then.rfind(':')) + *a);
+			if (!then.empty()) here->open(made_opens(then, command, *a, params));
 		}, true);
 	}
 

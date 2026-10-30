@@ -15,6 +15,7 @@ import { hintOf, rememberGiven, setPicked as pickRow, useInGroup, useInOptions, 
 import { useSaying } from "./said.js";
 import { PictureAlone, stepped, useAwakeOn, useSwipeStep } from "./alone.js";
 import { pictureSize } from "./vectors.js";
+import { madeOpens } from "./opening.js";
 import { cameraOf, factsOf, takenAt } from "./exif.js";
 import { dayTitle, rulerOf, timeGroups } from "./contract.js";
 import type { BoardCard, CanvasRegion, CardGroup, ChartProps, FieldProps, Filtered, Hue, LandingFeature, LandingProps, LinkProps, PipelineRow, TimelineStep, TimeUnit, TrackStep } from "./contract.js";
@@ -1251,6 +1252,7 @@ export function Command({
   const { questions } = useConfirmContext();
   const replier = useRunner();
   const navigate = useNavigate();
+  const params = useParams();
   const tool = useTool();
   // In a toolbar, one that doesn't apply now is there, but off, so the toolbar keeps
   // its shape.
@@ -1286,7 +1288,7 @@ export function Command({
     if (!thenOpen) return void runner.run(name, sent);
     // What it made, opened: its id in the route's last parameter.
     void runner.reply(name, sent).then((made) => {
-      if (made?.id) void navigate(thenOpen.replace(/:[a-z_]+\*?$/, encodeURIComponent(made.id)));
+      if (made?.id) void navigate(madeOpens(thenOpen, name, made.id, params));
     });
   };
   const closeOptions = useInOptions();
@@ -3464,6 +3466,7 @@ export function Form({
   const runner = useConfirmedRunner();
   const navigate = useNavigate();
   const filled = useFilled();
+  const params = useParams();
   const specs = fields.map((f) => (typeof f === "string" ? { name: f } : f));
   const empty = () => Object.fromEntries(specs.map((f) => [f.name, f.start ?? ""]));
   const [values, setValues] = useState<Record<string, string>>(empty);
@@ -3534,7 +3537,7 @@ export function Form({
       onDone?.();
       if (after !== undefined) void navigate(filled(after));
       // What it made, opened, like a board made from New board.
-      if (thenOpen && made?.id) void navigate(thenOpen.replace(/:[a-z_]+\*?$/, encodeURIComponent(made.id)));
+      if (thenOpen && made?.id) void navigate(madeOpens(thenOpen, command, made.id, params));
     }
   };
 
