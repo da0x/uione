@@ -12,6 +12,7 @@
 #include <cmath>
 #include <cstdint>
 #include <format>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -60,7 +61,7 @@ namespace one::math {
 					case node::kind::number: return number(n.text, s);
 					case node::kind::name: return name(n.text, s);
 					case node::kind::greek: return glyph(greek(n.text), s);
-					case node::kind::symbol: return glyph(n.text == "inf" ? 0x221E : 0x2202, s);
+					case node::kind::symbol: return glyph(n.text == "inf" ? 0x221E : n.text == "cdot" ? 0x22C5 : 0x2202, s);
 					case node::kind::words: return word(n.text, s, false);
 					case node::kind::row: return row(n.parts, s);
 					case node::kind::infix: return infix(n, s);
@@ -74,13 +75,14 @@ namespace one::math {
 					case node::kind::group: return around(set(n.parts[0], s), '(', ')', s);
 					case node::kind::call: return call(n, s);
 					case node::kind::root: return root(n, s);
-					case node::kind::bracket: return around(set(n.parts[0], s), n.text == "abs" ? '|' : n.text == "floor" ? 0x230A : 0x2308,
-					                                        n.text == "abs" ? '|' : n.text == "floor" ? 0x230B : 0x2309, s);
+					case node::kind::bracket: return around(set(n.parts[0], s), n.text == "abs" ? '|' : n.text == "floor" ? 0x230A : n.text == "square" ? '[' : 0x2308,
+					                                        n.text == "abs" ? '|' : n.text == "floor" ? 0x230B : n.text == "square" ? ']' : 0x2309, s);
 					case node::kind::accent: return accent(n, s);
 					case node::kind::big: return big(n, s);
 					case node::kind::differential: return beside({word("d", s, false), set(n.parts[0], s)});
 					case node::kind::matrix: return matrix(n, s);
 					case node::kind::cases: return cases(n, s);
+					case node::kind::arrow: return arrow(n, s);
 				}
 				return {};
 			}
@@ -137,7 +139,15 @@ namespace one::math {
 			// Characters upright, as numbers and words and longer names are.
 			laid_out word(const std::string& text, style s, bool spaced_underscores = false) const {
 				std::vector<laid_out> parts;
-				for (unsigned char c : text) parts.push_back(glyph(spaced_underscores && c == '_' ? ' ' : c, s));
+				// Each character, as UTF-8 writes it: one byte, or a lead byte and those that follow.
+				for (std::size_t i = 0; i < text.size();) {
+					auto c = static_cast<unsigned char>(text[i]);
+					std::size_t bytes = c < 0x80 ? 1 : c < 0xE0 ? 2 : c < 0xF0 ? 3 : 4;
+					std::uint32_t code = bytes == 1 ? c : c & (0xFF >> (bytes + 1));
+					for (std::size_t b = 1; b < bytes && i + b < text.size(); ++b) code = (code << 6) | (static_cast<unsigned char>(text[i + b]) & 0x3F);
+					i += bytes;
+					parts.push_back(glyph(spaced_underscores && code == '_' ? ' ' : code, s));
+				}
 				return beside(std::move(parts));
 			}
 
@@ -482,6 +492,49 @@ namespace one::math {
 					}
 				}
 				return beside({op, space(3.0 / 18, s), body});
+			}
+
+			// A reaction's arrow, drawn as lines as long as what's set small over or under it
+			// needs; ⇌ as two half arrows, one each way.
+			laid_out arrow(const node& n, style s) {
+				style small = lowered(s);
+				double em = unit(s), a = axis(s);
+				double line = measures::fraction_rule_thickness * scale(s);
+				auto none = [](const node& p) { return p.type == node::kind::row && p.parts.empty(); };
+				std::optional<laid_out> over, under;
+				if (!none(n.parts[2])) over = set(n.parts[2], small);
+				if (!none(n.parts[3])) under = set(n.parts[3], small);
+				double pad = 0.3 * em, head = 0.28 * em, apart = n.text == "<=>" ? 0.12 * em : 0;
+				double width = std::max({1.6 * em, (over ? over->width : 0) + 2 * pad, (under ? under->width : 0) + 2 * pad});
+				using points = std::vector<std::pair<double, double>>;
+				std::vector<points> lines;
+				double top = -a - apart, bottom = -a + apart;
+				lines.push_back({{0, top}, {width, top}});
+				if (n.text == "<=>") {
+					lines.push_back({{0, bottom}, {width, bottom}});
+					lines.push_back({{width - head, top - head / 2}, {width, top}});
+					lines.push_back({{head, bottom + head / 2}, {0, bottom}});
+				} else {
+					if (n.text != "<-") lines.push_back({{width - head, top - head / 2}, {width, top}, {width - head, top + head / 2}});
+					if (n.text != "->") lines.push_back({{head, top - head / 2}, {0, top}, {head, top + head / 2}});
+				}
+				laid_out drawn{width, a + apart + head / 2, std::max(0.0, -a + apart + head / 2), {}};
+				for (auto& p : lines) drawn.drawn.push_back(placed{placed::kind::line, 0, 0, 0, line, 0, 0, std::move(p)});
+				double room = 0.1 * em;
+				if (over) {
+					double rise = drawn.ascent + room + over->descent;
+					move(*over, (width - over->width) / 2, -rise);
+					drawn.ascent = rise + over->ascent;
+					drawn.drawn.insert(drawn.drawn.end(), over->drawn.begin(), over->drawn.end());
+				}
+				if (under) {
+					double drop = drawn.descent + room + under->ascent;
+					move(*under, (width - under->width) / 2, drop);
+					drawn.descent = drop + under->descent;
+					drawn.drawn.insert(drawn.drawn.end(), under->drawn.begin(), under->drawn.end());
+				}
+				double gap = s == style::script || s == style::scripts ? 0 : 5.0 / 18;
+				return beside({set(n.parts[0], s), space(gap, s), std::move(drawn), space(gap, s), set(n.parts[1], s)});
 			}
 
 			laid_out matrix(const node& n, style s) {

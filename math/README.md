@@ -148,6 +148,34 @@ spot.
 A terminal sets an equation in Unicode: `x²`, `x₁`, `√x`, `∑`. Where there's room it
 stacks a fraction over a line of `─`, and it writes `a/b` when there isn't.
 
+## Chemistry
+
+`ce( )` holds a chemical equation, written as it's said, and sets it as a textbook
+would: the elements upright, the counts lowered, the arrow drawn.
+
+```
+ce(2H2 + O2 -> 2H2O)
+ce(CuSO4*5H2O)
+ce(Fe^3+ + e^- <=> Fe^2+)
+ce(2KClO3 ->[MnO2][Delta] 2KCl + 3O2(g))
+```
+
+- An element starts with a capital, like `Na`, and the number after it is how many.
+  A number before a formula is its coefficient, a fraction too: `1/2O2`.
+- `( )` and `[ ]` group, with a count after: `Ca(OH)2`, `[Cu(NH3)4]^2+`.
+- `^` gives a charge: `^+`, `^2-`, or `^{2-}`. `e^-` is an electron.
+- `(s)`, `(l)`, `(g)` and `(aq)` give its state, and `*`, `.` or `·` joins a hydrate.
+- `+` is between what reacts. The arrows are `->`, `<-`, `<->`, `<=>` and `=`, and
+  `->[over]` or `->[over][under]` writes on the arrow, a formula, a Greek letter's
+  name or words, the arrow as long as they need.
+
+An element that doesn't exist isn't read: "there's no element Xx".
+
+A reaction can be checked. Each side's elements and charge are counted, and one that
+isn't balanced says how: "not balanced: 2 O on the left, 1 on the right". One thing
+alone, with no arrow, has a molar mass, from the standard atomic weights of all 118
+elements: `H2O` is 18.02 g/mol.
+
 ## In Markdown
 
 `$…$` holds an equation in a line of text, and a ```` ```math ```` block holds one set

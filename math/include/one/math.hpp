@@ -47,6 +47,7 @@ namespace one::math {
 			differential,  // d and a letter, like dx: parts[0] the letter
 			matrix,      // rows of columns: parts are rows, each a row of cells
 			cases,       // parts are rows: value, then condition, or nothing for otherwise
+			arrow,       // `text` ->, <-, <-> or <=>, a reaction's: parts: before, after, what's over and under it
 		};
 		kind type = kind::row;
 		std::string text;
@@ -59,6 +60,9 @@ namespace one::math {
 	};
 
 	namespace detail {
+
+		// What's in ce( ), read as a chemical equation (chem.hpp).
+		inline std::expected<node, problem> chemical(std::string_view written);
 
 		inline const std::set<std::string, std::less<>>& greek_names() {
 			static const std::set<std::string, std::less<>> names{
@@ -453,6 +457,8 @@ namespace one::math {
 					if (!acts) return acts;
 					return node{node::kind::call, name, {std::move(*acts)}};
 				}
+				// ce(2H2 + O2 -> 2H2O): a chemical equation, read as one and set as math.
+				if (name == "ce" && parenthesized) return chemical_here();
 				if (greek_names().contains(name)) return with_subscript_word(node{node::kind::greek, name, {}}, true);
 				if (name == "inf" || name == "partial") return node{node::kind::symbol, name, {}};
 				// dx, dy, dt: a d and a letter is a differential.
@@ -462,6 +468,23 @@ namespace one::math {
 				// letter is multiplied by what's in them, n(n + 1), and set the same as f(x).
 				if (parenthesized && name.size() > 1) return called(name);
 				return with_subscript_word(node{node::kind::name, name, {}}, name.size() == 1);
+			}
+
+			// What's in ce( ), to its matching ), read as a chemical equation; where it can't
+			// be, said where it is in the whole.
+			std::expected<node, problem> chemical_here() {
+				std::size_t from = at_, end = from;
+				int depth = 1;
+				for (; end < s_.size() && depth > 0; ++end) {
+					if (s_[end] == '(') ++depth;
+					else if (s_[end] == ')') --depth;
+				}
+				if (depth > 0) return std::unexpected(problem{s_.size(), "a ) to close the chemical equation, like ce(2H2 + O2 -> 2H2O)"});
+				auto read = chemical(s_.substr(from, end - 1 - from));
+				if (!read) return std::unexpected(problem{from + read.error().at, read.error().says});
+				at_ = end;
+				next();
+				return read;
 			}
 
 			// A function and what's in the parentheses after it, one thing kept in them as
@@ -577,8 +600,11 @@ namespace one::math {
 			case k::differential: return all("d");
 			case k::matrix: return all("matrix");
 			case k::cases: return all("cases");
+			case k::arrow: return all("arrow:" + n.text);
 		}
 		return "";
 	}
 
 }  // namespace one::math
+
+#include "one/chem.hpp"

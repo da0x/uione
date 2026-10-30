@@ -5,6 +5,7 @@
 // book sets them and, where it can be, worked out (math/README.md). The twin of
 // one::math's math.hpp, both held to math/tests/cases.tsv.
 
+import { chemAsMath, parseChem } from "./chem.js";
 import { measures } from "./math-measures.js";
 
 export type MathKind =
@@ -30,7 +31,8 @@ export type MathKind =
   | "big" // `text` sum, prod, int or lim; parts: below, above, what it acts on
   | "differential" // d and a letter: parts[0] the letter
   | "matrix" // parts are rows of cells
-  | "cases"; // parts are rows: value, then condition
+  | "cases" // parts are rows: value, then condition
+  | "arrow"; // `text` ->, <-, <-> or <=>, a reaction's: parts: before, after, what's over and under it
 
 export interface MathNode {
   type: MathKind;
@@ -54,6 +56,7 @@ const functionNames = new Set([
 const bracketNames = new Set(["abs", "floor", "ceil"]);
 const accentNames = new Set(["hat", "bar", "vec", "dot", "ddot"]);
 const bigNames = new Set(["sum", "prod", "int", "lim"]);
+export const isGreekName = (name: string) => greekNames.has(name);
 
 interface Token {
   type: "end" | "number" | "name" | "words" | "sign";
@@ -365,6 +368,8 @@ class Reader {
       if (parenthesized) return this.called(name);
       return node("call", name, [this.actedOn()]);
     }
+    // ce(2H2 + O2 -> 2H2O): a chemical equation, read as one (chem.ts) and set as math.
+    if (name === "ce" && parenthesized) return this.chemical();
     if (greekNames.has(name)) return node("greek", name);
     if (name === "inf" || name === "partial") return node("symbol", name);
     // dx, dy, dt: a d and a letter is a differential.
@@ -373,6 +378,27 @@ class Reader {
     // is multiplied by what's in them, n(n + 1), and set the same as f(x).
     if (parenthesized && name.length > 1) return this.called(name);
     return this.withSubscriptWord(node("name", name), name.length === 1);
+  }
+
+  // What's in ce( ), to its matching ), read as a chemical equation; where it can't be,
+  // said where it is in the whole.
+  private chemical(): MathNode {
+    const from = this.at;
+    let depth = 1, end = from;
+    for (; end < this.s.length && depth > 0; end++) {
+      if (this.s[end] === "(") depth++;
+      else if (this.s[end] === ")") depth--;
+    }
+    if (depth > 0) {
+      this.at = this.s.length;
+      this.now = { type: "end", text: "", at: this.s.length };
+      this.fail("a ) to close the chemical equation, like ce(2H2 + O2 -> 2H2O)");
+    }
+    const read = parseChem(this.s.slice(from, end - 1));
+    if ("problem" in read) throw new Failed({ at: from + read.problem.at, says: read.problem.says });
+    this.at = end;
+    this.next();
+    return chemAsMath(read.reaction);
   }
 
   // A function and what's in the parentheses after it, one thing kept in them as it was
@@ -485,6 +511,7 @@ export function writtenMath(n: MathNode): string {
     case "differential": return all("d");
     case "matrix": return all("matrix");
     case "cases": return all("cases");
+    case "arrow": return all(`arrow:${n.text}`);
   }
 }
 
@@ -571,7 +598,7 @@ class Setter {
       case "number": return this.number(n.text, s);
       case "name": return this.name(n.text, s);
       case "greek": return this.glyph(greekCode(n.text), s);
-      case "symbol": return this.glyph(n.text === "inf" ? 0x221e : 0x2202, s);
+      case "symbol": return this.glyph(n.text === "inf" ? 0x221e : n.text === "cdot" ? 0x22c5 : 0x2202, s);
       case "words": return this.word(n.text, s);
       case "row": return this.row(n.parts, s);
       case "infix": return this.infix(n, s);
@@ -586,8 +613,8 @@ class Setter {
       case "call": return this.call(n, s);
       case "root": return this.root(n, s);
       case "bracket": {
-        const open = n.text === "abs" ? 124 : n.text === "floor" ? 0x230a : 0x2308;
-        const close = n.text === "abs" ? 124 : n.text === "floor" ? 0x230b : 0x2309;
+        const open = n.text === "abs" ? 124 : n.text === "floor" ? 0x230a : n.text === "square" ? 91 : 0x2308;
+        const close = n.text === "abs" ? 124 : n.text === "floor" ? 0x230b : n.text === "square" ? 93 : 0x2309;
         return this.around(this.set(n.parts[0]!, s), open, close, s);
       }
       case "accent": return this.accent(n, s);
@@ -595,6 +622,7 @@ class Setter {
       case "differential": return beside([this.word("d", s), this.set(n.parts[0]!, s)]);
       case "matrix": return this.matrix(n, s);
       case "cases": return this.cases(n, s);
+      case "arrow": return this.arrow(n, s);
     }
   }
 
@@ -880,6 +908,44 @@ class Setter {
       }
     }
     return beside([op, this.space(3 / 18, s), body]);
+  }
+
+  // A reaction's arrow, drawn as lines as long as what's set small over or under it
+  // needs; ⇌ as two half arrows, one each way.
+  private arrow(n: MathNode, s: Style): MathLaidOut {
+    const small = lowered(s), em = this.unit(s), a = this.axis(s);
+    const line = constant("FractionRuleThickness") * this.scale(s);
+    const over = n.parts[2]!.type === "row" && n.parts[2]!.parts.length === 0 ? undefined : this.set(n.parts[2]!, small);
+    const under = n.parts[3]!.type === "row" && n.parts[3]!.parts.length === 0 ? undefined : this.set(n.parts[3]!, small);
+    const pad = 0.3 * em, head = 0.28 * em, apart = n.text === "<=>" ? 0.12 * em : 0;
+    const width = Math.max(1.6 * em, (over?.width ?? 0) + 2 * pad, (under?.width ?? 0) + 2 * pad);
+    const lines: [number, number][][] = [];
+    const top = -a - apart, bottom = -a + apart;
+    lines.push([[0, top], [width, top]]);
+    if (n.text === "<=>") {
+      lines.push([[0, bottom], [width, bottom]]);
+      lines.push([[width - head, top - head / 2], [width, top]]);
+      lines.push([[head, bottom + head / 2], [0, bottom]]);
+    } else {
+      if (n.text !== "<-") lines.push([[width - head, top - head / 2], [width, top], [width - head, top + head / 2]]);
+      if (n.text !== "->") lines.push([[head, top - head / 2], [0, top], [head, top + head / 2]]);
+    }
+    const drawn: MathLaidOut = { width, ascent: a + apart + head / 2, descent: Math.max(0, -a + apart + head / 2), drawn: lines.map((points) => place("line", 0, 0, 0, line, 0, 0, points)) };
+    const room = 0.1 * em;
+    if (over) {
+      const rise = drawn.ascent + room + over.descent;
+      moved(over, (width - over.width) / 2, -rise);
+      drawn.ascent = rise + over.ascent;
+      drawn.drawn.push(...over.drawn);
+    }
+    if (under) {
+      const drop = drawn.descent + room + under.ascent;
+      moved(under, (width - under.width) / 2, drop);
+      drawn.descent = drop + under.descent;
+      drawn.drawn.push(...under.drawn);
+    }
+    const gap = s === "script" || s === "scripts" ? 0 : 5 / 18;
+    return beside([this.set(n.parts[0]!, s), this.space(gap, s), drawn, this.space(gap, s), this.set(n.parts[1]!, s)]);
   }
 
   private matrix(n: MathNode, s: Style): MathLaidOut {

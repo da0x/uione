@@ -44,3 +44,13 @@ x in "the reals"	(in x "the reals")
 (a + b	! a ) to close
 sqrt x	! sqrt takes parentheses
 a +	! something more to finish the equation
+ce(2H2 + O2 -> 2H2O)	(arrow:-> (+ (row 2 (_ "H" 2)) (_ "O" 2)) (row 2 (_ "H" 2) "O") (row) (row))
+ce(N2 + 3H2 <=> 2NH3)	(arrow:<=> (+ (_ "N" 2) (row 3 (_ "H" 2))) (row 2 "N" (_ "H" 3)) (row) (row))
+ce(2KClO3 ->[heat] 2KCl + 3O2)	(arrow:-> (row 2 "K" "Cl" (_ "O" 3)) (+ (row 2 "K" "Cl") (row 3 (_ "O" 2))) "heat" (row))
+ce(Fe^3+ + 3OH^- -> Fe(OH)3(s))	(arrow:-> (+ (^ "Fe" "3+") (row 3 "O" (^ "H" "−"))) (row "Fe" (_ (group (row "O" "H")) 3) (group "s")) (row) (row))
+ce([Cu(NH3)4]^2+)	(^ (square (row "Cu" (_ (group (row "N" (_ "H" 3))) 4))) "2+")
+ce(CuSO4*5H2O)	(row "Cu" "S" (_ "O" 4) symbol:cdot 5 (_ "H" 2) "O")
+ce(SO4^2-)	(row "S" (^ (_ "O" 4) "2−"))
+x = ce(H2O)	(= x (row (_ "H" 2) "O"))
+ce(Xx2)	! there's no element Xx
+ce(H2O	! a ) to close the chemical equation

@@ -4,14 +4,19 @@
 // one::math held to tests/cases.tsv, every equation there read as the tree beside it or
 // turned down for the reason beside it; and to tests/layouts.txt, every one that reads
 // set as it was when that was written, 20 pixels to the em, as it's shown on its own
-// lines. ONE_MATH_LAYOUTS=write writes it again, to be looked at before it's kept.
+// lines. ONE_MATH_LAYOUTS=write writes it again, to be looked at before it's kept. And
+// chem.hpp held to tests/chem.tsv, each chemical equation read, balanced or not, and
+// weighed as it says.
 
+#include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <vector>
 
+#include "one/chem.hpp"
 #include "one/math.hpp"
 #include "one/math_layout.hpp"
 
@@ -35,6 +40,34 @@ int main() {
 		if (read) layouts += "== " + written + "\n" + one::math::written(one::math::lay_out(*read, 20, true));
 	}
 	std::cout << count - failed << " of " << count << " read as they should\n";
+	std::ifstream chemical(ONE_MATH_TESTS "/chem.tsv");
+	int reactions = 0, wrong = 0;
+	while (std::getline(chemical, line)) {
+		if (line.empty() || line.starts_with("#") || line.find('\t') == std::string::npos) continue;
+		std::vector<std::string> fields;
+		for (std::size_t from = 0;;) {
+			auto tab = line.find('\t', from);
+			fields.push_back(line.substr(from, tab == std::string::npos ? std::string::npos : tab - from));
+			if (tab == std::string::npos) break;
+			from = tab + 1;
+		}
+		++reactions;
+		auto read = one::math::chem::parse(fields[0]);
+		std::string got = read ? one::math::chem::written(*read) : "! " + read.error().says;
+		bool same = fields[1].starts_with("! ") ? got.starts_with(fields[1]) : got == fields[1];
+		if (same && read && fields.size() == 4) {
+			auto mass = one::math::chem::molar_mass(*read);
+			char weighed[32];
+			std::snprintf(weighed, sizeof weighed, "%.2f", mass.value_or(0));
+			same = one::math::chem::unbalanced(*read).value_or("balanced") == fields[2] && (mass ? std::string(weighed) : "-") == fields[3];
+		}
+		if (!same) {
+			++wrong;
+			std::cout << "FAIL " << fields[0] << "\n  want " << fields[1] << "\n  got  " << got << "\n";
+		}
+	}
+	std::cout << reactions - wrong << " of " << reactions << " chemical equations read as they should\n";
+	failed += wrong;
 	std::string file = ONE_MATH_TESTS "/layouts.txt";
 	if (const char* mode = std::getenv("ONE_MATH_LAYOUTS"); mode && std::string(mode) == "write") {
 		std::ofstream(file) << layouts;
