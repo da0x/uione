@@ -129,8 +129,18 @@ namespace one::desktop::runtime {
 					v = desktop::row(std::move(bar)).spacing(6).align(align::center);
 				}
 				// A toolbar's groups with a line between each and the next, as the web draws them.
+				// When every one is a single row of small tools, it's a thin strip, their names
+				// said only by their tools', as the web's.
 				if (std::string_view(across) == "toolbar") {
 					auto groups = std::move(v).take();
+					auto drawn = [](desktop::element* g) { return g->key == "group at end" && !g->children.empty() ? g->children.back().get() : g; };
+					bool thin = std::ranges::all_of(groups->children, [&](const auto& g) { return !drawn(g.get())->key.starts_with("group") || drawn(g.get())->key == "group one row"; });
+					if (thin) {
+						for (auto& g : groups->children) {
+							auto* group = drawn(g.get());
+							if (group->key == "group one row" && group->children.size() == 3) group->children.resize(1);
+						}
+					}
 					std::vector<desktop::view> lined;
 					for (auto& g : groups->children) {
 						if (!lined.empty()) lined.push_back(desktop::spacer().grow(0).width(1).background({.fill = t.line}));
@@ -182,10 +192,12 @@ namespace one::desktop::runtime {
 		std::erase_if(tools, [](const desktop::view& v) { return !v.get(); });
 		if (tools.empty()) return {};
 		desktop::view laid;
+		bool one_row = false;  // small, its tools in a single row
 		if (small) {
 			// Rows of icons, read a row at a time: as long as the group says, or two rows, the
 			// first the longer. Each column is one from each row, so they line up.
 			std::size_t across = across_said > 0 ? static_cast<std::size_t>(across_said) : (tools.size() + 1) / 2;
+			one_row = tools.size() <= across;
 			std::vector<desktop::view> columns;
 			for (std::size_t i = 0; i < across && i < tools.size(); ++i) {
 				std::vector<desktop::view> down;
@@ -202,9 +214,10 @@ namespace one::desktop::runtime {
 		label.size = t.text_size - 4;
 		// Its name at the bottom, in line with every other group's, however many rows of
 		// tools are over it, as the web's.
-		auto drawn = desktop::column(std::move(laid), desktop::spacer(), desktop::text(std::move(name), label)).spacing(2).align(align::center).padding(edges(0, 8));
+		// Marked by how it's laid out, for the toolbar to tell whether it's thin.
+		auto drawn = desktop::column(std::move(laid), desktop::spacer(), desktop::text(std::move(name), label)).spacing(2).align(align::center).padding(edges(0, 8)).key(one_row ? "group one row" : "group");
 		if (!at_end) return drawn;
-		return desktop::row(desktop::spacer(), std::move(drawn)).align(align::stretch).grow();
+		return desktop::row(desktop::spacer(), std::move(drawn)).align(align::stretch).grow().key("group at end");
 	}
 
 	desktop::view options(page& p, std::string label, std::string icon, std::function<std::vector<desktop::view>()> build) {

@@ -2453,8 +2453,10 @@ export const radix: ComponentSet = {
         {regions.bar && (
           <WorkspaceBar site={site} end={regions.barEnd}>{regions.bar}</WorkspaceBar>
         )}
+        {/* When every group is a single row of small tools, a thin strip, their names
+            said by their tools' as they're pointed at. */}
         {regions.toolbar && (
-          <div role="toolbar" className="flex shrink-0 items-stretch gap-1 overflow-x-auto border-b border-line bg-surface px-2 py-1 [&>[data-at-end]]:ml-auto [&>[data-at-end]~[data-at-end]]:ml-0">
+          <div role="toolbar" className="flex shrink-0 items-stretch gap-1 overflow-x-auto border-b border-line bg-surface px-2 py-1 [&>[data-at-end]]:ml-auto [&>[data-at-end]~[data-at-end]]:ml-0 [&:not(:has(>[role=group]:not([data-one-row])))>[role=group]>span]:hidden">
             {regions.toolbar}
           </div>
         )}
@@ -2497,7 +2499,12 @@ export const radix: ComponentSet = {
   ColorPicker,
 
   Group: ({ name, small, across, atEnd, unsaid, children }) => (
-    <div role="group" aria-label={name} data-at-end={atEnd ? "" : undefined} className="flex shrink-0 flex-col items-center justify-between gap-0.5 border-r border-line px-2 last:border-r-0 [&:has(>div:empty)]:hidden">
+    <div
+      role="group"
+      aria-label={name}
+      data-at-end={atEnd ? "" : undefined}
+      data-one-row={small && (across ?? Math.ceil(Children.toArray(children).length / 2)) >= Children.toArray(children).length ? "" : undefined}
+      className="flex shrink-0 flex-col items-center justify-between gap-0.5 border-r border-line px-2 last:border-r-0 [&:has(>div:empty)]:hidden">
       <div
         className={small ? "grid gap-0.5" : "flex items-start gap-0.5"}
         style={small ? { gridTemplateColumns: `repeat(${across ?? Math.max(1, Math.ceil(Children.toArray(children).length / 2))}, auto)` } : undefined}

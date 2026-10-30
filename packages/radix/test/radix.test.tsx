@@ -878,3 +878,26 @@ describe("a front page's new parts", () => {
     expect(document.getElementById("talk")?.querySelector("a")?.getAttribute("href")).toBe("mailto:hello@example.com");
   });
 });
+
+describe("a workspace's toolbar", () => {
+  const Group = radix.Group;
+  const tools = (n: number) => Array.from({ length: n }, (_, at) => <button key={at} type="button">{at}</button>);
+
+  it("marks a group that's a single row of small tools, and none that's more", () => {
+    const { container } = render(
+      <>
+        <Group name="Reading" small across={4}>{tools(4)}</Group>
+        <Group name="View" small across={2}>{tools(2)}</Group>
+        <Group name="Align" small>{tools(2)}</Group>
+        <Group name="Style">{tools(2)}</Group>
+      </>,
+    );
+    const marked = Array.from(container.querySelectorAll("[role=group]")).map((g) => [g.getAttribute("aria-label"), g.hasAttribute("data-one-row")]);
+    expect(marked).toEqual([["Reading", true], ["View", true], ["Align", false], ["Style", false]]);
+  });
+
+  it("is a thin strip, its groups' names hidden, only while every group is a single row of small tools", () => {
+    const text = readFileSync(resolve(process.cwd(), "dist/styles.css"), "utf8");
+    expect(text).toContain(":not(:has(>[role=group]:not([data-one-row])))>[role=group]>span{display:none}");
+  });
+});

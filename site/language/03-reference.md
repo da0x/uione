@@ -2540,7 +2540,11 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   read a row at a time, its words said when it's pointed at. A large tool is as
   tall as two small ones, so the toolbar is as tall whichever groups it shows.
   `group "Align" small rows of 3 { ... }` lays its tools in rows of three instead,
-  read a row at a time. `group "View" at end` sits at the toolbar's far end.
+  read a row at a time. `group "View" at end` sits at the toolbar's far end. While
+  every group the toolbar shows is a single row of small tools, as `group "Reading"
+  small rows of 4` with four, it's a thin strip, its groups' names said by their tools
+  as they're pointed at; a mode that shows only such groups, like reading, gets a
+  thin toolbar, and one with large tools a full one.
 - In a toolbar, `when` doesn't hide: a group or a tool whose `when` doesn't hold is
   there, faint, and can't be pressed, nor its keys used, so the toolbar keeps its
   shape as what's picked changes. `group "Rotate" small when layer.picture != none`.
