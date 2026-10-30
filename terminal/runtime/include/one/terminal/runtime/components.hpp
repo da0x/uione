@@ -24,7 +24,7 @@ namespace one::terminal::runtime {
 		return items(std::move(all));
 	}
 
-	terminal::view text(std::vector<part> parts);
+	terminal::view text(std::vector<part> parts, bool quiet = false);
 	terminal::view subtitle(page& p, std::vector<part> parts);
 	terminal::view crumbs(page& p, std::vector<crumb> trail);
 	terminal::view code(std::string language, std::string source);
