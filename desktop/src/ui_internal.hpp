@@ -41,6 +41,9 @@ namespace one::desktop::detail {
 	// What an open popover's panel has at `at`, over everything else; none when it's
 	// not on one.
 	element* popover_hit(point at);
+	// An open dialog's panel, which the keyboard stays in while it's there; none when
+	// there's none.
+	element* open_dialog();
 
 	// In tree order: the focusable elements, and the one focused.
 	void focusables(element& root, std::vector<element*>& into);

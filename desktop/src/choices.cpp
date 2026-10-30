@@ -526,6 +526,66 @@ namespace one::desktop {
 			state<bool> open_;
 		};
 
+		// A panel in the middle of the window over everything, what's behind it dimmed.
+		// While it's there it's what a press reaches, on it or not.
+		class dialog_element : public element {
+		public:
+			// The newest built is the one open, as the view before it is let go.
+			dialog_element() { open_dialog() = this; }
+			~dialog_element() override {
+				if (open_dialog() == this) open_dialog() = nullptr;
+			}
+			dialog_element(const dialog_element&) = delete;
+			dialog_element& operator=(const dialog_element&) = delete;
+
+			static dialog_element*& open_dialog() {
+				thread_local dialog_element* open = nullptr;
+				return open;
+			}
+
+			extent measure_content(float) override { return {}; }
+			void place_content(const rect&) override {
+				if (children.empty()) return;
+				const element* root = this;
+				while (root->parent) root = root->parent;
+				window_ = root->frame;
+				float width = std::min(720.f, window_.width - 32);
+				extent e = children[0]->measure(width);
+				float height = std::min(e.height, window_.height - 32);
+				children[0]->place({window_.x + (window_.width - width) / 2, window_.y + std::max(16.f, (window_.height - height) / 3), width, height});
+			}
+			void paint_content(canvas& c) override {
+				if (children.empty()) return;
+				element* panel = children[0].get();
+				rect behind = window_;
+				c.later([panel, behind](canvas& over) {
+					const theme& t = current_theme();
+					color dim = color::hex(0x000000);
+					dim.alpha = 0.32f;
+					over.box(behind, {.fill = dim});
+					color shade = color::hex(0x000000);
+					shade.alpha = 0.24f;
+					over.shadow(panel->frame, 18, 28, shade, {0, 8});
+					over.box(panel->frame, {.fill = t.surface, .border = t.line, .border_width = 1, .radius = 12});
+					panel->paint(over);
+				});
+			}
+			element* hit(point at) override {
+				if (!children.empty()) {
+					if (element* found = children[0]->hit(at)) return found;
+				}
+				return this;
+			}
+			bool press(point, int) override { return true; }
+			bool wheel(point, float, float) override { return true; }
+			// Keys the panel didn't take go no further, to what's behind it.
+			bool handle_key(const key_event&) override { return true; }
+			element* panel() { return children.empty() ? nullptr : children[0].get(); }
+
+		private:
+			rect window_;
+		};
+
 		// Pickers whose list just closed, by their open state, to be given the keyboard back.
 		std::set<const void*>& closing() {
 			thread_local std::set<const void*> pickers;
@@ -545,6 +605,7 @@ namespace one::desktop {
 		}
 
 		element* popover_hit(point at) {
+			if (auto* d = dialog_element::open_dialog()) return d->hit(at);
 			for (auto& [key, o] : open_popovers()) {
 				if (o.open.peek() && o.panel && o.on.size() > 1 && o.on[1].contains(at)) return o.panel->hit(at);
 			}
@@ -566,6 +627,27 @@ namespace one::desktop {
 			                          .take());
 		}
 		for (auto& child : e->children) child->parent = e.get();
+		return view(std::move(e));
+	}
+
+	namespace detail {
+		element* open_dialog() {
+			auto* d = dialog_element::open_dialog();
+			return d ? d->panel() : nullptr;
+		}
+	}  // namespace detail
+
+	view dialog(view panel, std::function<void()> dismissed) {
+		auto e = std::make_unique<dialog_element>();
+		e->children.push_back(std::move(panel)
+		                          .padding(16)
+		                          .on_key([dismissed = std::move(dismissed)](const key_event& k) {
+			                          if (!k.is(keys::escape)) return false;
+			                          if (dismissed) dismissed();
+			                          return true;
+		                          })
+		                          .take());
+		e->children[0]->parent = e.get();
 		return view(std::move(e));
 	}
 

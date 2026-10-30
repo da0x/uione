@@ -379,6 +379,9 @@ namespace one::desktop {
 		bool multiline = false;
 		int lines = 4;  // how tall one of several lines is, at least
 		std::function<void()> on_submit = {};
+		// Where its selection is, its anchor and its caret, in bytes: kept here as they
+		// move, and moved to what's set here, as a key putting words at the caret does.
+		std::optional<state<std::pair<std::size_t, std::size_t>>> chosen = {};
 	};
 	view field(state<std::string> value, field_options options = {});
 
@@ -410,6 +413,11 @@ namespace one::desktop {
 	// A trigger, laid out as it is, and while `open` holds a panel under it, over
 	// everything else, as a menu is: closed by Esc, or a press anywhere but on it.
 	view popover(view trigger, view panel, state<bool> open);
+
+	// A panel in the middle of the window, over everything, what's behind it dimmed and
+	// out of reach while it's there, as a dialog is: the keyboard is in it, and Esc
+	// lets it go, telling `dismissed`. It takes no room where it's put.
+	view dialog(view panel, std::function<void()> dismissed);
 
 	// One of a few choices, side by side, each with a round button before what it
 	// says: picked with a click, or with the arrows, Space or Enter once it has the

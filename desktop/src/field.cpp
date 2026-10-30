@@ -21,6 +21,7 @@ namespace one::desktop {
 			field_element(state<std::string> value, field_options options)
 			    : value_(std::move(value)), options_(std::move(options)), edit_(value_.peek(), options_.multiline) {
 				padding = edges(7, 10);
+				take_chosen();
 			}
 
 			bool focusable() const override { return true; }
@@ -62,6 +63,7 @@ namespace one::desktop {
 				composing_ = std::move(was.composing_);
 				composing_at_ = was.composing_at_;
 				edit_.replace_all(value_.peek());
+				take_chosen();
 			}
 
 			extent measure_content(float width) override {
@@ -155,10 +157,14 @@ namespace one::desktop {
 				if (clicks == 2) edit_.select_word(offset);
 				else if (clicks == 3) options_.multiline ? edit_.select_line(offset) : edit_.select_all();
 				else edit_.move_to(offset, false);
+				tell_chosen();
 				return true;
 			}
 
-			void drag(point at) override { edit_.move_to(offset_at(at), true); }
+			void drag(point at) override {
+				edit_.move_to(offset_at(at), true);
+				tell_chosen();
+			}
 
 		private:
 			float line_height() const {
@@ -205,6 +211,7 @@ namespace one::desktop {
 			template <class F>
 			bool moved(F&& how) {
 				how();
+				tell_chosen();
 				keep_in_sight();
 				return true;
 			}
@@ -214,12 +221,28 @@ namespace one::desktop {
 				std::string before = edit_.text();
 				how();
 				if (edit_.text() != before) value_.set(edit_.text());
+				tell_chosen();
 				keep_in_sight();
 				return true;
 			}
 
 			bool typed(std::string_view words) {
 				return changed([&] { edit_.type(words); });
+			}
+
+			// Where the selection is, kept where it's asked for, and moved to what's set there.
+			void tell_chosen() {
+				if (!options_.chosen) return;
+				std::pair now{edit_.anchor(), edit_.caret()};
+				if (options_.chosen->peek() != now) options_.chosen->set(now);
+			}
+			void take_chosen() {
+				if (!options_.chosen) return;
+				auto [anchor, caret] = options_.chosen->peek();
+				std::size_t end = edit_.text().size();
+				if (std::pair{edit_.anchor(), edit_.caret()} == std::pair{anchor, caret}) return;
+				edit_.move_to(std::min(anchor, end), false);
+				edit_.move_to(std::min(caret, end), true);
 			}
 
 			// The caret, within any scroll the field is in.

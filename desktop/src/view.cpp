@@ -166,6 +166,23 @@ namespace one::desktop {
 					(*first)->focused_by_default = !better;
 				}
 			}
+			// A dialog has the keyboard while it's there: what in it asks for it, or the
+			// first thing in it that takes keys.
+			if (element* panel = w.root ? detail::open_dialog() : nullptr) {
+				element* now = detail::focused_in(*w.root);
+				bool inside = false;
+				for (element* e = now; e && !inside; e = e->parent) inside = e == panel;
+				if (!inside) {
+					std::vector<element*> all;
+					detail::focusables(*panel, all);
+					auto first = std::ranges::find_if(all, [](element* e) { return e->wants_focus; });
+					if (first == all.end()) first = all.begin();
+					if (first != all.end()) {
+						if (now) now->focused = now->focused_by_default = now->focused_by_pointer = false;
+						(*first)->focused = true;
+					}
+				}
+			}
 		}
 		if (w.root && (w.needs_placing || w.placed_at != w.size || w.placed_scale != w.scale)) {
 			w.root->place({0, 0, static_cast<float>(w.size.width), static_cast<float>(w.size.height)});
@@ -197,8 +214,10 @@ namespace one::desktop {
 		}
 		if (w.root) {
 			if (e.is(keys::tab) || e.is(keys::left_tab)) {
+				// Within a dialog while one's open.
 				std::vector<element*> all;
-				detail::focusables(*w.root, all);
+				element* panel = detail::open_dialog();
+				detail::focusables(panel ? *panel : *w.root, all);
 				if (!all.empty()) {
 					auto it = std::ranges::find(all, detail::focused_in(*w.root));
 					std::size_t at = it == all.end() ? 0 : static_cast<std::size_t>(it - all.begin());
@@ -291,7 +310,8 @@ namespace one::desktop {
 		bring_up_to_date(w);
 		in_window context(w);
 		if (!w.root) return;
-		for (element* e = w.root->hit(at); e; e = e->parent) {
+		element* over = detail::popover_hit(at);
+		for (element* e = over ? over : w.root->hit(at); e; e = e->parent) {
 			if (e->wheel(at, dx, dy)) {
 				point_to(w, at);
 				w.redraw();
