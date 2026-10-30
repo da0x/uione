@@ -99,7 +99,8 @@ function elementsOf(children: ReactNode): Part[] {
 }
 
 // What a section of words says: the short line over its title, its words, the
-// sections it holds, and the one link it opens; or nothing, when it holds anything else.
+// sections it holds, and the one link it opens; or nothing, when it holds anything else,
+// or a link with no words.
 function offered(section: Part, linked: (to: string) => LinkProps): LandingFeature | undefined {
   let overline: ReactNode;
   let link: LandingFeature["link"];
@@ -115,6 +116,9 @@ function offered(section: Part, linked: (to: string) => LinkProps): LandingFeatu
       features.push(inner);
     } else return undefined;
   }
+  // A link alone, with no words, is a way to reach the site, like a contact's, asked of
+  // its reader rather than offered.
+  if (link && text.length === 0) return undefined;
   return { title: section.props.title ?? "", ...(overline !== undefined ? { overline } : {}), ...(section.props.icon ? { icon: section.props.icon } : {}), text, features, ...(link ? { link } : {}) };
 }
 
