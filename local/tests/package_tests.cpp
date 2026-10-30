@@ -10,7 +10,9 @@
 #include <unistd.h>
 
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
+#include <set>
 #include <source_location>
 
 #include "check.hpp"
@@ -401,4 +403,30 @@ TEST("a value divided, or what's left over, is worked out as on every target: as
 	CHECK(one::local::remainder(-1, 4) == 3);
 	CHECK(one::local::remainder(5, 4) == 1);
 	CHECK(one::local::remainder(3, 0) == 0);
+}
+
+TEST("a list's first, what's after them, and two joined are lists of their own, as on every target") {
+	value list(std::vector<value>{value("a"), value("b"), value("c")});
+	CHECK(one::local::first_of(list, 2).as_array().size() == 2);
+	CHECK(one::local::first_of(list, 2).as_array()[1].as_string() == "b");
+	CHECK(one::local::first_of(list, 9).as_array().size() == 3);
+	CHECK(one::local::first_of(list, -1).as_array().empty());
+	CHECK(one::local::drop_of(list, 1).as_array()[0].as_string() == "b");
+	CHECK(one::local::drop_of(list, 9).as_array().empty());
+	CHECK(one::local::joined(one::local::drop_of(list, 2), list).as_array().size() == 4);
+	CHECK(one::local::counted(list) == 3);
+	CHECK(one::local::counted(value()) == 0);
+}
+
+TEST("a random number is a whole one from low to high, both included, and draws from its source") {
+	std::set<double> seen;
+	for (int i = 0; i < 2000; ++i) seen.insert(one::local::random(-2, 3));
+	CHECK((seen == std::set<double>{-2, -1, 0, 1, 2, 3}));
+	CHECK(one::local::random(5, 5) == 5);
+	CHECK(one::local::random(5, 1) == 5);
+	{
+		auto known = one::local::draw_with([](std::int64_t n) { return n - 1; });
+		CHECK(one::local::random(1, 6) == 6);
+	}
+	CHECK(one::local::random(1, 1) == 1);
 }

@@ -1812,6 +1812,62 @@ function sort_title(title) {
 }
 ```
 
+A parameter may say its type, written as a field's is. One written bare, like
+`title`, takes its type from the field a view orders by. A function called from a
+command says them all:
+
+```one
+enum pace {
+	slow
+	fast
+}
+
+function steps(n number, way pace) {
+	if n <= 0 { return 0 }
+	return match way {
+		slow 1 + steps(n - 1, way)
+		fast 2 + steps(n - 1, way)
+	}
+}
+
+command hand::turn {
+	turns = steps(turns, pace::fast)
+}
+```
+
+A body has `if` and `return`, arithmetic and comparisons, and calls: of the
+language's own, of other functions, and of itself, which is how a function repeats.
+A `match` goes alone after `return`, so only the arm chosen is worked out. A
+function reads only its parameters; reading and changing records is a command's
+work. It runs the same on every target, the backend's and the machine's alike.
+
+A list, in a function or a command, is read and joined with what reads text:
+`first(deck, 13)` is its first 13, `drop(deck, 13)` all of it after them, and
+`count(deck)` how many it holds. `+` joins two lists, the first's then the
+second's, and `[]` is one that holds nothing. Each gives a list of its own, so a
+list field changes only when it's given one: `deck = drop(deck, 13)`.
+
+`random(1, 6)` is a whole number from the first to the second, both included. It's
+drawn as a command runs, from the operating system's secure source, on the backend
+for a project in the cloud, so no one using the app can see or steer it. What's
+kept is what the command made of it, so the same draw is never made twice. A view
+shows everyone the same each time, so neither `random` nor a function that draws
+with it goes in one.
+
+```one
+function cut(deck list of card, at number) {
+	return drop(deck, at) + first(deck, at)
+}
+
+command deal::cut {
+	input how  cut_by
+	deck = cut(deck, count(deck) / 2 + random(-4, 4))
+}
+```
+
+An input may be one of an enum's choices, `input how  cut_by`, and a command is
+refused when it's sent anything else.
+
 ## screen
 
 A page: a title, a route, and what is on it. A screen without a title, `screen
