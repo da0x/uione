@@ -1812,6 +1812,35 @@ function sort_title(title) {
 }
 ```
 
+A parameter may say its type, written as a field's is. One written bare, like
+`title`, takes its type from the field a view orders by. A function called from a
+command says them all:
+
+```one
+enum pace {
+	slow
+	fast
+}
+
+function steps(n number, way pace) {
+	if n <= 0 { return 0 }
+	return match way {
+		slow 1 + steps(n - 1, way)
+		fast 2 + steps(n - 1, way)
+	}
+}
+
+command hand::turn {
+	turns = steps(turns, pace::fast)
+}
+```
+
+A body has `if` and `return`, arithmetic and comparisons, and calls: of the
+language's own, of other functions, and of itself, which is how a function repeats.
+A `match` goes alone after `return`, so only the arm chosen is worked out. A
+function reads only its parameters; reading and changing records is a command's
+work. It runs the same on every target, the backend's and the machine's alike.
+
 ## screen
 
 A page: a title, a route, and what is on it. A screen without a title, `screen

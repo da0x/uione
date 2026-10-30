@@ -26,6 +26,79 @@
 
 namespace one::generators {
 
+    namespace {
+
+        // An expression of Go a function's body is written as, kept as a tree until it's
+        // written, so it's spaced as gofmt spaces it: a sum in a call of several arguments
+        // tight, n-1, and one standing alone open, n - 1.
+        struct go_node {
+            enum class kind { atom, paren, unary, binary, call } is = kind::atom;
+            std::string text;  // an atom's code, the operator, or what's called
+            int precedence = 0;  // a binary's, as Go ranks its operator
+            std::vector<go_node> parts;
+        };
+
+        go_node go_atom(std::string code) { return {go_node::kind::atom, std::move(code), 0, {}}; }
+
+        go_node go_call(std::string called, std::vector<go_node> args) { return {go_node::kind::call, std::move(called), 0, std::move(args)}; }
+
+        go_node go_unary(std::string op, go_node operand) {
+            if (operand.is == go_node::kind::binary) operand = {go_node::kind::paren, "", 0, {std::move(operand)}};
+            return {go_node::kind::unary, std::move(op), 0, {std::move(operand)}};
+        }
+
+        // In brackets where Go would read it otherwise: a looser operator on the left, one no
+        // tighter on the right.
+        go_node go_binary(std::string op, int precedence, go_node left, go_node right) {
+            if (left.is == go_node::kind::binary && left.precedence < precedence) left = {go_node::kind::paren, "", 0, {std::move(left)}};
+            if (right.is == go_node::kind::binary && right.precedence <= precedence) right = {go_node::kind::paren, "", 0, {std::move(right)}};
+            return {go_node::kind::binary, std::move(op), precedence, {std::move(left), std::move(right)}};
+        }
+
+        // What go/printer's walkBinary finds: whether sums and products are mixed, and the
+        // tightest an operator next to a unary one must be kept apart from it.
+        void walk_binary(const go_node& e, bool& has4, bool& has5, int& problem) {
+            if (e.precedence == 4) has4 = true;
+            if (e.precedence == 5) has5 = true;
+            const go_node& l = e.parts[0];
+            if (l.is == go_node::kind::binary && l.precedence >= e.precedence) walk_binary(l, has4, has5, problem);
+            const go_node& r = e.parts[1];
+            if (r.is == go_node::kind::binary && r.precedence > e.precedence) walk_binary(r, has4, has5, problem);
+            if (r.is == go_node::kind::unary && e.text + r.text == "--") problem = std::max(problem, 4);
+        }
+
+        int go_cutoff(const go_node& e, int depth) {
+            bool has4 = false, has5 = false;
+            int problem = 0;
+            walk_binary(e, has4, has5, problem);
+            if (problem > 0) return problem + 1;
+            if (has4 && has5) return depth == 1 ? 5 : 4;
+            return depth == 1 ? 6 : 4;
+        }
+
+        std::string go_written(const go_node& n, int depth = 1) {
+            switch (n.is) {
+                case go_node::kind::atom: return n.text;
+                case go_node::kind::paren: return "(" + go_written(n.parts[0], depth > 1 ? depth - 1 : depth) + ")";
+                case go_node::kind::unary: return n.text + go_written(n.parts[0], depth);
+                case go_node::kind::call: {
+                    std::string args;
+                    for (const auto& a : n.parts) args += (args.empty() ? "" : ", ") + go_written(a, n.parts.size() > 1 ? depth + 1 : depth);
+                    return n.text + "(" + args + ")";
+                }
+                case go_node::kind::binary: {
+                    bool blank = n.precedence < go_cutoff(n, depth);
+                    const go_node& l = n.parts[0];
+                    int same = l.is == go_node::kind::binary && l.precedence == n.precedence ? 0 : 1;
+                    std::string op = blank ? " " + n.text + " " : n.text;
+                    return go_written(l, depth + same) + op + go_written(n.parts[1], depth + 1);
+                }
+            }
+            return n.text;
+        }
+
+    }  // namespace
+
     class api_generator {
     public:
         api_generator(const std::vector<language::file>& files, std::string project_dir, std::string out_dir)
@@ -103,6 +176,11 @@ namespace one::generators {
         std::string collecting_;  // the file being collected
         std::map<std::string, std::vector<std::string>> form_fields_;  // by command, like projects::issue::update
         std::map<const language::expression*, std::string> existing_;  // each exists(...) or held(...) asked in a command, and what holds its answer
+        // What each function returns, in Go, once it's worked out; and those being worked
+        // out, so one calling itself is judged by its other returns.
+        std::map<const language::function_declaration*, std::optional<std::string>> returns_;
+        std::set<const language::function_declaration*> working_out_;
+        bool quiet_ = false;  // while a type is only being worked out, what can't be said isn't reported
         int helds_ = 0;  // how many held(...) a command has asked so far, to name each answer
         std::map<std::string, std::string> held_named_;  // held([role::shipper]) asked so far, by the roles it asks of
         int waits_ = 0;  // how many waiting(...) a command has asked, each its own answer
@@ -1921,6 +1999,26 @@ namespace one::generators {
             if (auto found = existing_.find(&x); found != existing_.end()) return found->second;
             if (auto* call = std::get_if<language::call_expression>(&x.node)) {
                 auto* callee = std::get_if<language::name_expression>(&call->callee->node);
+                // shuffled(deck, way, 7): a function the file declares, given what the command reads,
+                // a choice by its name as its parameter's enum keeps it.
+                if (const language::function_declaration* called = callee && pkg_ ? function(*pkg_, callee->name.text()) : nullptr) {
+                    std::string args;
+                    for (std::size_t i = 0; i < call->arguments.size(); ++i) {
+                        const auto& a = *call->arguments[i];
+                        const language::field* param = i < called->parameter_types.size() ? &called->parameter_types[i] : nullptr;
+                        auto* named = std::get_if<language::name_expression>(&a.node);
+                        std::optional<std::string> arg;
+                        if (named && param && std::ranges::find(param->choices, named->name.parts.back()) != param->choices.end() &&
+                            (named->name.parts.size() == 1 ? !field(e, named->name.parts[0]) && !inputs_.contains(named->name.parts[0]) : named->name.parts[0] == param->enum_name)) {
+                            arg = api_detail::go_string(named->name.parts.back());
+                        } else {
+                            arg = expression(e, a, me, nullptr);
+                        }
+                        if (!arg) return std::nullopt;
+                        args += (args.empty() ? "" : ", ") + *arg;
+                    }
+                    return api_detail::go_name(called->name) + "(" + args + ")";
+                }
                 // was issue.stage, or was stage: the field as it was stored.
                 if (callee && callee->name.text() == "was") {
                     const auto& of = *call->arguments[0];
@@ -2006,7 +2104,7 @@ namespace one::generators {
                     return *l + " " + it->second + " " + *r;
                 }
             }
-            unsupported(path_, x.where, "this expression in a command; a command can use its own fields, now, me, none, and plain values");
+            unsupported(path_, x.where, "this expression in a command; a command can use its own fields, now, me, none, plain values and functions");
             return std::nullopt;
         }
 
@@ -2507,80 +2605,162 @@ namespace one::generators {
             return types;
         }
 
-        // An expression in a function's body, in Go, with its Go type.
-        std::optional<std::pair<std::string, std::string>> function_expression(const language::expression& x,
-                                                                         const std::map<std::string, std::string>& params) {
+        // An expression in a function's body, in Go, with its Go type: its parameters, plain
+        // values and their choices, arithmetic, comparisons, and calls, of the language's own
+        // or of functions, itself too.
+        std::optional<std::pair<go_node, std::string>> function_expression(const package& pkg, const language::expression& x,
+                                                                         const std::map<std::string, const language::field*>& params,
+                                                                         const std::map<std::string, std::string>& types) {
+            auto fails = [&](const std::string& what) -> std::optional<std::pair<go_node, std::string>> {
+                if (!quiet_) unsupported(path_, x.where, what);
+                return std::nullopt;
+            };
+            auto said = [&](const language::expression& inner) { return function_expression(pkg, inner, params, types); };
             if (auto* lit = std::get_if<language::literal_expression>(&x.node)) {
-                if (lit->type == language::literal_expression::kind::string) return std::pair{api_detail::go_string(lit->value), std::string("string")};
-                bool whole = lit->value.find('.') == std::string::npos;
-                return std::pair{lit->value, std::string(whole ? "int" : "float64")};
+                if (lit->type == language::literal_expression::kind::string) return std::pair{go_atom(api_detail::go_string(lit->value)), std::string("string")};
+                if (lit->type == language::literal_expression::kind::number) return std::pair{go_atom(lit->value), std::string("float64")};
+                return fails("a time in a function");
             }
-            if (auto* n = std::get_if<language::name_expression>(&x.node); n && n->name.parts.size() == 1) {
-                const auto& name = n->name.parts[0];
-                if (auto it = params.find(name); it != params.end()) return std::pair{local_name(name), it->second};
-                if (name == "true" || name == "false") return std::pair{name, std::string("bool")};
+            if (auto* n = std::get_if<language::name_expression>(&x.node)) {
+                const auto& name = n->name.text();
+                if (auto it = types.find(name); it != types.end()) return std::pair{go_atom(local_name(name)), it->second};
+                if (name == "true" || name == "false") return std::pair{go_atom(name), std::string("bool")};
+                // riffle, or pace::riffle: a choice of a parameter's enum, as it's kept.
+                std::string choice = n->name.parts.back();
+                for (const auto& [_, f] : params) {
+                    bool named = n->name.parts.size() == 1 || n->name.parts[0] == f->enum_name;
+                    if (named && std::ranges::find(f->choices, choice) != f->choices.end()) return std::pair{go_atom(api_detail::go_string(choice)), std::string("string")};
+                }
+                return fails("the name " + name + " in a function; it can use its parameters and their choices");
             }
             if (auto* call = std::get_if<language::call_expression>(&x.node)) {
                 auto* callee = std::get_if<language::name_expression>(&call->callee->node);
-                std::vector<std::string> args;
-                for (const auto& a : call->arguments) {
-                    auto arg = function_expression(*a, params);
-                    if (!arg) return std::nullopt;
-                    args.push_back(arg->first);
-                }
-                std::string joined;
-                for (const auto& a : args) joined += (joined.empty() ? "" : ", ") + a;
                 std::string name = callee ? callee->name.text() : "";
-                if (name == "starts_with" && args.size() == 2) return std::pair{"one.StartsWith(" + joined + ")", std::string("bool")};
-                if (name == "drop" && args.size() == 2) return std::pair{"one.Drop(" + joined + ")", std::string("string")};
+                std::vector<std::pair<go_node, std::string>> args;
+                for (const auto& a : call->arguments) {
+                    auto arg = said(*a);
+                    if (!arg) return std::nullopt;
+                    args.push_back(*arg);
+                }
+                auto nodes = [&] {
+                    std::vector<go_node> all;
+                    for (const auto& [node, _] : args) all.push_back(node);
+                    return all;
+                };
+                // A whole number, as Go counts, from a number; 4 as it's written, which Go takes as it is.
+                auto whole = [](const std::pair<go_node, std::string>& n) {
+                    bool written = n.first.is == go_node::kind::atom && n.first.text.find_first_not_of("0123456789") == std::string::npos;
+                    return n.second == "float64" && !written ? go_call("int", {n.first}) : n.first;
+                };
+                if (name == "starts_with" && args.size() == 2) return std::pair{go_call("one.StartsWith", nodes()), std::string("bool")};
+                if (name == "drop" && args.size() == 2) return std::pair{go_call("one.Drop", {args[0].first, whole(args[1])}), std::string("string")};
+                if ((name == "min" || name == "max") && args.size() == 2) return std::pair{go_call(name, nodes()), std::string("float64")};
+                if (const language::function_declaration* called = function(pkg, name)) {
+                    auto returns = return_type_of(pkg, *called);
+                    if (!returns) return std::nullopt;
+                    return std::pair{go_call(api_detail::go_name(name), nodes()), *returns};
+                }
+                return fails("calling " + name + " in a function");
             }
-            if (auto* u = std::get_if<language::unary_expression>(&x.node); u && u->op == language::token_kind::logical_not) {
-                if (auto inner = function_expression(*u->operand, params)) return std::pair{"!" + inner->first, std::string("bool")};
-                return std::nullopt;
+            if (auto* u = std::get_if<language::unary_expression>(&x.node)) {
+                auto inner = said(*u->operand);
+                if (!inner) return std::nullopt;
+                if (u->op == language::token_kind::logical_not) return std::pair{go_unary("!", inner->first), std::string("bool")};
+                if (u->op == language::token_kind::minus) return std::pair{go_unary("-", inner->first), inner->second};
             }
             if (auto* b = std::get_if<language::binary_expression>(&x.node)) {
-                static const std::map<language::token_kind, std::string> ops{
-                    {language::token_kind::equal, "=="}, {language::token_kind::not_equal, "!="},
-                    {language::token_kind::logical_and, "&&"}, {language::token_kind::logical_or, "||"}};
-                auto l = function_expression(*b->left, params);
-                auto r = function_expression(*b->right, params);
-                if (auto it = ops.find(b->op); it != ops.end() && l && r) {
-                    return std::pair{l->first + " " + it->second + " " + r->first, std::string("bool")};
+                using language::token_kind;
+                // Each operator as Go writes it, and how tightly it binds there.
+                static const std::map<token_kind, std::pair<std::string, int>> operators{
+                    {token_kind::logical_or, {"||", 1}}, {token_kind::logical_and, {"&&", 2}}, {token_kind::equal, {"==", 3}}, {token_kind::not_equal, {"!=", 3}},
+                    {token_kind::less, {"<", 3}}, {token_kind::greater, {">", 3}}, {token_kind::less_equal, {"<=", 3}}, {token_kind::greater_equal, {">=", 3}},
+                    {token_kind::plus, {"+", 4}}, {token_kind::minus, {"-", 4}}, {token_kind::star, {"*", 5}}};
+                auto l = said(*b->left);
+                auto r = said(*b->right);
+                if (!l || !r) return std::nullopt;
+                if (b->op == token_kind::slash) return std::pair{go_call("one.Divide", {l->first, r->first}), std::string("float64")};
+                if (b->op == token_kind::remainder) return std::pair{go_call("one.Remainder", {l->first, r->first}), std::string("float64")};
+                if (auto it = operators.find(b->op); it != operators.end()) {
+                    std::string type = it->second.second <= 3 ? "bool" : l->second;
+                    return std::pair{go_binary(it->second.first, it->second.second, l->first, r->first), type};
                 }
             }
-            unsupported(path_, x.where, "this in a function; a function can use its parameters, plain values, starts_with and drop");
-            return std::nullopt;
+            if (std::holds_alternative<language::match_expression>(x.node)) return fails("a match in a function anywhere but alone after return, like return match way { … }");
+            return fails("this in a function; a function can use its parameters, plain values, arithmetic, comparisons and calls");
         }
 
-        // The type a function returns: that of the first thing it returns.
-        std::optional<std::string> return_type(const std::vector<language::statement>& body, const std::map<std::string, std::string>& params) {
+        // The type a function returns: that of the first thing it returns whose type can be
+        // told, so one calling itself first returns what it ends with.
+        std::optional<std::string> return_type(const package& pkg, const std::vector<language::statement>& body,
+                                               const std::map<std::string, const language::field*>& params,
+                                               const std::map<std::string, std::string>& types) {
             for (const auto& s : body) {
                 if (auto* r = std::get_if<language::return_statement>(&s.node); r && r->value) {
-                    if (auto value = function_expression(*r->value, params)) return value->second;
-                    return std::nullopt;
+                    if (auto* m = std::get_if<language::match_expression>(&r->value->node)) {
+                        for (const auto& arm : m->arms) {
+                            if (auto value = function_expression(pkg, *arm.value, params, types)) return value->second;
+                        }
+                        if (m->otherwise) {
+                            if (auto value = function_expression(pkg, *m->otherwise, params, types)) return value->second;
+                        }
+                    } else if (auto value = function_expression(pkg, *r->value, params, types)) {
+                        return value->second;
+                    }
                 }
                 if (auto* i = std::get_if<language::if_statement>(&s.node)) {
-                    if (auto t = return_type(i->then_body, params)) return t;
+                    if (auto t = return_type(pkg, i->then_body, params, types)) return t;
+                    if (auto t = return_type(pkg, i->else_body, params, types)) return t;
                 }
             }
             return std::nullopt;
         }
 
-        void function_statements(stream& out, const std::vector<language::statement>& body, const std::map<std::string, std::string>& params,
-                           const code::source& file) {
+        // A function's parameters, by name, as fields, and their Go types; nothing when one's
+        // type can't be told.
+        std::optional<std::pair<std::map<std::string, const language::field*>, std::map<std::string, std::string>>> parameters_of(
+            const package& pkg, const language::function_declaration& function) {
+            auto types = parameter_types(pkg, function);
+            if (!types) return std::nullopt;
+            std::map<std::string, const language::field*> params;
+            std::map<std::string, std::string> typed;
+            for (std::size_t i = 0; i < types->size(); ++i) {
+                if (i < function.parameter_types.size()) params[function.parameters[i]] = &function.parameter_types[i];
+                typed[function.parameters[i]] = (*types)[i];
+            }
+            return std::pair{params, typed};
+        }
+
+        std::optional<std::string> return_type_of(const package& pkg, const language::function_declaration& function) {
+            if (auto known = returns_.find(&function); known != returns_.end()) return known->second;
+            if (working_out_.contains(&function)) return std::nullopt;
+            working_out_.insert(&function);
+            bool was_quiet = std::exchange(quiet_, true);
+            std::optional<std::string> returns;
+            if (auto parameters = parameters_of(pkg, function)) returns = return_type(pkg, function.body, parameters->first, parameters->second);
+            quiet_ = was_quiet;
+            working_out_.erase(&function);
+            if (working_out_.empty()) returns_[&function] = returns;  // judged without guessing at another's
+            return returns;
+        }
+
+        void function_statements(stream& out, const package& pkg, const std::vector<language::statement>& body,
+                                 const std::map<std::string, const language::field*>& params, const std::map<std::string, std::string>& types,
+                                 const code::source& file) {
             for (const auto& s : body) {
                 auto from_statement = in(out, file, s.where.line);
-                if (auto* r = std::get_if<language::return_statement>(&s.node); r && r->value) {
-                    if (auto value = function_expression(*r->value, params)) out.line("return " + value->first);
+                if (auto* r = std::get_if<language::return_statement>(&s.node); r && r->value && std::holds_alternative<language::match_expression>(r->value->node)) {
+                    match_statement(out, pkg, std::get<language::match_expression>(r->value->node), params, types);
+                } else if (auto* r = std::get_if<language::return_statement>(&s.node); r && r->value) {
+                    if (auto value = function_expression(pkg, *r->value, params, types)) out.line("return " + go_written(value->first));
                 } else if (auto* i = std::get_if<language::if_statement>(&s.node)) {
-                    auto condition = function_expression(*i->condition, params);
+                    auto condition = function_expression(pkg, *i->condition, params, types);
                     if (!condition) continue;
-                    out.open("if " + condition->first + " {");
-                    function_statements(out, i->then_body, params, file);
+                    out.open("if " + go_written(condition->first) + " {");
+                    function_statements(out, pkg, i->then_body, params, types, file);
                     if (!i->else_body.empty()) {
                         out.dedent();
                         out.open("} else {");
-                        function_statements(out, i->else_body, params, file);
+                        function_statements(out, pkg, i->else_body, params, types, file);
                     }
                     out.close("}");
                 } else {
@@ -2589,27 +2769,63 @@ namespace one::generators {
             }
         }
 
+        // return match way { riffle riffle(deck) … }: a switch, so only the arm chosen is
+        // worked out, and a function calling itself in one arm doesn't run every other.
+        void match_statement(stream& out, const package& pkg, const language::match_expression& m, const std::map<std::string, const language::field*>& params,
+                             const std::map<std::string, std::string>& types) {
+            auto* subject = std::get_if<language::name_expression>(&m.subject->node);
+            auto param = subject ? params.find(subject->name.text()) : params.end();
+            if (param == params.end() || param->second->choices.empty()) {
+                unsupported(path_, m.subject->where, "a match in a function on anything but a parameter with choices");
+                return;
+            }
+            out.open("switch " + local_name(subject->name.text()) + " {");
+            for (const auto& arm : m.arms) {
+                auto value = function_expression(pkg, *arm.value, params, types);
+                if (!value) continue;
+                out.dedent();
+                out.open("case " + api_detail::go_string(arm.choice) + ":");
+                out.line("return " + go_written(value->first));
+            }
+            out.close("}");
+            // Else's value, or with every choice said, nothing Go can reach, said as it asks.
+            if (m.otherwise) {
+                if (auto value = function_expression(pkg, *m.otherwise, params, types)) out.line("return " + go_written(value->first));
+            } else {
+                out.line("panic(\"no choice matched\")");
+            }
+        }
+
+        // Whether a function's body ends in a return on every way through it, as Go asks.
+        static bool always_returns(const std::vector<language::statement>& body) {
+            if (body.empty()) return false;
+            const auto& last = body.back();
+            if (std::holds_alternative<language::return_statement>(last.node)) return true;
+            auto* i = std::get_if<language::if_statement>(&last.node);
+            return i && always_returns(i->then_body) && always_returns(i->else_body);
+        }
+
         void functions(stream& out, const package& pkg) {
             for (const auto& [function, where] : pkg.functions) {
-                auto types = parameter_types(pkg, *function);
-                if (!types) {
-                    unsupported(path_, where, "a function whose parameters' types can't be told from where it's used");
+                auto parameters = parameters_of(pkg, *function);
+                if (!parameters) {
+                    unsupported(path_, where, "a function whose parameters' types can't be told; say them, like deck  list of item");
                     continue;
                 }
-                std::map<std::string, std::string> params;
                 std::string list;
-                for (std::size_t i = 0; i < types->size(); ++i) {
-                    params[function->parameters[i]] = (*types)[i];
-                    list += (list.empty() ? "" : ", ") + local_name(function->parameters[i]) + " " + (*types)[i];
-                }
-                auto returns = return_type(function->body, params);
+                for (const auto& name : function->parameters) list += (list.empty() ? "" : ", ") + local_name(name) + " " + parameters->second.at(name);
+                auto returns = return_type_of(pkg, *function);
                 if (!returns) {
-                    unsupported(path_, where, "a function that returns nothing");
+                    unsupported(path_, where, "a function that returns nothing, or nothing whose type can be told");
+                    continue;
+                }
+                if (!always_returns(function->body)) {
+                    unsupported(path_, where, "a function that can end without a return; end it with one");
                     continue;
                 }
                 auto from_function = in(out, at(function), where.line);
                 out.open("func " + api_detail::go_name(function->name) + "(" + list + ") " + *returns + " {");
-                function_statements(out, function->body, params, at(function));
+                function_statements(out, pkg, function->body, parameters->first, parameters->second, at(function));
                 out.close("}");
                 out.line();
             }

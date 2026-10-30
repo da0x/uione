@@ -221,12 +221,53 @@ TEST_CASE("a local view counts its own list's rows, those its where keeps, and a
 
 TEST_CASE("what local storage can't do yet is an error at its line, and nothing's written") {
     language::diagnostics out;
-    auto files = parsed(with(board, "\tscreen \"Boards\"", "\tfunction twice(n) {\n\t\treturn n * 2\n\t}\n\n\tscreen \"Boards\""), out);
+    auto files = parsed(with(board, "\tscreen \"Boards\"", "\tfunction layers() {\n\t\treturn count(layer)\n\t}\n\n\tscreen \"Boards\""), out);
     REQUIRE(out.empty());
     auto generated = generators::generate_local(files);
     CHECK(generated.files.empty());
     REQUIRE(generated.errors.size() == 1);
-    CHECK(generated.errors[0].message == "not supported yet in a project that says storage local: a function");
+    CHECK(generated.errors[0].message == "not supported yet in a project that says storage local: this call");
+}
+
+TEST_CASE("a function is written for each target on values as rows keep them, called from a command, itself too") {
+    const std::string counted = with(board, "\tscreen \"Boards\"", R"(	enum pace {
+		slow
+		fast
+	}
+
+	function steps(n number, way pace) {
+		if n <= 0 { return 0 }
+		return match way {
+			slow 1 + steps(n - 1, way)
+			fast 2 + steps(n - 1, way)
+		}
+	}
+
+	command layer::step {
+		x = steps(w, pace::fast)
+	}
+
+	screen "Boards")");
+    language::diagnostics out;
+    auto files = parsed(counted, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_local(files);
+    for (const auto& d : generated.errors) FAIL_CHECK(language::format(d));
+    REQUIRE(generated.files.size() == 1);
+    REQUIRE(generated.web.size() == 1);
+    const std::string& cpp = generated.files[0].content;
+    const std::string& ts = generated.web[0].content;
+    CAPTURE(cpp);
+    CAPTURE(ts);
+    // Said first, so it may call itself, and only the arm chosen worked out.
+    CHECK(cpp.find("\tstatic value pinned_steps(value, value);\n") != std::string::npos);
+    CHECK(cpp.find("\tstatic value pinned_steps(value n, value way) {\n\t\tif (compare(n, value(0)) <= 0) {\n\t\t\treturn value(0);\n\t\t}\n") != std::string::npos);
+    CHECK(cpp.find("\t\tif (way.as_string() == \"slow\") return value(value(1).as_double() + pinned_steps(value(n.as_double() - value(1).as_double()), way).as_double());\n") != std::string::npos);
+    CHECK(cpp.find("e.fields[\"x\"] = pinned_steps(e[\"w\"], value(\"fast\"));") != std::string::npos);
+    CHECK(ts.find("type Value, view } from \"@uione/react/local\";") != std::string::npos);
+    CHECK(ts.find("function pinned_steps(n: Value, way: Value): Value {\n  if (compare(n, 0) <= 0) {\n    return 0;\n  }\n") != std::string::npos);
+    CHECK(ts.find("  if (text(way) === \"fast\") return (number(2) + number(pinned_steps((number(n) - number(1)), way)));\n  return null;\n}") != std::string::npos);
+    CHECK(ts.find("e[\"x\"] = pinned_steps(e[\"w\"], \"fast\");") != std::string::npos);
 }
 
 TEST_CASE("one build writes a local project's native apps alone, with no service, rules or cloud") {

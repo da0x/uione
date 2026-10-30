@@ -735,6 +735,21 @@ TEST_CASE("a parameter's type is checked as a field's is") {
                        "function first_of(books list of book, at number, way pace, title) {\n\treturn books\n}\n").empty());
 }
 
+TEST_CASE("a function may match on a parameter's choices, and is given one by its enum") {
+    const std::string paced = "enum pace {\n\tslow\n\tfast\n}\nentity hand {\n\tturns  number\n}\n"
+                              "function steps(n number, way pace) {\n\treturn match way {\n\t\tslow n\n\t\tfast n * 2\n\t}\n}\n"
+                              "command hand::turn {\n\tturns = steps(turns, pace::fast)\n}\n";
+    CHECK(check_source(paced).empty());
+    auto bare = paced;
+    bare.replace(bare.find("pace::fast"), std::string("pace::fast").size(), "fast");
+    CHECK(only_error(bare).message == "write pace::fast; an enum's choices are named with it");
+    auto wrong = paced;
+    wrong.replace(wrong.find("\t\tfast n * 2"), std::string("\t\tfast").size(), "\t\tquick");
+    auto out = check_source(wrong);
+    REQUIRE(!out.empty());
+    CHECK(out[0].message == "quick isn't one of way's choices");
+}
+
 TEST_CASE("a wrong name is reported once, not again in what it's compared with or given") {
     auto e = only_error("entity book {\n\tstatus  enum on_shelf | lent\n}\ncommand book::lend {\n\tstatuss = status::lent\n}\n");
     CHECK(e.message == "entity book has no field statuss; did you mean status?");

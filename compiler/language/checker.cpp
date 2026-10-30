@@ -142,6 +142,7 @@ namespace one::language {
             bool picked = false;                         // entity is a row an each or a once's step picked, changed only by dispatch
             // A command's inputs, like into in input into stage, named in its body.
             const std::map<std::string, field, std::less<>>* inputs = nullptr;
+            const std::vector<field>* parameter_types = nullptr;  // a function's parameters, each as a field, in its body
         };
 
         diagnostics& out_;
@@ -2642,7 +2643,9 @@ namespace one::language {
                 }
                 verify_type(ns, *typed.type);
             }
-            statements(ns, f.body, nullptr, context{ns, nullptr, nullptr, f.parameters, false});
+            context in{ns, nullptr, nullptr, f.parameters, false};
+            in.parameter_types = &f.parameter_types;
+            statements(ns, f.body, nullptr, in);
         }
 
         // link next in library.things: a screen whose address names one record steps to
@@ -5257,8 +5260,8 @@ namespace one::language {
         // every one of them or an else, each value one the field it's given to holds,
         // with a choice of that field's enum written bare.
         void matched(const context& in, const expression& e, const match_expression& m, const field* beside) {
-            if (!in.command) {
-                error(e.where, "match is for a command's body for now; a view or a screen can't use it yet");
+            if (!in.command && !in.parameter_types) {
+                error(e.where, "match is for a command's or a function's body for now; a view or a screen can't use it yet");
                 return;
             }
             const field* subject = resolve(in, *m.subject);
@@ -5368,7 +5371,15 @@ namespace one::language {
                     mean(n->name.where, name.size(), "built-in value " + says.at(name), std::nullopt, "built-in-values");
                     return nullptr;
                 }
-                if (std::find(in.parameters.begin(), in.parameters.end(), name) != in.parameters.end()) return nullptr;
+                if (std::find(in.parameters.begin(), in.parameters.end(), name) != in.parameters.end()) {
+                    // A parameter that says its type reads as a field of it, its choices too.
+                    if (in.parameter_types) {
+                        for (const auto& typed : *in.parameter_types) {
+                            if (typed.name == name && (typed.type || !typed.choices.empty())) return &typed;
+                        }
+                    }
+                    return nullptr;
+                }
                 if (in.inputs) {
                     if (auto it = in.inputs->find(name); it != in.inputs->end()) return &it->second;
                 }
@@ -5635,7 +5646,11 @@ namespace one::language {
             }
             if (const function_declaration* function = callee ? find(in.ns, callee->name, &scope::functions) : nullptr) {
                 if (arguments(function->parameters.size())) {
-                    for (const auto& a : call.arguments) resolve(in, *a);
+                    // A parameter with choices is given one of them, by its enum: pace::fast.
+                    for (std::size_t i = 0; i < call.arguments.size(); ++i) {
+                        const field* typed = i < function->parameter_types.size() && !function->parameter_types[i].choices.empty() ? &function->parameter_types[i] : nullptr;
+                        resolve(in, *call.arguments[i], typed);
+                    }
                 }
                 return nullptr;
             }

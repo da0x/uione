@@ -42,6 +42,7 @@ namespace one::generators {
             std::vector<std::pair<const language::entity_declaration*, std::string>> entities;
             std::vector<std::pair<const language::command_declaration*, std::string>> commands;
             std::vector<std::pair<const language::view_declaration*, std::string>> views;
+            std::vector<std::pair<const language::function_declaration*, std::string>> functions;
             std::map<const void*, int> lines;
         };
 
@@ -53,6 +54,7 @@ namespace one::generators {
                 for (const auto& f : files_) collect(f.path, "", f.declarations);
                 generated_local out;
                 stream packages;  // every namespace's, for the web app's one file
+                stream declared;  // and every namespace's functions, before them
                 std::string first_path;
                 for (const auto& [ns, parts] : namespaces_) {
                     if (parts.entities.empty() && parts.commands.empty() && parts.views.empty()) continue;
@@ -64,6 +66,7 @@ namespace one::generators {
                     parts_ = &parts;
                     if (typescript()) {
                         if (first_path.empty()) first_path = parts.path;
+                        functions(declared, parts);
                         package_body(packages, parts);
                         continue;
                     }
@@ -71,7 +74,7 @@ namespace one::generators {
                     out.files.push_back(file("src/local/" + identifier(ns) + ".cpp", namespace_file(parts, install)));
                     out.installs.push_back(install);
                 }
-                if (typescript() && !first_path.empty()) out.files.push_back(file("src/local.generated.ts", typescript_file(packages, first_path)));
+                if (typescript() && !first_path.empty()) out.files.push_back(file("src/local.generated.ts", typescript_file(declared, packages, first_path)));
                 out.errors = std::move(errors_);
                 if (!out.errors.empty()) out.files.clear();
                 return out;
@@ -112,9 +115,8 @@ namespace one::generators {
                         parts.views.emplace_back(v, path);
                         parts.lines[v] = d.where.line;
                     } else if (auto* fn = std::get_if<language::function_declaration>(&d.node)) {
-                        path_ = path;
-                        unsupported(d.where, "a function");
-                        (void)fn;
+                        parts.functions.emplace_back(fn, path);
+                        parts.lines[fn] = d.where.line;
                     } else if (auto* screen = std::get_if<language::screen_declaration>(&d.node)) {
                         collect_forms(ns, screen->items);
                     }
@@ -262,12 +264,27 @@ namespace one::generators {
                 const language::entity_declaration* own = nullptr;  // the command's entity, read as e
                 const language::entity_declaration* row = nullptr;  // in an each, the row's, read as row
                 std::set<std::string> inputs;
+                std::map<std::string, const language::field*> parameters;  // a function's, each as a field
             };
+
+            // A function the namespace declares, and what it's called in the code written,
+            // with its namespace, since the web app's file holds every namespace's.
+            const language::function_declaration* function(const std::string& name) const {
+                for (const auto& [f, _] : parts_->functions)
+                    if (f->name == name) return f;
+                return nullptr;
+            }
+            std::string function_name(const std::string& name) const { return identifier(ns_ + "_" + name); }
 
             piece expression(const language::expression& e, const scope& s) {
                 if (auto v = literal_value(e)) return {*v};
                 if (auto* n = std::get_if<language::name_expression>(&e.node)) {
                     const auto& parts = n->name.parts;
+                    if (parts.size() == 1 && s.parameters.contains(parts[0])) return {identifier(parts[0])};
+                    // riffle, or pace::riffle: a choice of a parameter's enum.
+                    for (const auto& [_, f] : s.parameters) {
+                        if ((parts.size() == 1 || parts[0] == f->enum_name) && std::ranges::find(f->choices, parts.back()) != f->choices.end()) return {value_of(str(parts.back()))};
+                    }
                     if (parts.size() == 1) {
                         const std::string& name = parts[0];
                         if (name == "now") return {value_of("c.now()")};
@@ -316,7 +333,22 @@ namespace one::generators {
                         std::string said = typescript() ? "Math." + callee->name.text() : "std::" + callee->name.text() + "<double>";
                         return {sum(said + "(" + a + ", " + b + ")")};
                     }
-                    unsupported(e.where, "this call in a command");
+                    // A function the namespace declares, a choice given by its name as its parameter's enum keeps it.
+                    if (const language::function_declaration* called = callee ? function(callee->name.text()) : nullptr) {
+                        std::string args;
+                        for (std::size_t i = 0; i < call->arguments.size(); ++i) {
+                            const auto& a = *call->arguments[i];
+                            const language::field* param = i < called->parameter_types.size() ? &called->parameter_types[i] : nullptr;
+                            auto* given = std::get_if<language::name_expression>(&a.node);
+                            bool choice = given && param && std::ranges::find(param->choices, given->name.parts.back()) != param->choices.end() &&
+                                          (given->name.parts.size() == 1 ? !s.parameters.contains(given->name.parts[0]) && !s.inputs.contains(given->name.parts[0]) &&
+                                                                               !field(s.own, given->name.parts[0]) && !field(s.row, given->name.parts[0])
+                                                                         : given->name.parts[0] == param->enum_name);
+                            args += (args.empty() ? "" : ", ") + (choice ? value_of(str(given->name.parts.back())) : as_value(expression(a, s)));
+                        }
+                        return {function_name(called->name) + "(" + args + ")"};
+                    }
+                    unsupported(e.where, "this call");
                     return {nothing_value()};
                 }
                 if (auto* u = std::get_if<language::unary_expression>(&e.node)) {
@@ -498,7 +530,7 @@ namespace one::generators {
                 // create takes every field, and an update with neither all but its keys.
                 std::vector<std::string> allowed;
                 if (auto forms = form_fields_.find(name); forms != form_fields_.end()) allowed = forms->second;
-                scope s{own, nullptr, {}};
+                scope s{own, nullptr, {}, {}};
                 for (const auto& st : c.body) {
                     if (auto* changes = std::get_if<language::changes_statement>(&st.node)) {
                         for (const auto& name : changes->fields)
@@ -741,6 +773,76 @@ namespace one::generators {
                 if (lines.size() > 1) out.dedent();
             }
 
+            // functions
+
+            // A function, on values as rows keep them, as every target's are.
+            void function(stream& out, const language::function_declaration& f, const std::string& path, int line) {
+                path_ = path;
+                auto from = out.from(path, line);
+                scope s;
+                std::string list;
+                for (std::size_t i = 0; i < f.parameters.size(); ++i) {
+                    if (i < f.parameter_types.size()) s.parameters[f.parameters[i]] = &f.parameter_types[i];
+                    list += (list.empty() ? "" : ", ") + (typescript() ? identifier(f.parameters[i]) + ": Value" : "value " + identifier(f.parameters[i]));
+                }
+                out.open(typescript() ? "function " + function_name(f.name) + "(" + list + "): Value {" : "static value " + function_name(f.name) + "(" + list + ") {");
+                function_statements(out, path, f.body, s);
+                if (!always_returns(f.body)) out.line("return " + nothing_value() + ";");
+                out.close("}");
+            }
+
+            void function_statements(stream& out, const std::string& path, const std::vector<language::statement>& body, const scope& s) {
+                for (const auto& st : body) {
+                    auto from = out.from(path, st.where.line);
+                    auto* r = std::get_if<language::return_statement>(&st.node);
+                    if (r && r->value && std::holds_alternative<language::match_expression>(r->value->node)) {
+                        // return match way { … }: only the arm chosen worked out.
+                        const auto& m = std::get<language::match_expression>(r->value->node);
+                        piece on = expression(*m.subject, s);
+                        for (const auto& arm : m.arms) out.line("if (" + text_of(as_value(on)) + (typescript() ? " === " : " == ") + str(arm.choice) + ") return " + as_value(expression(*arm.value, s)) + ";");
+                        out.line("return " + (m.otherwise ? as_value(expression(*m.otherwise, s)) : nothing_value()) + ";");
+                    } else if (r && r->value) {
+                        out.line("return " + as_value(expression(*r->value, s)) + ";");
+                    } else if (auto* i = std::get_if<language::if_statement>(&st.node)) {
+                        out.open("if (" + as_bool(expression(*i->condition, s)) + ") {");
+                        function_statements(out, path, i->then_body, s);
+                        if (!i->else_body.empty()) {
+                            out.dedent();
+                            out.open("} else {");
+                            function_statements(out, path, i->else_body, s);
+                        }
+                        out.close("}");
+                    } else {
+                        unsupported(st.where, "this statement in a function; a function can use if and return");
+                    }
+                }
+            }
+
+            static bool always_returns(const std::vector<language::statement>& body) {
+                if (body.empty()) return false;
+                if (auto* r = std::get_if<language::return_statement>(&body.back().node)) return r->value != nullptr;
+                auto* i = std::get_if<language::if_statement>(&body.back().node);
+                return i && always_returns(i->then_body) && always_returns(i->else_body);
+            }
+
+            // Each of a namespace's functions; in C++, said first, so one may call another
+            // declared after it, or itself.
+            void functions(stream& out, const namespace_parts& parts) {
+                if (!typescript()) {
+                    for (const auto& [f, path] : parts.functions) {
+                        auto from = out.from(path, parts.lines.at(f));
+                        std::string list;
+                        for (std::size_t i = 0; i < f->parameters.size(); ++i) list += i ? ", value" : "value";
+                        out.line("static value " + function_name(f->name) + "(" + list + ");");
+                    }
+                    if (!parts.functions.empty()) out.line();
+                }
+                for (const auto& [f, path] : parts.functions) {
+                    function(out, *f, path, parts.lines.at(f));
+                    out.line();
+                }
+            }
+
             // A namespace's package: its entities, commands and views, in three lists.
             void package_body(stream& body, const namespace_parts& parts) {
                 std::string open = typescript() ? "[" : "{", close = typescript() ? "]" : "}";
@@ -771,6 +873,8 @@ namespace one::generators {
             }
 
             stream namespace_file(const namespace_parts& parts, const std::string& install) {
+                stream declared("\t");
+                functions(declared, parts);
                 stream body("\t");
                 package_body(body, parts);
                 body.line(identifier(ns_) + ".install(source);");
@@ -787,6 +891,10 @@ namespace one::generators {
                     out.line("using namespace one::local;");
                     out.line("using fields = std::map<std::string, value>;");
                     out.line();
+                }
+                out.embed(declared);
+                {
+                    auto fixed = out.fixed();
                     out.line("// " + ns_ + "'s entities, commands and views, kept on this machine.");
                     out.open("void " + install + "(local_source& source) {");
                 }
@@ -801,13 +909,18 @@ namespace one::generators {
             }
 
             // The web app's one file: every namespace's package, for its localSource.
-            static stream typescript_file(const stream& packages, const std::string& path) {
+            static stream typescript_file(const stream& declared, const stream& packages, const std::string& path) {
                 stream out;
                 out.generated_from(std::filesystem::path(path).filename().string());
                 {
                     auto fixed = out.fixed();
-                    out.line("import { all, by, command, compare, divided, entity, failed, keyOf, localPackage, number, remainder, row, same, subject, subjectField, text, truthy, view } from \"@uione/react/local\";");
+                    out.line(std::string("import { all, by, command, compare, divided, entity, failed, keyOf, localPackage, number, remainder, row, same, subject, subjectField, text, truthy, ") +
+                             (declared.str().empty() ? "" : "type Value, ") + "view } from \"@uione/react/local\";");
                     out.line();
+                }
+                out.embed(declared);
+                {
+                    auto fixed = out.fixed();
                     out.line("// Each namespace's entities, commands and views, kept in this browser.");
                     out.open("export const packages = [");
                 }

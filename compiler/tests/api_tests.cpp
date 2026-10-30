@@ -158,6 +158,67 @@ function same_title(a text, b text) {
     CHECK(found->content.find("func SameTitle(a string, b string) bool {\n\treturn a == b\n}") != std::string::npos);
 }
 
+TEST_CASE("a function calls others and itself, works out sums and a match, and a command calls it, all as gofmt writes Go") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace clock {
+enum pace {
+	slow
+	fast
+}
+entity hand {
+	turns  number  = 0
+	way    pace    = pace::slow
+}
+function steps(n number, way pace) {
+	if n <= 0 { return 0 }
+	return walk(n, way)
+}
+function walk(n number, way pace) {
+	return match way {
+		slow 1 + steps(n - 1, way)
+		fast 2 + steps(n - 1, way)
+	}
+}
+function half(n number) {
+	return (n + 1) / 2 * 3 - -n
+}
+command hand::turn {
+	turns = half(steps(turns, pace::fast))
+}
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    for (const auto& d : generated.errors) FAIL_CHECK(language::format(d));
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "clock/clock.go"; });
+    REQUIRE(found != generated.files.end());
+    CAPTURE(found->content);
+    CHECK(found->content.find(R"(func Steps(n float64, way string) float64 {
+	if n <= 0 {
+		return 0
+	}
+	return Walk(n, way)
+}
+
+func Walk(n float64, way string) float64 {
+	switch way {
+	case "slow":
+		return 1 + Steps(n-1, way)
+	case "fast":
+		return 2 + Steps(n-1, way)
+	}
+	panic("no choice matched")
+}
+
+func Half(n float64) float64 {
+	return one.Divide(n+1, 2)*3 - -n
+}
+)") != std::string::npos);
+    CHECK(found->content.find("h.Turns = Half(Steps(h.Turns, \"fast\"))") != std::string::npos);
+}
+
 TEST_CASE("a field can be worked out from what another points at, and a list can start with values") {
     language::diagnostics out;
     std::vector<language::file> files;
