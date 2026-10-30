@@ -849,8 +849,41 @@ export class LocalPackage {
     return (row) => said(byRow.get(row) ?? { count: 0, sum: 0 });
   }
 
+  // Read so a record made before a field of it had a default, like a layout added
+  // later, has that default, as one made now would; it's kept as it was. A copy only of
+  // one that lacks it. The same as the desktop's.
+  defaulted(reading: Reading): Reading {
+    const defaults = new Map<string, Field[]>();
+    for (const e of this.entities.values()) {
+      const given = e.fields.filter((f) => f.initial !== undefined);
+      if (given.length > 0) defaults.set(e.name, given);
+    }
+    if (defaults.size === 0) return reading;
+    const filled = (kind: string, row: Row): Row => {
+      const fields = defaults.get(kind);
+      if (!fields || fields.every((f) => !nothing(row[f.name]))) return row;
+      const out: Row = { ...row };
+      for (const f of fields) if (nothing(out[f.name])) out[f.name] = copied(f.initial!);
+      return out;
+    };
+    // Each entity's rows filled once while it's read, however often they're gone through.
+    const read = new Map<string, Row[]>();
+    return {
+      each: (kind) => {
+        let rows = read.get(kind);
+        if (!rows) read.set(kind, (rows = defaults.has(kind) ? reading.each(kind).map((row) => filled(kind, row)) : reading.each(kind)));
+        return rows;
+      },
+      find: (kind, id) => {
+        const row = reading.find(kind, id);
+        return row && filled(kind, row);
+      },
+    };
+  }
+
   // A view's document for its subject, or none when what it's per is gone.
-  build(v: ViewDescription, reading: Reading, about: string): Row | undefined {
+  build(v: ViewDescription, given: Reading, about: string): Row | undefined {
+    const reading = this.defaulted(given);
     let per: Row | undefined;
     if (v.perKind) {
       per = reading.find(v.perKind, about);

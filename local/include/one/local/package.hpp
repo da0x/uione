@@ -276,6 +276,9 @@ namespace one::local {
 		};
 		static reading from(const store& entities);
 		static reading from(const step& changes);
+		// Read so a record made before a field of it had a default, like a layout added
+		// later, has that default, as one made now would; it's kept as it was.
+		reading defaulted(reading r) const;
 		// A query's rows, for the subject a view is per and the row a value is for.
 		std::vector<value> picked(const query& q, const reading& r, const value* subject, const std::string& row) const;
 		// An entity made as a create command makes it: defaults, serials, id, checks.

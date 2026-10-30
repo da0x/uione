@@ -4436,7 +4436,7 @@ namespace {
 
 	// Posters taken a few hours apart, newest first, from the end of October 2026 back,
 	// under a heading for each month as a mosaic, and the years and months beside them.
-	site dated_archive(int count, memory_source& data, int across = 0) {
+	list dated_posters(int count, int across) {
 		using namespace std::chrono;
 		list posters;
 		auto newest = sys_days(year(2026) / October / day(30)) + hours(12);
@@ -4449,7 +4449,11 @@ namespace {
 			if (across && i % 7 != 0) row["picture_width"] = value(3000 + (i % 5) * 400), row["picture_height"] = value(2000 + (i % 3) * 1000);
 			posters.push_back(value(row));
 		}
-		data.set("studio::archive", "", value(fields{{"posters", posters}}));
+		return posters;
+	}
+
+	site dated_archive(int count, memory_source& data, int across = 0) {
+		data.set("studio::archive", "", value(fields{{"posters", dated_posters(count, across)}}));
 		site s{.name = "studio", .id = "org.uione.runtime-tests"};
 		s.look = tested_theme();
 		s.screens.push_back({"Posters", "/posters", "", [across](page& p) {
@@ -4565,6 +4569,76 @@ TEST("cards by a date are under a heading for each month, a mosaic's tiles start
 	timeline->handle_key({.symbol = one::desktop::keys::end, .text = ""});
 	window.update();
 	CHECK(std::abs(offset() - (length - scrolled->visible)) < 1);
+}
+
+TEST("cards shown as a mosaic or in columns, as a field of their view says, change as it's changed, and the timeline beside them scrolls whichever is shown") {
+	use_time_zone("UTC");
+	memory_source data;
+	auto posters = dated_posters(80, 5);
+	data.set("studio::archive", "", value(fields{{"posters", posters}, {"layout", "mosaic"}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Posters", "/posters", "", [](page& p) {
+		                     auto archive = p.view("studio::archive");
+		                     auto shown = [&](bool mosaic, int across) {
+			                     return cards(p, {.view = archive, .list = "posters", .columns = {{"title", "Title"}}, .link = "/posters/:poster", .picture = "image", .mosaic = mosaic, .across = across, .by = "taken", .unit = time_unit::month, .key = "/posters cards"});
+		                     };
+		                     return workspace(p, region{"main", items([&] { if (same(at(archive, "layout"), value("mosaic"))) return shown(true, 0); return one::desktop::view(); }(), [&] { if (same(at(archive, "layout"), value("columns"))) return shown(false, 5); return one::desktop::view(); }())},
+		                                      region{"side", items(dated_timeline(p, {.view = archive, .list = "posters", .by = "taken", .unit = time_unit::month, .cards = "/posters cards"}))});
+	                     }});
+	s.screens.push_back({"Poster", "/posters/:poster", "", [](page&) { return items(); }});
+	navigator nav(s, data);
+	nav.open("/posters");
+	kept_window window(nav);
+	window.w.size = {1200, 700};
+	window.update();
+	(void)looked(window.w);
+	window.update();
+	std::vector<one::desktop::element*> parts;
+	one::desktop::element* timeline = nullptr;
+	auto again = [&] {
+		window.update();
+		(void)looked(window.w);
+		window.update();
+		parts.clear();
+		timeline = nullptr;
+		each_dated(*window.w.root, parts, timeline);
+	};
+	again();
+	CHECK(parts.size() == 4);
+	CHECK(timeline != nullptr);
+	if (parts.size() != 4 || !timeline) return;
+	float side = (parts[1]->frame.width - 4) / 3;
+	float as_mosaic = parts[0]->frame.height;
+	CHECK(std::abs(as_mosaic - (mosaic_rows(24) * side + (mosaic_rows(24) - 1) * 2)) < 2);
+	float top = parts[0]->frame.y;
+	// Changed to columns, as a command would, the same months are in columns instead.
+	data.set("studio::archive", "", value(fields{{"posters", posters}, {"layout", "columns"}}));
+	again();
+	CHECK(parts.size() == 4);
+	CHECK(timeline != nullptr);
+	if (parts.size() != 4 || !timeline) return;
+	CHECK_SAYING(std::abs(parts[0]->frame.height - as_mosaic) > 20, std::format("{} {}", parts[0]->frame.height, as_mosaic));
+	// The timeline scrolls these: down a heading, to September's, and to the end.
+	timeline->handle_key({.symbol = one::desktop::keys::home, .text = ""});
+	timeline->handle_key({.symbol = one::desktop::keys::down, .text = ""});
+	again();
+	CHECK_SAYING(std::abs(parts[1]->frame.y - top) < 50, std::format("{} {}", parts[1]->frame.y, top));
+	timeline->handle_key({.symbol = one::desktop::keys::end, .text = ""});
+	again();
+	auto scrolled = parts[0]->scrolled();
+	CHECK(scrolled.has_value());
+	if (scrolled) CHECK(std::abs(scrolled->offset - (scrolled->length - scrolled->visible)) < 1);
+	// And back to the mosaic, which the timeline scrolls in turn.
+	data.set("studio::archive", "", value(fields{{"posters", posters}, {"layout", "mosaic"}}));
+	again();
+	CHECK(parts.size() == 4);
+	if (parts.size() != 4 || !timeline) return;
+	CHECK(std::abs(parts[0]->frame.height - as_mosaic) < 2);
+	timeline->handle_key({.symbol = one::desktop::keys::home, .text = ""});
+	timeline->handle_key({.symbol = one::desktop::keys::down, .text = ""});
+	again();
+	CHECK_SAYING(std::abs(parts[1]->frame.y - top) < 50, std::format("{} {}", parts[1]->frame.y, top));
 }
 
 TEST("twenty thousand cards in columns by a date are placed from their sizes, and the oldest scrolled to as their timeline is dragged past its foot, in a moment") {

@@ -398,6 +398,33 @@ describe("the same app in two tabs", () => {
   });
 });
 
+describe("a field given a default later", () => {
+  it("reads as that default on a record made before it, as one made now would, until it's changed", async () => {
+    const store = memoryStore();
+    const shelf = (laidOut: boolean) =>
+      localPackage(
+        "archive",
+        [entity("archive::shelf", [{ name: "name", required: true }, ...(laidOut ? [{ name: "layout", choices: ["mosaic", "columns"], initial: "mosaic" }] : [])])],
+        [command("archive::shelf::create").creates("archive::shelf"), command("archive::shelf::arrange").updates("archive::shelf").fields(["layout"])],
+        [view("archive::shelf_page").per("archive::shelf").copy("name", "name").copy("layout", "layout"), view("archive::shelves").each(all("archive::shelf")).order("name").fields(["name", "layout"])],
+      );
+    const before = localSource({ name: "archive", packages: [shelf(false)], store });
+    await before.opened;
+    const made = (await before.run("archive::shelf::create", { name: "Harbor" })) as CommandReply;
+    const after = localSource({ name: "archive", packages: [shelf(true)], store });
+    await after.opened;
+    const shown = (name: string, about?: string) => {
+      let seen: ViewState | undefined;
+      after.subscribe(name, about, (state) => (seen = state))();
+      return seen?.data as Row | undefined;
+    };
+    expect(shown("archive::shelf_page", made.id)?.["layout"]).toBe("mosaic");
+    expect((shown("archive::shelves")?.["rows"] as Row[])[0]?.["layout"]).toBe("mosaic");
+    await after.run("archive::shelf::arrange", { id: made.id, layout: "columns" });
+    expect(shown("archive::shelf_page", made.id)?.["layout"]).toBe("columns");
+  });
+});
+
 describe("a local app's files", () => {
   it("keeps each file once by its SHA-256, reads it back, and lets go of what nothing names", async () => {
     const store = memoryStore();

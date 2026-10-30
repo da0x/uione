@@ -596,4 +596,24 @@ export const buttonIcons: Record<string, ReactNode> = {
       <rect x="9" y="9" width="5" height="5" rx="1" />
     </svg>
   ),
+  // Pictures set as a mosaic, a tall one beside a wide one over two small; and in
+  // columns, each its own height.
+  mosaic: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="2" y="2" width="4" height="12" />
+      <rect x="7" y="2" width="7" height="5" />
+      <rect x="7" y="8" width="3" height="6" />
+      <rect x="11" y="8" width="3" height="6" />
+    </svg>
+  ),
+  columns: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="2" y="2" width="3" height="7" />
+      <rect x="2" y="10" width="3" height="4" />
+      <rect x="6.5" y="2" width="3" height="4" />
+      <rect x="6.5" y="7" width="3" height="7" />
+      <rect x="11" y="2" width="3" height="9" />
+      <rect x="11" y="12" width="3" height="2" />
+    </svg>
+  ),
 };

@@ -268,7 +268,9 @@ the app, each command's event is kept in a log, and every file a command is give
 kept once, named by its hash: under `~/.local/share/<project>` for the desktop and
 terminal apps, and in the browser's IndexedDB, in a database named for the project,
 for the web app. Screens read views live, as they do from the cloud, and nothing
-leaves the machine. Nobody signs in to such an app, so what needs a person or a
+leaves the machine. A field given a default later, like `layout layout =
+layout::mosaic`, is read as having it on records made before it was, until a
+command changes it. Nobody signs in to such an app, so what needs a person or a
 server, like `signin`, `me`, roles, a view `per user`, webhooks and Stripe, is an
 error at its line, saying why. It names its targets, like `target desktop` or
 `target web desktop`.
@@ -2099,7 +2101,7 @@ form step::update "Save" {
   `building`, `chart`, `cloud`, `code`, `connect`, `database`, `globe`, `layers`,
   `lock`, `people`, `shield` and `spark`; and for a drawing app's toolbar, `undo`,
   `redo`, `save`, `paste`, `copy`, `crop`, `text`, `screenshot`, `picture`,
-  `folder`, `gallery`, `fullscreen`, `sun`, `moon`, `check`, `close`, `raise`, `lower`,
+  `folder`, `gallery`, `mosaic`, `columns`, `fullscreen`, `sun`, `moon`, `check`, `close`, `raise`, `lower`,
   `rotate_left`, `rotate_right`, `flip_horizontal`, `flip_vertical`, `bold`,
   `smaller`, `larger`, `fill`, `fit`, `stretch`, `center`, `color` and `edges`. A
   name close to one of them is told which it was likely meant to be.
@@ -2147,6 +2149,10 @@ form step::update "Save" {
   thousands are placed without reading a picture, and one whose size isn't kept is
   square. Under `by`, the columns start level again under each heading. Cards are a
   mosaic or in columns, not both, in 1 to 12 of them. A terminal can't set them.
+  Two cards on the same list, each with its own `when`, like `... mosaic ... when
+  library_page.layout == layout::mosaic` and `... columns 5 ... when
+  library_page.layout == layout::columns`, are one set of cards shown either way, so
+  a timeline of the list scrolls whichever is shown.
   `cards clippings_page.clippings mosaic by picture_date month` sets the cards under
   a heading for each month of a date their list holds, like "October 2026", in the
   text's face, strong and larger. `year` and `day` head each year, or each day, like

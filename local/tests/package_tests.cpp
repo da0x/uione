@@ -430,3 +430,38 @@ TEST("a random number is a whole one from low to high, both included, and draws 
 	}
 	CHECK(one::local::random(1, 1) == 1);
 }
+
+TEST("a record made before a field of it had a default reads as having it, as one made now would") {
+	scratch s;
+	auto shelf = [](bool laid_out) {
+		std::vector<field> kept{{.name = "name", .required = true}};
+		if (laid_out) kept.push_back({.name = "layout", .choices = {"mosaic", "columns"}, .initial = "mosaic"});
+		auto shelf = entity("archive::shelf", kept);
+		auto make = command("archive::shelf::create").creates("archive::shelf");
+		auto arrange = command("archive::shelf::arrange").updates("archive::shelf").fields({"layout"});
+		auto page = view("archive::shelf_page").per("archive::shelf").copy("name", "name").copy("layout", "layout");
+		auto all_of = view("archive::shelves").each(all("archive::shelf")).order("name").fields({"name", "layout"});
+		return package("archive", {shelf}, {make, arrange}, {page, all_of});
+	};
+	std::string id;
+	{
+		auto source = std::move(*local_source::open(*folder::open_at(s.at)));
+		package before = shelf(false);
+		before.install(*source);
+		source->run("archive::shelf::create", value(fields{{"name", "Harbor"}}), [&](const one::screens::answer& a) { id = a ? *a : ""; });
+	}
+	CHECK(!id.empty());
+	auto source = std::move(*local_source::open(*folder::open_at(s.at)));
+	package after = shelf(true);
+	after.install(*source);
+	auto read = [&](const std::string& name, const std::string& subject) {
+		value shown;
+		auto listening = source->listen(name, subject, [&](const one::screens::view_state& v) { shown = v.data; });
+		return shown;
+	};
+	CHECK(read("archive::shelf_page", id)["layout"].as_string() == "mosaic");
+	CHECK(read("archive::shelves", "")["rows"].items.at(0)["layout"].as_string() == "mosaic");
+	// Chosen, it's what was chosen.
+	source->run("archive::shelf::arrange", value(fields{{"id", id}, {"layout", "columns"}}), [](const one::screens::answer&) {});
+	CHECK(read("archive::shelf_page", id)["layout"].as_string() == "columns");
+}

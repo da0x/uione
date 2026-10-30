@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstdio>
 #include <ctime>
+#include <deque>
 #include <format>
 #include <functional>
 #include <memory>
@@ -352,6 +353,42 @@ namespace one::local {
 		        [&changes](const std::string& kind, const std::string& id) { return changes.find(kind, id); }};
 	}
 
+	package::reading package::defaulted(reading r) const {
+		// Each entity's fields with a default, found once.
+		auto defaults = std::make_shared<std::map<std::string, std::vector<const field*>>>();
+		for (const auto& [name, e] : entities_) {
+			for (const auto& f : e.fields)
+				if (f.initial) (*defaults)[name].push_back(&f);
+		}
+		if (defaults->empty()) return r;
+		// A copy only of a record that lacks one.
+		auto filled = [defaults](const std::string& kind, const value& row) -> std::optional<value> {
+			auto found = defaults->find(kind);
+			if (found == defaults->end()) return std::nullopt;
+			std::optional<value> out;
+			for (const field* f : found->second) {
+				if (!nothing(row[f->name])) continue;
+				if (!out) out = row;
+				out->fields[f->name] = *f->initial;
+			}
+			return out;
+		};
+		// Kept while it's read, as what's read may be held on to, as the first of a list is.
+		auto kept = std::make_shared<std::deque<value>>();
+		return {[each = r.each, filled, kept](const std::string& kind, const std::function<void(const value&)>& row) {
+			        each(kind, [&](const value& v) {
+				        if (auto with = filled(kind, v)) row(kept->emplace_back(std::move(*with)));
+				        else row(v);
+			        });
+		        },
+		        [find = r.find, filled](const std::string& kind, const std::string& id) -> std::optional<value> {
+			        auto v = find(kind, id);
+			        if (!v) return v;
+			        if (auto with = filled(kind, *v)) return with;
+			        return v;
+		        }};
+	}
+
 	namespace {
 
 		// A row's field, or one read through what it points at, like book.title: the
@@ -507,7 +544,7 @@ namespace one::local {
 	};
 
 	std::optional<value> package::build(const view_description& v, const store& entities, const std::string& subject) const {
-		reading r = from(entities);
+		reading r = defaulted(from(entities));
 		std::optional<value> per;
 		if (!v.per_kind.empty()) {
 			per = r.find(v.per_kind, subject);

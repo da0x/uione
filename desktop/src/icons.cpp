@@ -118,6 +118,10 @@ namespace one::desktop {
 			    // A folder: its tab at the top left.
 			    {"folder", {path("M2 4.5a1 1 0 0 1 1-1h3.2l1.5 1.8H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z")}},
 			    {"gallery", {box(2, 2, 5, 5, 1), box(9, 2, 5, 5, 1), box(2, 9, 5, 5, 1), box(9, 9, 5, 5, 1)}},
+			    // Pictures set as a mosaic, a tall one beside a wide one over two small; and in
+			    // columns, each its own height.
+			    {"mosaic", {box(2, 2, 4, 12, 0), box(7, 2, 7, 5, 0), box(7, 8, 3, 6, 0), box(11, 8, 3, 6, 0)}},
+			    {"columns", {box(2, 2, 3, 7, 0), box(2, 10, 3, 4, 0), box(6.5, 2, 3, 4, 0), box(6.5, 7, 3, 7, 0), box(11, 2, 3, 9, 0), box(11, 12, 3, 2, 0)}},
 			    {"fullscreen", {path("M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4")}},
 			    {"sun", {ring(8, 8, 3), path("M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3.05 3.05l1.06 1.06M11.89 11.89l1.06 1.06M3.05 12.95l1.06-1.06M11.89 4.11l1.06-1.06")}},
 			    {"moon", {path("M13.5 9.5A5.5 5.5 0 1 1 6.5 2.5a4.5 4.5 0 0 0 7 7z")}},

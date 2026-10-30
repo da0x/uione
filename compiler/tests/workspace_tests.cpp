@@ -1754,3 +1754,98 @@ TEST_CASE("a button can ask first, its key too, the question reading the view an
     CHECK(messages(layered_screen(R"(		layer::delete "Remove" confirm "Remove it from {build.name}?"
 )")) == std::vector<std::string>{"43: {build.name} isn't something a site is built from; it's {build.version} or {build.commit}"});
 }
+
+TEST_CASE("a layout kept on a record, chosen from a toolbar, shows one of two cards on a list, and the timeline goes with whichever is shown") {
+    const std::string pieces = R"(namespace studio at / {
+	enum layout { mosaic "Magazine"  columns "Columns" }
+
+	entity poster {
+		title   text  required
+		layout  layout = layout::mosaic
+	}
+
+	entity clipping {
+		poster          poster  required
+		name            text
+		image           file
+		picture_date    date
+		picture_width   number
+		picture_height  number
+		starred         boolean
+	}
+
+	command poster::arrange {
+		changes layout
+	}
+
+	view poster_page per poster {
+		title  layout
+		clippings = each clipping in poster {
+			order by picture_date descending
+			name  image  picture_date  picture_width  picture_height
+		}
+	}
+
+	view starred_page per poster {
+		layout
+		clippings = each clipping in poster {
+			order by picture_date descending
+			name  image  picture_date  picture_width  picture_height
+		}
+	}
+
+	screen "Clipping" /posters/:poster/clippings/:clipping {
+	}
+
+	screen "Clippings" /posters/:poster {
+		layout workspace
+		toolbar {
+			group "Layout" small rows of 2 {
+				poster::arrange "Magazine" icon mosaic { layout = layout::mosaic } on when poster_page.layout == layout::mosaic
+				poster::arrange "Columns" icon columns { layout = layout::columns } on when poster_page.layout == layout::columns
+			}
+		}
+		main {
+			cards poster_page.clippings mosaic by picture_date month link /posters/:poster/clippings/:clipping when poster_page.layout == layout::mosaic {
+				picture image
+				name
+			}
+			cards poster_page.clippings columns 5 by picture_date month link /posters/:poster/clippings/:clipping when poster_page.layout == layout::columns {
+				picture image
+				name
+			}
+		}
+		side {
+			timeline poster_page.clippings by picture_date
+		}
+	}
+
+	screen "Starred" /posters/:poster/starred {
+		cards starred_page.clippings mosaic by picture_date month link /posters/:poster/clippings/:clipping when starred_page.layout == layout::mosaic {
+			picture image
+			name
+		}
+		cards starred_page.clippings columns 5 by picture_date month link /posters/:poster/clippings/:clipping when starred_page.layout == layout::columns {
+			picture image
+			name
+		}
+	}
+}
+)";
+    CHECK(messages(project + pieces).empty());
+    auto files = built(project + pieces);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    // The choice is the record's, set by its tools, each pressed while it's the one.
+    CHECK(web.find(R"(<Command name="studio::poster::arrange" id={posterId} label="Columns" icon="columns" given={{ "layout": "columns" }} pressed={posterPage.status === "live" && (((posterPage.data?.["layout"] ?? null) === "columns"))} />)") != std::string::npos);
+    CHECK(native.find(R"(.icon = "columns", .pressed = (ready(poster_page) && same(at(poster_page, "layout"), value("columns")))})") != std::string::npos);
+    // Either cards, as it says, under one name, which the timeline goes with whichever is shown.
+    CHECK(native.find(R"(if ((ready(poster_page) && same(at(poster_page, "layout"), value("columns")))) return cards(p, {.view = poster_page, .list = "clippings", .columns = {{"name", "Name"}}, .link = "/posters/:poster/clippings/:clipping", .picture = "image", .across = 5, .by = "picture_date", .unit = time_unit::month, .key = "/posters/:poster cards clippings"});)") != std::string::npos);
+    CHECK(web.find(R"(across={5} by={{ field: "picture_date", unit: "month" }} link="/posters/:poster/clippings/:clipping" name="/posters/:poster cards clippings" />)") != std::string::npos);
+    CHECK(web.find(R"(<DatedTimeline view={posterPage} list="clippings" by="picture_date" unit="month" cards="/posters/:poster cards clippings" />)") != std::string::npos);
+    CHECK(native.find(R"(.cards = "/posters/:poster cards clippings"})") != std::string::npos);
+    // Another screen reads the same choice through a view of its own.
+    CHECK(native.find(R"(same(at(starred_page, "layout"), value("columns")))) return cards(p, {.view = starred_page)") != std::string::npos);
+}
