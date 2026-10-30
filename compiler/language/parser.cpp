@@ -1785,7 +1785,8 @@ namespace one::language {
             bool zooms = at_word("zoom") && peek(1).kind == token_kind::identifier && (peek(1).text == "in" || peek(1).text == "out" || (peek(1).text == "to" && peek(2).text == "fit"));
             // group picked: what's picked, several at once, made one group.
             bool groups = at_word("group") && peek(1).kind == token_kind::identifier && peek(1).text == "picked";
-            bool collage_does = ((at_word("crop") || at_word("paste") || at_word("screenshot") || at_word("ungroup") || at_word("raise") || at_word("lower")) && alone) || as_picture || zooms || groups ||
+            // copy alone: the picture the screen shows alone, put on the clipboard.
+            bool collage_does = ((at_word("crop") || at_word("copy") || at_word("paste") || at_word("screenshot") || at_word("ungroup") || at_word("raise") || at_word("lower")) && alone) || as_picture || zooms || groups ||
                                 ((at_word("edit") || at_word("add")) && peek(1).kind == token_kind::identifier && peek(1).text == "words") ||
                                 (at_word("add") && peek(1).kind == token_kind::identifier && (peek(1).text == "pictures" || peek(1).text == "folder"));
             if (collage_does) {

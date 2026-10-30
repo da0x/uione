@@ -3786,7 +3786,14 @@ namespace one::language {
                     bool into_paper = (does->does == kind::paste || does->does == kind::add_pictures || does->does == kind::add_folder) &&
                                       (std::ranges::any_of(papers_, [](const paper_item* p) { return p->paste; }) || std::ranges::any_of(cards_, [](const cards_item* c) { return c->paste; }));
                     bool zooms = does->does == kind::zoom_in || does->does == kind::zoom_out || does->does == kind::zoom_fit;
-                    bool can = does->of.has_value() || into_paper || (zooms && alone_) || std::ranges::any_of(collages_, [&](const collage_item* c) {
+                    // A copy naming nothing copies the picture the screen shows alone.
+                    bool copies_alone = does->does == kind::copy && !does->of;
+                    if (copies_alone && !alone_) {
+                        std::string like = collages_.empty() ? "" : "; a collage's copy names it, like copy " + collages_.front()->view.text() + " as picture";
+                        error(item.where, "this screen has no picture alone for this button to copy" + like);
+                        continue;
+                    }
+                    bool can = does->of.has_value() || into_paper || ((zooms || copies_alone) && alone_) || std::ranges::any_of(collages_, [&](const collage_item* c) {
                         return zooms || (does->does == kind::crop ? c->crop.has_value() : does->does == kind::edit_words ? c->write.has_value() : does->does == kind::ungroup ? c->group.has_value() : does->does == kind::group_picked ? c->group.has_value() && c->add.has_value() : does->does == kind::raise || does->does == kind::lower ? c->order.has_value() : takes_pictures ? c->paste : c->add.has_value());
                     });
                     if (!can) {
