@@ -1807,6 +1807,40 @@ TEST("a workspace: its bar, the app's name in its middle and light and dark at i
 	matches_golden("workspace", {900, 420}, [&] { return drawn(nav); });
 }
 
+TEST("a toolbar is a thin strip while every group it shows is a single row of small tools, and full with any other") {
+	memory_source data;
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	static bool large = false;
+	s.screens.push_back({"Studio", "/", "", [](page& p) {
+		                     std::vector<one::desktop::view> groups;
+		                     groups.push_back(group(p, "View", true, true, [&] {
+			                     return tools(toggle(p, "/ a", "A", "eye", std::vector<std::string>{}), toggle(p, "/ b", "B", "fit", std::vector<std::string>{}));
+		                     }, 2));
+		                     if (large) groups.push_back(group(p, "Poster", false, false, [&] { return tools(command(p, {.command = "studio::poster::create", .label = "New", .icon = "add"})); }));
+		                     return workspace(p, region{"toolbar", along(std::move(groups))}, region{"main", items(text({words("Work")}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	// The height of the View group as it's drawn, its name under its tools or not.
+	auto view_height = [&] {
+		auto root = built(nav);
+		float found = 0;
+		std::function<void(one::desktop::element&)> look = [&](one::desktop::element& e) {
+			if (e.key == "group one row") found = e.frame.height;
+			for (auto& c : e.children) look(*c);
+		};
+		look(*root);
+		return found;
+	};
+	float thin = view_height();
+	large = true;
+	float full = view_height();
+	large = false;
+	CHECK(thin > 0);
+	CHECK(thin + 8 < full);
+}
+
 TEST("a toolbar's choices of one enum are pressed one at a time, the first until another's chosen by a press or its key") {
 	memory_source data;
 	site s{.name = "studio", .id = "org.uione.runtime-tests"};
