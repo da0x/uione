@@ -6,11 +6,12 @@
 import type { BlockKind } from "./kinds.js";
 import { chem } from "./chem.js";
 import { code } from "./code.js";
+import { diagram } from "./diagram.js";
 import { math } from "./math.js";
 import { picture } from "./picture.js";
 import { heading, quote, subtitle, text, title } from "./words.js";
 
-const kinds: Record<string, BlockKind> = { title, subtitle, heading, text, quote, math, chem, code, picture };
+const kinds: Record<string, BlockKind> = { title, subtitle, heading, text, quote, math, chem, code, diagram, picture };
 
 // The kind of that name, or text when there's none.
 export const kindOf = (name: string): BlockKind => kinds[name] ?? text;

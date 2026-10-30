@@ -7,6 +7,9 @@ export { App, Built, BuiltLink, Crumbs, Heading, Subtitle, accentOf, screen, use
 export { Applies, Choose, Either, FullScreen, Group, History, Messages, Options, Toggle, Tools, setChosen, useChosen, hintOf, keyShown, setPicked, setToggled, useInGroup, useKeys, useOff, usePicked, usePickedId, useTool, useToggled } from "./workspace.js";
 export { useSaying } from "./said.js";
 export { Equation } from "./equation.js";
+export { DiagramView } from "./diagram-view.js";
+export { layOutDiagram } from "./diagram.js";
+export type { DiagramLaidOut } from "./diagram.js";
 export { layOutMath, mathFont, parseMath, writtenMath } from "./math.js";
 export type { MathLaidOut, MathNode, MathPlaced, MathProblem } from "./math.js";
 export { findLanguage, highlight as highlightSyntax, languages, syntaxColor } from "./syntax.js";

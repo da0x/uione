@@ -41,6 +41,18 @@ namespace one::desktop::runtime {
 		std::function<void(desktop::canvas&, desktop::point)> draw = {};
 	};
 	set_equation equation_set(const std::string& written, float em, bool displayed, color ink);
+	// A block diagram written in one::diagram's notation, laid out by itself, in ems of the
+	// text around it; one that can't be read shown as it's written.
+	desktop::view diagram(std::string written);
+	// The same, at a size, for something that draws it itself: how big it is, and drawing
+	// it with its top left at a point; or what's wrong with it.
+	struct set_diagram {
+		bool read = false;
+		std::string problem = "";
+		float width = 0, height = 0;
+		std::function<void(desktop::canvas&, desktop::point)> draw = {};
+	};
+	set_diagram diagram_set(const std::string& written, float em, color ink);
 	// Text, with values read live from views, quiet as a status line's is; a subtitle
 	// says less, under the title.
 	desktop::view text(std::vector<part> parts, bool quiet = false);

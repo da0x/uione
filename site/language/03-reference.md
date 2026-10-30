@@ -2564,7 +2564,8 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   Each row is a block, in the order its `position` says, set as its `kind` says
   (`title`, `subtitle`, `heading`, `text`, `quote`, `math`, an equation set from its
   words, `chem`, a chemical equation set from its words, `code`, kept as it's typed and colored as its
-  `language` reads it, or `picture`, with its words its caption) and
+  `language` reads it, `diagram`, a block diagram drawn from its words, or `picture`,
+  with its words its caption) and
   aligned as its `align` says (`left`, `center` or `right`). Its words
   are its `words`.
   - `write block::write`: what's typed in a block, sent once typing pauses or the
@@ -2596,7 +2597,12 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     lines, kept with Control and Enter, and its language chosen there, one of
     one::syntax's, like C++, Python or SQL, or plain text. It's kept in the block's
     `language`, like `cpp`, which `write` changes too, so it's in what the command
-    changes, as in `changes words kind language`. In a code block, Enter starts a new
+    changes, as in `changes words kind language`. A diagram block is written the same
+    way over several lines, a block diagram drawn above them as they're typed, or what's
+    wrong with them, like "nothing between x and y". Its keys are inputs, outputs,
+    gains, integrators, transfer functions, sums and blocks of their own, and its
+    notation is in [one::math's README](https://github.com/da0x/uione/blob/main/math/README.md#block-diagrams).
+    In a code block, Enter starts a new
     line, and Enter on an empty last line leaves it for text after it. Words pasted over several lines are a block a
     paragraph, but in code, which keeps its lines.
   - `insert "Equation" icon equation { kind = kind::math }`, or `insert "Chemistry"
@@ -3060,7 +3066,7 @@ issue::verify "Verify" when {
   people write is drawn safely: it can't add markup or scripts to the page, and
   images in it are shown as links. A fenced block's code is colored as its language
   reads it, like ```` ```cpp ````, and a ```` ```math ```` or ```` ```chem ```` block is
-  set as an equation.
+  set as an equation, and a ```` ```diagram ```` block drawn as a block diagram.
 
 ## notify
 

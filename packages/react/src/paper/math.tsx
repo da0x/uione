@@ -7,6 +7,7 @@
 // phone it's written apart, its equation over its words as they're typed. A chemical
 // equation is the same block, its words read as ce( ) reads them.
 
+import type { ReactNode } from "react";
 import { Equation } from "../equation.js";
 import { parseMath } from "../math.js";
 import type { ApartKeys, BlockKind } from "./kinds.js";
@@ -79,26 +80,21 @@ const mathKeys: ApartKeys[] = [
   ]),
 ];
 
-// A block set as an equation, from what its words are written as; what's said of them
-// under it as they're typed, and when it's pointed at.
-export function equationKind(apart: NonNullable<BlockKind["apart"]>, written: (words: string) => string = (words) => words): BlockKind {
+// A block drawn from its words, as an equation's set: what's wrong with them, if
+// anything, and what's drawn of them; what's said of them under it as they're typed, and
+// when it's pointed at.
+export function drawnKind(apart: NonNullable<BlockKind["apart"]>, problem: (words: string) => string | undefined, drawn: (words: string) => ReactNode): BlockKind {
   return {
     look: inCode,
     room: [10, 18],
     joins: false,
-    apart: {
-      ...apart,
-      problem: (words) => {
-        const read = parseMath(written(words));
-        return words.trim() === "" ? undefined : "problem" in read ? read.problem.says : undefined;
-      },
-    },
+    apart: { ...apart, problem: (words) => (words.trim() === "" ? undefined : problem(words)) },
     showing: ({ words, focused, readOnly, zoom, align, toWords }) => {
-      const set = words.trim() !== "" && "node" in parseMath(written(words));
+      const set = words.trim() !== "" && problem(words) === undefined;
       const raw = !set || (focused && !readOnly);
       return {
         raw,
-        // Not shown while its equation is, but still there to take the caret, as a hidden
+        // Not shown while what's drawn is, but still there to take the caret, as a hidden
         // element can't.
         words: raw ? well : { opacity: 0 },
         over: set ? (
@@ -115,12 +111,24 @@ export function equationKind(apart: NonNullable<BlockKind["apart"]>, written: (w
               if (!readOnly) toWords();
             }}
           >
-            <Equation written={written(words)} displayed />
+            {drawn(words)}
           </div>
         ) : undefined,
       };
     },
   };
+}
+
+// A block set as an equation, from what its words are written as.
+export function equationKind(apart: NonNullable<BlockKind["apart"]>, written: (words: string) => string = (words) => words): BlockKind {
+  return drawnKind(
+    apart,
+    (words) => {
+      const read = parseMath(written(words));
+      return "problem" in read ? read.problem.says : undefined;
+    },
+    (words) => <Equation written={written(words)} displayed />,
+  );
 }
 
 export const math = equationKind({ name: "Equation", keys: mathKeys, apart: true });

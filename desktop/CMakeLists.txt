@@ -133,6 +133,7 @@ if(ONE_DESKTOP_RUNTIME)
 		runtime/src/charts.cpp
 		runtime/src/pipeline.cpp
 		runtime/src/components.cpp
+		runtime/src/diagram.cpp
 		runtime/src/forms.cpp
 		runtime/src/markdown.cpp
 		runtime/src/layout.cpp
@@ -142,6 +143,7 @@ if(ONE_DESKTOP_RUNTIME)
 		runtime/src/paper/words.cpp
 		runtime/src/paper/math.cpp
 		runtime/src/paper/code.cpp
+		runtime/src/paper/diagram.cpp
 		runtime/src/paper/picture.cpp
 		runtime/src/runtime.cpp
 		runtime/src/table.cpp

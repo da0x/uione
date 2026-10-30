@@ -493,6 +493,14 @@ describe("markdown someone wrote", () => {
     expect(container.querySelectorAll("pre")[1]?.textContent).toBe("+[-]\n");
   });
 
+  it("draws a diagram block as its blocks and wires, on its own lines", () => {
+    const { container } = render(<MarkdownText source={"```diagram\nin x\nx -> *2 -> y\nout y\n```"} />);
+    const drawn = container.querySelector(".one-math svg[role=img]");
+    expect(drawn?.getAttribute("aria-label")).toBe("in x\nx -> *2 -> y\nout y");
+    expect(drawn?.querySelectorAll("polygon").length).toBeGreaterThan(0);
+    expect(container.querySelector("pre")).toBeNull();
+  });
+
   it("is written in a form with a preview of how it will look", () => {
     renderScreen(() => <Form command="library::book::create" fields={[{ name: "summary", type: "markdown" }]} />);
     fireEvent.change(screen.getByRole("textbox", { name: "Summary" }), { target: { value: "A **classic**." } });

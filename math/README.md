@@ -176,11 +176,41 @@ isn't balanced says how: "not balanced: 2 O on the left, 1 on the right". One th
 alone, with no arrow, has a molar mass, from the standard atomic weights of all 118
 elements: `H2O` is 18.02 g/mol.
 
+## Block diagrams
+
+A block diagram is written a line at a time, signals flowing left to right through
+blocks, and laid out by itself: the blocks in columns, a chain fed back drawn under
+what it feeds, the wires at right angles, and a dot where one branches.
+
+```
+in p_mechanical, p_electrical
+p_mechanical - p_electrical - damping -> *k_inertia -> 1/s -> w
+w -> num(s)/den(s) "HPF" -> *k_damp -> damping
+w + nominalFrequency -> f
+oscillator_3ph(f -> osc)
+out osc, f as f_rotor
+```
+
+- `in` and `out` are the numbered ports, `out y as speed` naming one apart from its
+  signal.
+- A chain starts with a signal, or a sum of them with their signs, like `a - b`, and
+  each block after `->` is what it does: `*k` a gain, a triangle, and anything else, like
+  `1/s`, a box with that equation in it. Words in quotes after a block are written under
+  it. The name at a chain's end is the signal it makes.
+- A name is how chains join, so a signal used before it's made is fed back. A name
+  nothing makes is a constant, its box drawn over a sum it's added in.
+- `f(a, b -> c, d)` is a block of its own, its inputs and outputs named on it.
+- A `;` ends a line as a line break does.
+
+One that can't be drawn says why, and where: "nothing between x and y; put a block
+there, like x -> *2 -> y". `diagram.hpp` lays one out in ems, and @uione/react's
+`diagram.ts` the same, both held to `tests/diagrams.txt`.
+
 ## In Markdown
 
 `$…$` holds an equation in a line of text, and a ```` ```math ```` block holds one set
 on its own lines, centered. A ```` ```chem ```` block is a chemical equation the same way,
-its words what `ce( )` holds.
+its words what `ce( )` holds, and a ```` ```diagram ```` block is a block diagram.
 
 ## Status
 

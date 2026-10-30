@@ -1484,6 +1484,7 @@ function PaperBlock({
   const ref = useRef<HTMLDivElement | null>(null);
   const [focused, setFocused] = useState(false);
   const [words, setWords] = useState(block.words);
+  const notation = ["math", "chem", "code", "diagram"].includes(block.kind);
   // Its words as they're kept, unless they're being typed: set into it, the caret kept
   // where it was.
   // Its words go in when it first appears, whatever's being typed.
@@ -1566,10 +1567,10 @@ function PaperBlock({
         role="textbox"
         aria-multiline
         aria-label={hint ?? block.kind}
-        // An equation's and code's words are written as they're meant, so a phone's
-        // keyboard neither corrects nor capitalizes them.
-        spellCheck={block.kind !== "math" && block.kind !== "chem" && block.kind !== "code"}
-        {...(block.kind === "math" || block.kind === "chem" || block.kind === "code" ? { autoCorrect: "off", autoCapitalize: "off" } : {})}
+        // An equation's, a diagram's and code's words are written as they're meant, so a
+        // phone's keyboard neither corrects nor capitalizes them.
+        spellCheck={!notation}
+        {...(notation ? { autoCorrect: "off", autoCapitalize: "off" } : {})}
         style={editable}
         onInput={(e) => {
           setWords(wordsOf(e.currentTarget));

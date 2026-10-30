@@ -10,7 +10,7 @@ import { useId, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { ColoredCode, Equation } from "@uione/react";
+import { ColoredCode, DiagramView, Equation } from "@uione/react";
 
 // Markdown's tree, as much of it as math needs.
 type MarkdownNode = { type: string; value?: string; lang?: string | null; children?: MarkdownNode[]; data?: object };
@@ -48,6 +48,11 @@ function remarkMath() {
         const written = child.lang === "chem" ? `ce(${(child.value ?? "").trim()})` : (child.value ?? "").trim();
         return [{ type: "math", value: written, data: { hName: "div", hProperties: { dataMath: written, dataDisplayed: true }, hChildren: [] } }];
       }
+      // A diagram block drawn as its blocks and wires.
+      if (child.type === "code" && child.lang === "diagram") {
+        const written = child.value ?? "";
+        return [{ type: "diagram", value: written, data: { hName: "div", hProperties: { dataDiagram: written }, hChildren: [] } }];
+      }
       walk(child);
       return [child];
     });
@@ -76,6 +81,14 @@ export function MarkdownText({ source }: { source: string }) {
             return typeof written === "string" ? <Equation written={written} displayed={false} /> : <span {...props} />;
           },
           div: ({ node: _, ...props }) => {
+            const drawn = (props as Record<string, unknown>)["data-diagram"];
+            if (typeof drawn === "string") {
+              return (
+                <div className="one-math">
+                  <DiagramView written={drawn} />
+                </div>
+              );
+            }
             const written = (props as Record<string, unknown>)["data-math"];
             return typeof written === "string" ? (
               <div className="one-math">

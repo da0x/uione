@@ -1,0 +1,167 @@
+# Each diagram after "== ", a ; where a line ends, then what diagram.hpp draws of it, as
+# its written() writes it, or "! " and why it can't be and where. @uione/react's
+# diagram.ts is held to the same, each place to a hundredth of an em.
+== in x; x -> *2 -> y; out y
+9.34 2.64
+port 0.30 0.65 1.40 0.90
+gain 3.50 0.30 2.34 1.60
+port 7.64 0.65 1.40 0.90
+wire 1.70,1.10 3.50,1.10
+wire 5.84,1.10 7.64,1.10
+face 0.75 0.79 1.37 "1"
+face 0.70 0.81 2.18 "x"
+face 1.00 3.90 1.46 2
+face 0.75 8.13 1.37 "1"
+face 0.70 8.17 2.18 "y"
+== in u; u -> 1/(s+1) "plant" -> y; out y as speed
+9.93 3.43
+port 0.30 0.79 1.40 0.90
+box 3.50 0.30 2.35 1.88
+port 7.94 0.79 1.40 0.90
+wire 1.70,1.24 3.50,1.24
+wire 5.85,1.24 7.94,1.24
+face 0.75 0.79 1.51 "1"
+face 0.70 0.78 2.32 "u"
+face 1.00 4.00 1.56 1/(s+1)
+face 0.70 3.83 2.97 "plant"
+face 0.75 8.42 1.51 "1"
+face 0.70 7.65 2.47 "speed"
+== in r; r - y -> *k_p -> 1/(s+1) "plant" -> y; out y
+16.96 4.25
+port 0.30 1.01 1.40 0.90
+sum 3.50 0.96 1.00 1.00
+gain 6.30 0.30 3.02 2.32
+box 11.12 0.52 2.35 1.88
+port 15.26 1.01 1.40 0.90
+wire 4.50,1.46 6.30,1.46
+wire 9.32,1.46 11.12,1.46
+wire 1.70,1.46 3.50,1.46
+stub 13.46,1.46 14.06,1.46
+wire 14.06,1.46 14.06,3.95 4.00,3.95 4.00,1.96
+wire 14.06,1.46 15.26,1.46
+dot 14.06,1.46
+face 0.75 0.79 1.73 "1"
+face 0.70 0.86 2.54 "r"
+face 0.60 3.59 1.62 "+"
+face 0.60 3.83 1.79 "−"
+face 1.00 6.70 1.66 k_p
+face 1.00 11.62 1.78 1/(s+1)
+face 0.70 11.44 3.18 "plant"
+face 0.75 15.75 1.73 "1"
+face 0.70 15.78 2.54 "y"
+== in a, b; mixer(a, b -> sum, difference); sum -> *2 -> twice; out twice, difference
+18.84 5.42
+port 0.30 0.75 1.40 0.90
+port 0.30 3.29 1.40 0.90
+system 3.50 0.30 5.76 2.70
+gain 11.06 0.40 2.34 1.60
+port 16.18 0.75 1.40 0.90
+port 16.18 3.42 1.40 0.90
+wire 1.70,1.20 3.50,1.20
+wire 1.70,3.74 2.60,3.74 2.60,2.10 3.50,2.10
+wire 9.26,1.20 11.06,1.20
+wire 13.41,1.20 16.18,1.20
+wire 9.26,2.10 12.72,2.10 12.72,3.87 16.18,3.87
+face 0.75 0.79 1.47 "1"
+face 0.70 0.80 2.28 "a"
+face 0.75 0.79 4.01 "2"
+face 0.70 0.79 4.97 "b"
+face 0.70 3.75 1.39 "a"
+face 0.70 3.75 2.36 "b"
+face 0.70 7.59 1.39 "sum"
+face 0.70 5.68 2.36 "difference"
+face 0.70 5.44 3.77 "mixer"
+face 1.00 11.46 1.56 2
+face 0.75 16.66 1.47 "1"
+face 0.70 16.02 2.42 "twice"
+face 0.75 16.66 4.14 "2"
+face 0.70 15.21 5.11 "difference"
+== in x; x + bias -> *k -> y; out y
+11.99 4.54
+port 0.30 2.55 1.40 0.90
+sum 3.50 2.50 1.00 1.00
+gain 6.30 2.19 2.19 1.62
+port 10.29 2.55 1.40 0.90
+constant 2.64 0.30 2.71 1.30
+wire 4.50,3.00 6.30,3.00
+wire 1.70,3.00 3.50,3.00
+wire 4.00,1.60 4.00,2.50
+wire 8.49,3.00 10.29,3.00
+face 0.75 0.79 3.27 "1"
+face 0.70 0.81 4.08 "x"
+face 0.60 3.59 3.16 "+"
+face 0.60 3.83 2.92 "+"
+face 1.00 6.70 3.38 k
+face 0.75 10.78 3.27 "1"
+face 0.70 10.81 4.08 "y"
+face 1.00 3.04 1.32 "bias"
+== in p_mechanical, p_electrical; p_mechanical - p_electrical - damping -> *k_inertia -> 1/s -> w; w -> num(s)/den(s) "HPF (wDamperDecoupler)" -> *k_damp -> damping; w + nominalFrequency -> f; oscillator_3ph(f -> osc); out osc, f as f_rotor
+39.47 8.80
+port 1.84 2.55 1.40 0.90
+port 1.84 5.40 1.40 0.90
+sum 6.57 2.50 1.00 1.00
+gain 16.47 1.90 5.91 2.20
+box 24.17 2.06 1.80 1.88
+box 18.82 5.52 3.36 2.01 flipped
+gain 8.87 5.30 5.54 2.45 flipped
+sum 27.77 2.50 1.00 1.00
+system 30.86 2.20 4.00 1.60
+port 37.36 2.55 1.40 0.90
+port 37.36 5.09 1.40 0.90
+constant 23.50 0.30 9.55 1.30
+wire 7.57,3.00 16.47,3.00
+wire 22.37,3.00 24.17,3.00
+wire 18.82,6.53 14.41,6.53
+wire 3.24,3.00 6.57,3.00
+wire 3.24,5.85 5.97,5.85 5.97,1.90 7.07,1.90 7.07,2.50
+wire 8.87,6.53 7.07,6.53 7.07,3.50
+stub 25.97,3.00 26.57,3.00
+wire 26.57,3.00 26.57,6.53 22.17,6.53
+wire 26.57,3.00 27.77,3.00
+wire 28.27,1.60 28.27,2.50
+stub 28.77,3.00 29.37,3.00
+wire 29.37,3.00 30.86,3.00
+wire 34.86,3.00 37.36,3.00
+wire 29.37,3.00 29.37,5.54 37.36,5.54
+dot 26.57,3.00
+dot 29.37,3.00
+face 0.75 2.32 3.27 "1"
+face 0.70 0.30 4.23 "p_mechanical"
+face 0.75 2.32 6.12 "2"
+face 0.70 0.70 7.08 "p_electrical"
+face 0.60 6.66 3.16 "+"
+face 0.60 6.90 2.85 "−"
+face 0.60 6.90 3.33 "−"
+face 1.00 16.87 3.27 k_inertia
+face 1.00 24.70 3.32 1/s
+face 1.00 19.32 6.82 num(s)/den(s)
+face 0.70 16.21 8.33 "HPF (wDamperDecoupler)"
+face 1.00 11.84 6.73 k_damp
+face 0.60 27.86 3.16 "+"
+face 0.60 28.10 2.92 "+"
+face 0.70 31.11 3.27 "f"
+face 0.70 33.51 3.19 "osc"
+face 0.70 30.57 4.58 "oscillator_3ph"
+face 0.75 37.84 3.27 "1"
+face 0.70 37.51 4.08 "osc"
+face 0.75 37.84 5.81 "2"
+face 0.70 36.94 6.77 "f_rotor"
+face 1.00 23.90 1.21 "nominalFrequency"
+== 
+! something to draw, like in x and x -> *2 -> y at 0
+== in x; out y
+! nothing makes y for out to show at 10
+== in x; x -> *2 -> y; x -> *3 -> y
+! two things make y at 31
+== in x; x -> y
+! nothing between x and y; put a block there, like x -> *2 -> y at 11
+== in x; x -> 1/ -> y
+! something more to finish the equation at 13
+== in x; x -> *2
+! what a chain makes is named at its end, like -> y at 11
+== in x; x - -> *2 -> y
+! a chain starts with a signal, or a sum of them, like a - b at 9
+== in x; frob
+! a chain, like a -> *k -> b; ports, like in a or out b; or a block of its own, like f(a -> b) at 6
+== in 2x
+! an input is a name, like in x, y at 3

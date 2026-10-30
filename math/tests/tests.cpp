@@ -6,10 +6,13 @@
 // set as it was when that was written, 20 pixels to the em, as it's shown on its own
 // lines. ONE_MATH_LAYOUTS=write writes it again, to be looked at before it's kept. And
 // chem.hpp held to tests/chem.tsv, each chemical equation read, balanced or not, and
-// weighed as it says.
+// weighed as it says. And diagram.hpp held to tests/diagrams.txt, each diagram there,
+// after "== ", drawn as it was, or turned down as it was; ONE_MATH_LAYOUTS=write writes
+// that again too.
 
 #include <cstdio>
 #include <cstdlib>
+#include <format>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -17,6 +20,7 @@
 #include <vector>
 
 #include "one/chem.hpp"
+#include "one/diagram.hpp"
 #include "one/math.hpp"
 #include "one/math_layout.hpp"
 
@@ -68,19 +72,30 @@ int main() {
 	}
 	std::cout << reactions - wrong << " of " << reactions << " chemical equations read as they should\n";
 	failed += wrong;
-	std::string file = ONE_MATH_TESTS "/layouts.txt";
-	if (const char* mode = std::getenv("ONE_MATH_LAYOUTS"); mode && std::string(mode) == "write") {
-		std::ofstream(file) << layouts;
-		std::cout << "wrote " << file << "\n";
-	} else {
+	std::string diagrams;
+	std::ifstream drawn(ONE_MATH_TESTS "/diagrams.txt");
+	while (std::getline(drawn, line)) {
+		if (line.starts_with("#")) diagrams += line + "\n";
+		if (!line.starts_with("== ")) continue;
+		auto d = one::diagram::lay_out(line.substr(3));
+		diagrams += line + "\n" + (d ? one::diagram::written(*d) : std::format("! {} at {}\n", d.error().says, d.error().at));
+	}
+	bool write = std::getenv("ONE_MATH_LAYOUTS") && std::string(std::getenv("ONE_MATH_LAYOUTS")) == "write";
+	for (auto [name, now] : {std::pair{"layouts", &layouts}, std::pair{"diagrams", &diagrams}}) {
+		std::string file = ONE_MATH_TESTS "/" + std::string(name) + ".txt";
+		if (write) {
+			std::ofstream(file) << *now;
+			std::cout << "wrote " << file << "\n";
+			continue;
+		}
 		std::ifstream kept(file);
 		std::stringstream was;
 		was << kept.rdbuf();
-		if (was.str() != layouts) {
+		if (was.str() != *now) {
 			++failed;
-			std::cout << "FAIL the layouts differ from " << file << "\n";
+			std::cout << "FAIL the " << name << " differ from " << file << "\n";
 		} else {
-			std::cout << "every layout as kept\n";
+			std::cout << "every one of the " << name << " as kept\n";
 		}
 	}
 	return failed == 0 && count > 0 ? 0 : 1;

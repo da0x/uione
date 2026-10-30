@@ -61,7 +61,7 @@ marker() {
 		*.sh|*.py|*.yaml|*.yml|makefile|CMakeLists.txt|dockerfile|gaps) echo '#' ;;
 		# What a terminal shows, or where an equation's parts are set, as a test holds
 		# it, byte for byte, like a golden image.
-		*.txt) case "$1" in */tests/golden/*|math/tests/layouts.txt) echo exempt ;; esac ;;
+		*.txt) case "$1" in */tests/golden/*|math/tests/layouts.txt|math/tests/diagrams.txt) echo exempt ;; esac ;;
 		*.*) ;;
 		*) content "$1" | head -1 | grep -q '^#!' && echo '#' ;;
 	esac

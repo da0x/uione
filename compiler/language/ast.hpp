@@ -1683,7 +1683,7 @@ namespace one::language {
     // A paper's: a block's words and its place in the order, and how it's set.
     inline const std::vector<collage_part>& paper_parts() {
         static const std::vector<collage_part> all{
-            {"words", "text", true}, {"position", "number", true}, {"kind", "title subtitle heading text quote math chem code picture"}, {"align", "left center right"}, {"language", "text"},
+            {"words", "text", true}, {"position", "number", true}, {"kind", "title subtitle heading text quote math chem code diagram picture"}, {"align", "left center right"}, {"language", "text"},
             // A picture's: the file, its own size, how much of the page's width it runs, and how round its corners are.
             {"picture", "file"}, {"picture_width", "number"}, {"picture_height", "number"}, {"width", "number"}, {"corners", "number"},
         };

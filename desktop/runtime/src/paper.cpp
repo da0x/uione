@@ -1316,6 +1316,10 @@ namespace one::desktop::runtime {
 				shown.language = language.get();
 				paper_kinds::setting at{t, ""};
 				made.push_back(desktop::text(kind_of(b->kind).words_spans(shown, now.empty() ? " " : now, t.code(), at)));
+			} else if (apart->drawn) {
+				auto drawn = now.empty() ? std::unexpected(std::string(" ")) : apart->drawn(now, t.text_size * 1.25f);
+				if (drawn) made.push_back(std::move(*drawn));
+				else made.push_back(desktop::text(drawn.error(), quiet));
 			} else if (auto read = one::math::parse(apart->written(now)); read && !now.empty()) {
 				made.push_back(set_view(equation_set(apart->written(now), t.text_size * 1.6f, true, t.ink)));
 				if (auto note = apart->note ? apart->note(now) : std::nullopt) made.push_back(desktop::text(*note, quiet));

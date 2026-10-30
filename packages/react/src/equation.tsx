@@ -7,6 +7,7 @@
 
 import { useMemo } from "react";
 import { layOutMath, mathFont, parseMath } from "./math.js";
+import type { MathLaidOut } from "./math.js";
 
 export function Equation({ written, displayed = false }: { written: string; displayed?: boolean }) {
   const read = useMemo(() => parseMath(written), [written]);
@@ -30,6 +31,15 @@ export function Equation({ written, displayed = false }: { written: string; disp
       style={{ fontSize: displayed ? "1.25em" : "1.1em", verticalAlign: `${-laid.descent}em`, overflow: "visible" }}
       fill="currentColor"
     >
+      <MathDrawn laid={laid} />
+    </svg>
+  );
+}
+
+// What an equation laid out draws, its baseline at 0, for an svg that places it.
+export function MathDrawn({ laid }: { laid: MathLaidOut }) {
+  return (
+    <>
       {laid.drawn.map((d, i) =>
         d.type === "glyph" ? (
           <text key={i} x={d.x} y={d.y} fontFamily={mathFont} fontSize={d.size}>
@@ -41,6 +51,6 @@ export function Equation({ written, displayed = false }: { written: string; disp
           <polyline key={i} points={d.points.map(([x, y]) => `${x},${y}`).join(" ")} fill="none" stroke="currentColor" strokeWidth={d.size} strokeLinecap="round" strokeLinejoin="round" />
         ),
       )}
-    </svg>
+    </>
   );
 }

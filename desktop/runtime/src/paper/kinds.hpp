@@ -9,6 +9,7 @@
 #pragma once
 
 #include <any>
+#include <expected>
 #include <functional>
 #include <optional>
 #include <string>
@@ -79,6 +80,9 @@ namespace one::desktop::runtime::paper_kinds {
 		bool spaced = false;     // a name put after a letter is apart from it, where letters together are one name
 		bool lines = false;      // its words run over several lines: Enter starts one, and Control+Enter keeps them
 		bool languages = false;  // written in a language chosen from one::syntax's, shown colored as it reads it
+		// What's drawn of its words, at the size the dialog shows it, or what's wrong with
+		// them, for a kind that isn't set as an equation is.
+		std::function<std::expected<desktop::view, std::string>(const std::string&, float)> drawn = {};
 	};
 
 	class kind {
@@ -131,6 +135,7 @@ namespace one::desktop::runtime::paper_kinds {
 	const kind& math_kind();
 	const kind& chem_kind();
 	const kind& code_kind();
+	const kind& diagram_kind();
 	const kind& picture_kind();
 
 }  // namespace one::desktop::runtime::paper_kinds

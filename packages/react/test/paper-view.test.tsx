@@ -246,6 +246,32 @@ describe("a paper", () => {
     expect(source.runs[1]).toMatchObject({ command: "studio::passage::write", input: { id: "b1", language: "python", "one:history": "joined" } });
   });
 
+  it("draws a diagram once the caret's left it, and writes it apart over several lines, saying what's wrong as it's typed", async () => {
+    const source = sourceWith([{ id: "b1", kind: "diagram", words: "in x\nx -> *2 -> y\nout y", position: 1, align: "center" }]);
+    const drawn = renderPaper(source);
+    await waitFor(() => expect(blocks(drawn).length).toBe(1));
+    fireEvent.blur(blocks(drawn)[0]!);
+    const picture = await drawn.findByRole("img", { name: "in x\nx -> *2 -> y\nout y" });
+    expect(picture.querySelectorAll("polygon").length).toBeGreaterThan(0);
+    fireEvent.mouseDown(picture);
+    const dialog = await drawn.findByRole("dialog", { name: "Diagram" });
+    const words = dialog.querySelector("textarea")!;
+    fireEvent.change(words, { target: { value: "in x\nx -> y" } });
+    expect(dialog.textContent).toContain("nothing between x and y");
+    fireEvent.change(words, { target: { value: "in x\nx -> 1/s -> y\nout y" } });
+    fireEvent.keyDown(words, { key: "Enter" });
+    expect(drawn.queryByRole("dialog")).not.toBeNull();
+    fireEvent.keyDown(words, { key: "Enter", ctrlKey: true });
+    await waitFor(() => expect(source.runs).toHaveLength(1));
+    expect(source.runs[0]).toMatchObject({ command: "studio::passage::write", input: { id: "b1", words: "in x\nx -> 1/s -> y\nout y" } });
+  });
+
+  it("sets the face of every diagram key", () => {
+    const tabs = kindOf("diagram").apart?.keys ?? [];
+    const unset = tabs.flatMap((t) => t.keys.filter((k) => !renderToStaticMarkup(<>{k.face}</>).includes('role="img"')).map((k) => `${t.name}: ${k.name}`));
+    expect(unset).toEqual([]);
+  });
+
   it("sets the face of every chemistry key, as ce( ) reads it", () => {
     const tabs = kindOf("chem").apart?.keys ?? [];
     expect(tabs.map((t) => t.name)).toEqual(["Common", "Arrows", "States", "Charges", "Elements"]);
