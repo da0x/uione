@@ -1111,10 +1111,18 @@ export function Paper({
                     const el = elements.current.get(b.id);
                     if (!el) return;
                     clearAcross();
-                    placeCaret(el, 0);
-                    el.scrollIntoView?.({ block: "start", behavior: "smooth" });
-                    // Where the contents fill the room, choosing one is done with them.
-                    if (narrow && fills && outlineToggle) setToggled(outlineToggle, false);
+                    // On a phone, the page goes straight there, with no caret to bring the
+                    // keyboard up and move it again; and where the contents fill the room,
+                    // choosing one is done with them, so they're closed first, and the page
+                    // goes there once it's in sight.
+                    const go = () => {
+                      if (!narrow && !readOnly) placeCaret(el, 0);
+                      el.scrollIntoView?.({ block: "start", behavior: narrow ? "auto" : "smooth" });
+                    };
+                    if (narrow && fills && outlineToggle) {
+                      setToggled(outlineToggle, false);
+                      requestAnimationFrame(() => requestAnimationFrame(go));
+                    } else go();
                   }}
                   style={{
                     display: "block",
