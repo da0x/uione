@@ -585,7 +585,7 @@ function Unzoomed() {
   useEffect(() => {
     const meta = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
     const was = meta?.content;
-    if (meta) meta.content = "width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover";
+    if (meta) meta.content = "width=device-width, initial-scale=1, maximum-scale=1";
     const root = document.documentElement.style, body = document.body.style;
     const kept = [root.overscrollBehavior, body.overscrollBehavior, body.overflow];
     root.overscrollBehavior = body.overscrollBehavior = "none";
@@ -618,9 +618,14 @@ function useSeen(): CSSProperties | undefined {
   return seen;
 }
 
+// Inside a phone's safe area, so its status line is never under the home indicator or
+// the browser's own bar.
 function WorkspaceWindow({ children }: { children: ReactNode }) {
   return (
-    <div className="fixed inset-0 flex min-h-0 touch-manipulation flex-col bg-sunken text-ink" style={useSeen()}>
+    <div
+      className="fixed inset-0 flex min-h-0 touch-manipulation flex-col bg-sunken pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] text-ink"
+      style={useSeen()}
+    >
       {children}
     </div>
   );
