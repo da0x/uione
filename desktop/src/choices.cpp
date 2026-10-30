@@ -605,10 +605,11 @@ namespace one::desktop {
 		}
 
 		element* popover_hit(point at) {
-			if (auto* d = dialog_element::open_dialog()) return d->hit(at);
+			// A popover's panel first, as one in a dialog is over it; then the dialog.
 			for (auto& [key, o] : open_popovers()) {
 				if (o.open.peek() && o.panel && o.on.size() > 1 && o.on[1].contains(at)) return o.panel->hit(at);
 			}
+			if (auto* d = dialog_element::open_dialog()) return d->hit(at);
 			return nullptr;
 		}
 	}  // namespace detail

@@ -248,6 +248,13 @@ namespace one::desktop {
 				hb_glyph_position_t* position = hb_buffer_get_glyph_positions(buffer, &count);
 				for (unsigned g = 0; g < count; ++g) {
 					if (clusters.empty() || clusters.back().at != info[g].cluster) clusters.push_back({info[g].cluster, into.advance});
+					// A tab is as wide as four spaces, as code on the web is, and nothing's drawn.
+					if (text[info[g].cluster] == '\t') {
+						hb_codepoint_t space = 0;
+						hb_font_get_nominal_glyph(f->harfbuzz, ' ', &space);
+						into.advance += 4 * hb_font_get_glyph_h_advance(f->harfbuzz, space) / 64.f;
+						continue;
+					}
 					into.glyphs.push_back({f, info[g].codepoint, into.advance + position[g].x_offset / 64.f, -position[g].y_offset / 64.f, style.color});
 					into.advance += position[g].x_advance / 64.f;
 				}
