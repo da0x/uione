@@ -124,7 +124,7 @@ export function StepLink({
   // A swipe across a picture alone steps too, while it can.
   useSwipeStep(next, !off && target !== undefined ? go : undefined);
   // By its key, it leaves a picture's bars hidden, as they were.
-  useKeys(
+  const flashed = useKeys(
     keys,
     () => {
       go();
@@ -133,7 +133,7 @@ export function StepLink({
     !off && target !== undefined,
   );
   return (
-    <ui.Button kind="secondary" icon={icon} tool={tool} disabled={off || target === undefined} hint={hintOf(typeof children === "string" ? children : "", keys)} onClick={go}>
+    <ui.Button kind="secondary" icon={icon} tool={tool} flashed={flashed} disabled={off || target === undefined} hint={hintOf(typeof children === "string" ? children : "", keys)} onClick={go}>
       {children}
     </ui.Button>
   );
@@ -214,11 +214,11 @@ export function Link({ to, icon, keys, children }: { to: string; icon?: string; 
   const navigate = useNavigate();
   const tool = useTool();
   const off = useOff();
-  useKeys(keys, () => void navigate(filled), !off);
+  const flashed = useKeys(keys, () => void navigate(filled), !off);
   // In a toolbar's group, a tool, as its buttons are.
   if (tool) {
     return (
-      <ui.Button kind="secondary" icon={icon} tool={tool} disabled={off} hint={hintOf(typeof children === "string" ? children : "", keys)} onClick={() => void navigate(filled)}>
+      <ui.Button kind="secondary" icon={icon} tool={tool} flashed={flashed} disabled={off} hint={hintOf(typeof children === "string" ? children : "", keys)} onClick={() => void navigate(filled)}>
         {children}
       </ui.Button>
     );
@@ -1290,7 +1290,7 @@ export function Command({
     });
   };
   const closeOptions = useInOptions();
-  useKeys(keys, run, shown && !off && !runner.busy(name));
+  const flashed = useKeys(keys, run, shown && !off && !runner.busy(name));
   const words = says ?? label(action(name));
   // Asked first, while it's there.
   useEffect(() => {
@@ -1347,6 +1347,7 @@ export function Command({
       icon={icon}
       tool={tool}
       pressed={pressed && !off}
+      flashed={flashed}
       swatch={tool ? swatch : undefined}
       hint={hintOf(words, keys)}
       disabled={off || runner.busy(name)}

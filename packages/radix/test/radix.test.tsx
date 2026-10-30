@@ -24,6 +24,7 @@ import {
   Table,
   Text,
   Thread,
+  Toggle,
   memorySource,
   screen as defineScreen,
   useView,
@@ -156,6 +157,31 @@ describe("forms", () => {
     renderScreen(() => <Form command="a::b::create" fields={["name"]} />, source);
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
     expect((await screen.findByRole("alert")).textContent).toBe("try again");
+  });
+});
+
+describe("a tool", () => {
+  it("is pushed in while the pointer's button is down on it, until it's let go anywhere, on or not, and a moment after its key ran it", async () => {
+    renderScreen(() => <Toggle name="/ grid" label="Grid" icon="grid" keys={["g"]} />);
+    const tool = screen.getByRole("button", { name: "Grid" });
+    expect(tool.dataset.pushed).toBeUndefined();
+    fireEvent.pointerDown(tool, { button: 0 });
+    expect(tool.dataset.pushed).toBe("true");
+    expect(tool.className).toContain("!bg-ink/10");
+    // Let go off it, it's out again.
+    fireEvent.pointerUp(document.body);
+    expect(tool.dataset.pushed).toBeUndefined();
+    // On, it's tinted, and pushed in it's darker than that, not the same.
+    fireEvent.click(tool);
+    expect(tool.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.pointerDown(tool, { button: 0 });
+    expect(tool.className).toContain("!bg-accent/25");
+    fireEvent.pointerUp(window);
+    expect(tool.className).not.toContain("!bg-accent/25");
+    // Its key pushes it in a moment, as a press does.
+    fireEvent.keyDown(window, { key: "g" });
+    expect(tool.dataset.pushed).toBe("true");
+    await waitFor(() => expect(tool.dataset.pushed).toBeUndefined());
   });
 });
 

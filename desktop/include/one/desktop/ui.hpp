@@ -141,6 +141,9 @@ namespace one::desktop {
 		bool shows_focus() const { return focused && !focused_by_default && !focused_by_pointer; }
 		bool carried = false;             // took over from an element of the view before, rather than new
 		bool hovered = false;
+		// The pointer's button went down on it and hasn't come up yet, wherever the
+		// pointer is now, as a button is drawn pushed in.
+		bool held_down = false;
 
 		// Brings an area of this element into view, through any scroll above it.
 		void reveal(const rect& area);
@@ -365,6 +368,7 @@ namespace one::desktop {
 		float line = 0;                    // drawn instead as a stroke, a line this wide, as a stroke color or width is
 		bool tiny = false;                 // smaller still, its icon 14 pixels, as a list's row's buttons are
 		bool on_hover = false;             // drawn only while what it's in is pointed at, as a row's delete is
+		bool flashed = false;              // drawn pushed in a moment, as its key just ran it
 	};
 	view tool_button(std::string icon, std::string label, std::function<void()> pressed, tool_options options = {});
 	// Words that go somewhere: in the accent color, underlined while pointed at or

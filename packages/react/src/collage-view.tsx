@@ -701,7 +701,7 @@ export function CollageButton({ collage, does, label, icon, keys }: { collage: s
           ask(collage, "pasted");
         })
       : ask(collage, does);
-  useKeys(byPaste ? keys!.filter((k) => k !== "ctrl+v") : keys, press, !off);
+  const flashed = useKeys(byPaste ? keys!.filter((k) => k !== "ctrl+v") : keys, press, !off);
   useEffect(() => {
     if (!byPaste) return;
     const pasted = (e: ClipboardEvent) => {
@@ -723,7 +723,7 @@ export function CollageButton({ collage, does, label, icon, keys }: { collage: s
   // A screenshot is taken where the browser can share the screen, and only there.
   if (does === "screenshot" && typeof navigator !== "undefined" && typeof navigator.mediaDevices?.getDisplayMedia !== "function") return null;
   return (
-    <ui.Button kind="secondary" icon={icon} tool={tool} disabled={off} hint={hintOf(label, keys)} onClick={press}>
+    <ui.Button kind="secondary" icon={icon} tool={tool} flashed={flashed} disabled={off} hint={hintOf(label, keys)} onClick={press}>
       {label}
     </ui.Button>
   );

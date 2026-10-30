@@ -681,8 +681,8 @@ namespace one::desktop::runtime {
 			});
 		}
 		std::string drawn = desktop::has_icon(icon) ? icon : "";
-		if (auto small = p.in_group()) return desktop::tool_button(drawn, *small ? hint_of(words, keys) : words, std::move(go), {.large = !*small, .off = off});
-		return desktop::tool_button(drawn, drawn.empty() ? words : hint_of(words, keys), std::move(go), {.off = off});
+		if (auto small = p.in_group()) return desktop::tool_button(drawn, *small ? hint_of(words, keys) : words, std::move(go), {.large = !*small, .off = off, .flashed = flashing(keys)});
+		return desktop::tool_button(drawn, drawn.empty() ? words : hint_of(words, keys), std::move(go), {.off = off, .flashed = flashing(keys)});
 	}
 
 	desktop::view link(page& p, std::string words, std::string to, std::string icon, std::vector<std::string> keys) {
@@ -693,7 +693,7 @@ namespace one::desktop::runtime {
 		// In a toolbar's group, a tool, as its buttons are.
 		if (auto small = p.in_group()) {
 			return desktop::tool_button(desktop::has_icon(icon) ? icon : "", *small ? hint_of(words, keys) : words, [&p, address = address_of(p, to)] { p.open(address); },
-			                            {.large = !*small, .off = off});
+			                            {.large = !*small, .off = off, .flashed = flashing(keys)});
 		}
 		// One of the web's icons is a quiet button drawn as just that, as on the web.
 		if (desktop::has_icon(icon) && !leaves(to) && !to.starts_with("#")) {
@@ -848,7 +848,7 @@ namespace one::desktop::runtime {
 			if (color.size() == 7) swatch = desktop::color::hex(static_cast<std::uint32_t>(std::strtoul(color.c_str() + 1, nullptr, 16)));
 			bool clear = color == "none";
 			return desktop::tool_button(desktop::has_icon(b.icon) ? b.icon : "", *small || swatch || clear ? hint_of(label_now, b.keys) : label_now, std::move(run),
-			                            {.large = !*small, .on = b.pressed && !off, .off = off, .swatch = swatch, .clear = clear, .line = line});
+			                            {.large = !*small, .on = b.pressed && !off, .off = off, .swatch = swatch, .clear = clear, .line = line, .flashed = flashing(b.keys)});
 		}
 		if (desktop::has_icon(b.icon)) return desktop::icon_button(b.icon, label_now, std::move(run), b.primary);
 		if (std::string g = glyph_of(b.icon); !g.empty()) label_now = g + " " + label_now;

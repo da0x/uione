@@ -182,6 +182,29 @@ namespace one::desktop::runtime {
 
 	void typing(std::function<bool(const key_event&)> taking) { typed_into = std::move(taking); }
 
+	namespace {
+		// The chord that just ran a line of the page, until a moment after, and which
+		// time it was, so an earlier wait doesn't end a later flash.
+		state<std::string> flashed;
+		int flashes = 0;
+
+		void flash(const std::string& chord) {
+			if (!posting()) return;
+			flashed.set(chord);
+			std::thread([at = ++flashes] {
+				std::this_thread::sleep_for(std::chrono::milliseconds(120));
+				post([at] {
+					if (at == flashes) flashed.set("");
+				});
+			}).detach();
+		}
+	}  // namespace
+
+	bool flashing(const std::vector<std::string>& keys) {
+		const std::string& chord = flashed.get();
+		return !chord.empty() && std::ranges::find(keys, chord) != keys.end();
+	}
+
 	bool key(navigator& nav, const key_event& e) {
 		if (answered(nav, e)) return true;
 		if (typed_into && typed_into(e)) return true;
@@ -191,6 +214,7 @@ namespace one::desktop::runtime {
 		}
 		if (e.is(keys::f11) && shown_in) {
 			shown_in->fullscreen(!shown_in->fullscreen());
+			flash("f11");
 			return true;
 		}
 		// Esc leaves the screen filled before it goes back, as a browser's does.
@@ -202,6 +226,7 @@ namespace one::desktop::runtime {
 		auto lines = nav.current().keys();
 		for (const auto& [chord, run] : lines) {
 			if (pressed(e, chord)) {
+				flash(chord);
 				run();
 				return true;
 			}

@@ -20,7 +20,7 @@ import "@fontsource-variable/fraunces/wght.css";
 import "@fontsource-variable/fraunces/wght-italic.css";
 import { Children, Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { CSSProperties, ReactNode } from "react";
+import type { ComponentProps, CSSProperties, ReactNode } from "react";
 import type { ButtonProps, CardGroup, CardsProps, ChoiceProps, ColorPickerProps, ComponentSet, DatedTimelineProps, OptionsProps, SliderProps } from "@uione/react";
 import { Surface, markLength, marksAlong, mosaicRows, mosaicTile, timelineStep } from "@uione/react";
 import { highlight, highlightCodeBlocks } from "./highlight.js";
@@ -304,7 +304,7 @@ function Faces({ people }: { people: { name: string; picture?: string }[] }) {
   );
 }
 
-const pressable = "inline-flex items-center justify-center gap-2 rounded-control px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50";
+const pressable = "inline-flex items-center justify-center gap-2 rounded-control px-4 py-2 text-sm font-medium transition-colors active:translate-y-px active:brightness-95 disabled:opacity-50 disabled:active:translate-y-0 disabled:active:brightness-100";
 
 // A label's hue: the one people expect for the usual ones, like red for a bug, and
 // for any other one picked from its words, so it's the same each time.
@@ -334,6 +334,48 @@ export function labelHue(label: string): number {
 
 // A tool that opens its choices in a panel under it, over everything, closed by Esc or a
 // press anywhere else.
+// A tool in a workspace's toolbar, pushed in while the pointer's button is down on it,
+// darker and what's in it a pixel lower, until it's let go wherever the pointer is
+// then; and a moment after its key ran it, so that shows too. Pressed, it acts on
+// what's being worked on and leaves the keyboard, and any caret, with it; Tab still
+// reaches it.
+function Tool({
+  flashed,
+  pushed,
+  className,
+  children,
+  ...rest
+}: { flashed?: boolean; pushed: string; className: string; children: ReactNode } & Omit<ComponentProps<"button">, "className" | "children">) {
+  const [held, setHeld] = useState(false);
+  useEffect(() => {
+    if (!held) return;
+    const letGo = () => setHeld(false);
+    window.addEventListener("pointerup", letGo);
+    window.addEventListener("pointercancel", letGo);
+    return () => {
+      window.removeEventListener("pointerup", letGo);
+      window.removeEventListener("pointercancel", letGo);
+    };
+  }, [held]);
+  const down = (held || flashed) && !rest.disabled;
+  return (
+    <button
+      type="button"
+      {...rest}
+      onMouseDown={(e) => e.preventDefault()}
+      onPointerDown={(e) => {
+        // The main button only, as a click is.
+        if (e.button > 0) return;
+        setHeld(true);
+      }}
+      data-pushed={down || undefined}
+      className={`${className} ${down ? `${pushed} [&>*]:translate-y-px` : ""}`}
+    >
+      {children}
+    </button>
+  );
+}
+
 function Options({ label, icon, tool, open, onToggle, onClose, children }: OptionsProps) {
   const at = useRef<HTMLSpanElement>(null);
   const panel = useRef<HTMLDivElement>(null);
@@ -865,13 +907,13 @@ export const radix: ComponentSet = {
         target="_blank"
         rel="noreferrer"
         title="Opens in a new tab"
-        className="inline-flex items-center gap-1 font-medium text-accent decoration-accent/40 underline-offset-4 hover:underline"
+        className="inline-flex items-center gap-1 font-medium text-accent decoration-accent/40 underline-offset-4 hover:underline active:opacity-70"
       >
         {children}
         <ExternalMark />
       </a>
     ) : (
-      <a href={href} onClick={onClick} className="font-medium text-accent decoration-accent/40 underline-offset-4 hover:underline">
+      <a href={href} onClick={onClick} className="font-medium text-accent decoration-accent/40 underline-offset-4 hover:underline active:opacity-70">
         {children}
       </a>
     ),
@@ -2346,7 +2388,7 @@ export const radix: ComponentSet = {
     );
   },
 
-  Button: ({ kind = "secondary", disabled, error, onClick, children, icon, tool, pressed: on, hint, swatch, focused }) => {
+  Button: ({ kind = "secondary", disabled, error, onClick, children, icon, tool, pressed: on, hint, swatch, focused, flashed }) => {
     // Drawn as an icon, its words still name it, and show when it's pointed at.
     const words = typeof children === "string" ? children : undefined;
     // A color it gives, drawn as a circle of it, outlined so white shows; none, a
@@ -2376,22 +2418,20 @@ export const radix: ComponentSet = {
       // its words when it has none, as wide as they are.
       // A large one's icon is drawn as finely as a small one's, a pixel at most.
       const shape = tool === "large" ? "h-[4.125rem] min-w-[3.75rem] flex-col gap-1 px-2 py-2 text-xs [&>svg]:size-8 [&>svg_*]:[stroke-width:0.5]" : tool === "tiny" ? "size-5 [&>svg]:size-3.5" : drawn ? "size-8 text-xs" : "h-8 min-w-8 px-1.5 text-xs";
-      // Pressed, it acts on what's being worked on and leaves the keyboard, and any
-      // caret, with it; Tab still reaches it.
       return (
-        <button
-          type="button"
+        <Tool
           disabled={disabled}
-          onMouseDown={(e) => e.preventDefault()}
+          flashed={flashed}
           onClick={onClick}
           aria-pressed={on}
           aria-label={tool !== "large" && drawn ? words : undefined}
           title={hint ?? words}
           className={`inline-flex items-center justify-center rounded-control border border-transparent transition-colors hover:bg-sunken focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-40 ${shape} ${on ? "border-accent/50 bg-accent-soft font-semibold text-accent" : "text-ink"}`}
+          pushed={on ? "!bg-accent/25" : "!bg-ink/10"}
         >
           {drawn}
           {(tool === "large" || !drawn) && <span className="whitespace-nowrap leading-none">{children}</span>}
-        </button>
+        </Tool>
       );
     }
     const pressed = (

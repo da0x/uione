@@ -410,7 +410,7 @@ namespace one::desktop::runtime {
 		};
 		if (!(p.in_group() && p.off())) for (const auto& k : keys) p.on_key(k, flip);
 		if (p.in_group()) return tool(p, icon, label, keys, flip, on);
-		return desktop::tool_button(desktop::has_icon(icon) ? icon : "", hint_of(label, keys), flip, {.on = on});
+		return desktop::tool_button(desktop::has_icon(icon) ? icon : "", hint_of(label, keys), flip, {.on = on, .flashed = flashing(keys)});
 	}
 
 	desktop::view choose(page& p, std::string name, std::string choice, std::string first, std::string label, std::string icon, std::vector<std::string> keys) {
@@ -418,7 +418,7 @@ namespace one::desktop::runtime {
 		auto pick = [&p, name, choice] { p.choose(name, choice); };
 		if (!(p.in_group() && p.off())) for (const auto& k : keys) p.on_key(k, pick);
 		if (p.in_group()) return tool(p, icon, label, keys, pick, on);
-		return desktop::tool_button(desktop::has_icon(icon) ? icon : "", hint_of(label, keys), pick, {.on = on});
+		return desktop::tool_button(desktop::has_icon(icon) ? icon : "", hint_of(label, keys), pick, {.on = on, .flashed = flashing(keys)});
 	}
 
 	desktop::view history(page& p, bool redo, std::string label, std::string icon, std::vector<std::string> keys) {
@@ -436,7 +436,7 @@ namespace one::desktop::runtime {
 		if (!(p.in_group() && p.off()) && !none) for (const auto& k : keys) p.on_key(k, take);
 		if (label.empty()) label = redo ? "Redo" : "Undo";
 		if (p.in_group()) return tool(p, icon, label, keys, take, false, none);
-		return desktop::tool_button(desktop::has_icon(icon) ? icon : "", hint_of(label, keys), take, {.off = none});
+		return desktop::tool_button(desktop::has_icon(icon) ? icon : "", hint_of(label, keys), take, {.off = none, .flashed = flashing(keys)});
 	}
 
 	desktop::view messages(page& p) {
@@ -483,7 +483,7 @@ namespace one::desktop::runtime {
 		if (!(p.in_group() && p.off())) for (const auto& k : keys) p.on_key(k, flip);
 		if (label.empty()) label = "Full screen";
 		if (p.in_group()) return tool(p, icon, label, keys, flip, fullscreen());
-		return desktop::tool_button(desktop::has_icon(icon) ? icon : "", hint_of(label, keys), flip, {.on = fullscreen()});
+		return desktop::tool_button(desktop::has_icon(icon) ? icon : "", hint_of(label, keys), flip, {.on = fullscreen(), .flashed = flashing(keys)});
 	}
 
 }  // namespace one::desktop::runtime

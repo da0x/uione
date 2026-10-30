@@ -141,6 +141,7 @@ namespace one::desktop {
 		focused = before.focused;
 		focused_by_default = before.focused_by_default;
 		focused_by_pointer = before.focused_by_pointer;
+		held_down = before.held_down;
 		brought = before.brought;
 	}
 
@@ -744,12 +745,11 @@ namespace one::desktop {
 					paint_icon(c, t);
 					return;
 				}
-				color fill = danger_ ? t.danger : primary_ ? t.accent : t.surface;
-				if (hovered) fill = primary_ ? mixed(fill, t.ink, 0.15f) : t.sunken;
+				color fill = shade(t);
 				c.box(frame, {.fill = fill, .border = primary_ ? fill : t.line, .border_width = 1, .radius = std::min(t.corners, 8.f)});
 				// The ring once the person moves to it, not where the window put the keyboard first.
 				if (shows_focus()) c.box(frame.inset(-3), {.border = mixed(t.accent, t.page, 0.4f), .border_width = 2, .radius = std::min(t.corners, 8.f) + 3});
-				rect area = inner();
+				rect area = pushed(inner());
 				const auto& laid = laid_out();
 				c.text(laid, {area.x + (area.width - laid.width()) / 2, area.y + (area.height - laid.height()) / 2});
 			}
@@ -769,17 +769,33 @@ namespace one::desktop {
 			static color mixed(color a, color b, float by) {
 				return {a.red + (b.red - a.red) * by, a.green + (b.green - a.green) * by, a.blue + (b.blue - a.blue) * by, a.alpha};
 			}
-			// Flat, tinted while it's on and shaded while it's pointed at: a large one's icon
-			// over its words, a small one's alone, its words under it while pointed at.
+			// Pushed in while the pointer's button is down on it, or a moment after its key
+			// ran it, so a press is seen to have taken.
+			bool down() const { return !tool_.off && (held_down || tool_.flashed); }
+			// What's in it, a pixel lower while it's pushed in.
+			rect pushed(rect area) const {
+				if (down()) area.y += 1;
+				return area;
+			}
+			color shade(const theme& t) const {
+				color fill = danger_ ? t.danger : primary_ ? t.accent : t.surface;
+				if (down()) return primary_ ? mixed(fill, t.ink, 0.25f) : mixed(t.sunken, t.ink, 0.08f);
+				if (hovered) return primary_ ? mixed(fill, t.ink, 0.15f) : t.sunken;
+				return fill;
+			}
+			// Flat, tinted while it's on and shaded while it's pointed at, darker still and
+			// its icon a pixel lower while it's pushed in: a large one's icon over its words,
+			// a small one's alone, its words under it while pointed at.
 			void paint_tool(canvas& c, const theme& t) {
 				// Shown only while what it's in is pointed at.
 				if (tool_.on_hover && !(hovered || (parent && parent->hovered))) return;
 				float corners = std::min(t.corners, 6.f);
 				color tint = mixed(t.surface, t.accent, 0.16f);
-				if (tool_.on) c.box(frame, {.fill = hovered ? mixed(tint, t.ink, 0.06f) : tint, .border = mixed(t.surface, t.accent, 0.45f), .border_width = 1, .radius = corners});
+				if (tool_.on) c.box(frame, {.fill = down() ? mixed(tint, t.accent, 0.14f) : hovered ? mixed(tint, t.ink, 0.06f) : tint, .border = mixed(t.surface, t.accent, 0.45f), .border_width = 1, .radius = corners});
+				else if (down()) c.box(frame, {.fill = mixed(t.sunken, t.ink, 0.08f), .radius = corners});
 				else if (hovered && !tool_.off) c.box(frame, {.fill = t.sunken, .radius = corners});
 				if (shows_focus()) c.box(frame.inset(-2), {.border = mixed(t.accent, t.page, 0.4f), .border_width = 2, .radius = corners + 2});
-				rect area = inner();
+				rect area = pushed(inner());
 				// One that doesn't apply now is faint, as a disabled button is.
 				color ink = tool_.on ? t.accent : t.ink;
 				if (tool_.off) ink = mixed(t.surface, ink, 0.35f);
@@ -879,11 +895,10 @@ namespace one::desktop {
 			}
 			// Its icon in place of its words, which show under it while it's pointed at.
 			void paint_icon(canvas& c, const theme& t) {
-				color fill = danger_ ? t.danger : primary_ ? t.accent : t.surface;
-				if (hovered) fill = primary_ ? mixed(fill, t.ink, 0.15f) : t.sunken;
+				color fill = shade(t);
 				c.box(frame, {.fill = fill, .border = primary_ ? fill : t.line, .border_width = 1, .radius = std::min(t.corners, 8.f)});
 				if (shows_focus()) c.box(frame.inset(-3), {.border = mixed(t.accent, t.page, 0.4f), .border_width = 2, .radius = std::min(t.corners, 8.f) + 3});
-				rect area = inner();
+				rect area = pushed(inner());
 				draw_icon(c, icon_, {area.x + (area.width - 16) / 2, area.y + (area.height - 16) / 2, 16, 16}, primary_ ? color::hex(0xffffff) : t.ink);
 				if (hovered || (shows_focus())) tooltip(c, t);
 			}
@@ -928,7 +943,10 @@ namespace one::desktop {
 			void paint_content(canvas& c) override {
 				rect area = inner();
 				if (shows_focus()) c.box(frame.inset(-2), {.border = current_theme().accent, .border_width = 1.5f, .radius = 3});
-				c.text(laid_out(area.width), {area.x, area.y});
+				// Pushed in while the pointer's button is down on it: shaded behind, its words a
+				// pixel lower.
+				if (held_down) c.box(frame.inset(-2), {.fill = current_theme().sunken, .radius = 3});
+				c.text(laid_out(area.width), {area.x, area.y + (held_down ? 1.f : 0.f)});
 			}
 			bool handle_key(const key_event& e) override {
 				if (!e.is(keys::enter) && !e.is(keys::keypad_enter)) return false;

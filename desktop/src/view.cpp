@@ -242,6 +242,7 @@ namespace one::desktop {
 	void deliver_leave(window::state& w) {
 		in_window context(w);
 		point_to(w, std::nullopt);
+		if (w.root) each_element(*w.root, [](element& e) { e.held_down = false; });
 		w.pressed = w.dragging = nullptr;
 		w.redraw();
 	}
@@ -256,6 +257,7 @@ namespace one::desktop {
 		if (!target) target = w.root->hit(at);
 		w.pressed = target;
 		w.dragging = nullptr;
+		for (element* e = target; e; e = e->parent) e->held_down = true;
 		for (element* e = target; e; e = e->parent) {
 			if (e->focusable()) {
 				if (!e->focused_by_press()) break;
@@ -277,6 +279,9 @@ namespace one::desktop {
 		bring_up_to_date(w);
 		in_window context(w);
 		element* pressed = std::exchange(w.pressed, nullptr);
+		// Let go anywhere, nothing's pushed in any more.
+		for (element* e = pressed; e; e = e->parent) e->held_down = false;
+		if (w.root) each_element(*w.root, [](element& e) { e.held_down = false; });
 		if (element* dragged = std::exchange(w.dragging, nullptr); dragged && w.root) dragged->release(at, w.root->hit(at));
 		if (!pressed || !w.root) return;
 		// A click is a press and a release over the same thing.

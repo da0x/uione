@@ -2075,9 +2075,9 @@ namespace one::desktop::runtime {
 			for (const auto& k : ask.keys) p.on_key(k, press);
 		}
 		if (auto small = p.in_group()) {
-			return desktop::tool_button(desktop::has_icon(ask.icon) ? ask.icon : "", *small ? hint_of(ask.label, ask.keys) : ask.label, std::move(press), {.large = !*small, .off = off});
+			return desktop::tool_button(desktop::has_icon(ask.icon) ? ask.icon : "", *small ? hint_of(ask.label, ask.keys) : ask.label, std::move(press), {.large = !*small, .off = off, .flashed = flashing(ask.keys)});
 		}
-		return desktop::tool_button(desktop::has_icon(ask.icon) ? ask.icon : "", hint_of(ask.label, ask.keys), std::move(press));
+		return desktop::tool_button(desktop::has_icon(ask.icon) ? ask.icon : "", hint_of(ask.label, ask.keys), std::move(press), {.flashed = flashing(ask.keys)});
 	}
 
 	desktop::view collage(page& p, collage_spec spec) {

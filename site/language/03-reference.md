@@ -2677,6 +2677,10 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   small rows of 4` with four, it's a thin strip, its groups' names said by their tools
   as they're pointed at; a mode that shows only such groups, like reading, gets a
   thin toolbar, and one with large tools a full one.
+- A tool is pushed in while it's pressed, darker and its icon a pixel lower, until the
+  button is let go, over it or not, and for a moment after its key runs it, so a
+  press is seen to have taken. One that's on stays tinted, and pushed in it's darker
+  than that.
 - In a toolbar, `when` doesn't hide: a group or a tool whose `when` doesn't hold is
   there, faint, and can't be pressed, nor its keys used, so the toolbar keeps its
   shape as what's picked changes. `group "Rotate" small when layer.picture != none`.
