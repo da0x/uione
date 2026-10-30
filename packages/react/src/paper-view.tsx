@@ -505,6 +505,7 @@ export function Paper({
         going.current = null;
         placeCaret(el, Math.min(want.at, wordsOf(el).length));
         if (pick && target.id) setPicked(pick, target.id);
+        if (!narrow && target.words === "") writeApart(target);
       }
       return;
     }
@@ -1125,10 +1126,11 @@ export function Paper({
     </nav>
   ) : null;
 
-  // On a phone, a block of a kind written apart is, as it's gone to or pressed.
+  // A block of a kind written apart is, as it's pressed or inserted, and on a phone as
+  // it's gone to; on a wider screen, gone to with the keys, it's written in place.
   const writeApart = (b: Block) => {
     const el = elements.current.get(b.id);
-    if (!narrow || readOnly || !b.id || !el || !kindOf(b.kind).apart) return;
+    if (readOnly || !b.id || !el || !kindOf(b.kind).apart) return;
     setApart({ id: b.id, words: wordsOf(el) });
     el.blur();
   };
@@ -1238,15 +1240,15 @@ export function Paper({
               caretBlock.current = b.id;
               setWritingIn(b.id);
               if (pick && b.id) setPicked(pick, b.id);
-              if (!opening.current) writeApart(b);
+              if (!opening.current && narrow) writeApart(b);
             }}
-            apart={narrow && !readOnly && kindOf(b.kind).apart ? () => writeApart(b) : undefined}
+            apart={!readOnly && kindOf(b.kind).apart ? () => writeApart(b) : undefined}
             onBlur={() => send(b.id)}
             typing={() => written.current.has(b.id)}
           />
         ))}
       </div>
-      {apart && <Apart block={shown.find((b) => b.id === apart.id)} words={apart.words} zoom={size} retyped={(words) => setApart({ ...apart, words })} done={keep} />}
+      {apart && <Apart block={shown.find((b) => b.id === apart.id)} words={apart.words} zoom={size} narrow={narrow} retyped={(words) => setApart({ ...apart, words })} done={keep} />}
     </div>
   );
   if (!rail) return page;
@@ -1270,10 +1272,11 @@ export function Paper({
   );
 }
 
-// A block written apart, as an equation is on a phone: a sheet over the page, what its
-// words make at the top, where the keyboard leaves it in sight, the words under it, and
-// Cancel and Accept, as Escape and Enter do.
-function Apart({ block, words, zoom, retyped, done }: { block?: Block; words: string; zoom: number; retyped: (words: string) => void; done: (kept: boolean) => void }) {
+// A block written apart, as an equation is: on a phone a sheet over the page, and on a
+// wider screen a dialog in the middle of it; what its words make at the top, where the
+// keyboard leaves it in sight, the words under it, and Cancel and Accept, as Escape and
+// Enter do.
+function Apart({ block, words, zoom, narrow, retyped, done }: { block?: Block; words: string; zoom: number; narrow: boolean; retyped: (words: string) => void; done: (kept: boolean) => void }) {
   const kind = kindOf(block?.kind ?? "");
   const align = "center" as CSSProperties["textAlign"];
   const made = kind.showing?.({ parts: block?.parts ?? {}, across: 320, tall: 320, words, focused: false, readOnly: true, zoom, align, toWords: () => {} });
@@ -1305,8 +1308,11 @@ function Apart({ block, words, zoom, retyped, done }: { block?: Block; words: st
   };
   const keep = (e: { preventDefault(): void }) => e.preventDefault();
   const button: CSSProperties = { font: "inherit", fontSize: 15, padding: "6px 12px", border: "none", borderRadius: 8, background: "transparent", color: "var(--color-accent, #2457d6)", cursor: "pointer" };
-  return (
-    <div role="dialog" aria-label={kind.apart?.name} style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", flexDirection: "column", background: "var(--color-surface, #ffffff)", color: "var(--color-ink, #1b2230)" }}>
+  const sheet: CSSProperties = narrow
+    ? { position: "fixed", inset: 0, zIndex: 50 }
+    : { position: "relative", width: "min(720px, calc(100% - 32px))", maxHeight: "calc(100% - 32px)", overflowY: "auto", borderRadius: 12, border: "1px solid var(--color-line, #dde2ea)", boxShadow: "0 8px 28px rgba(0, 0, 0, 0.24)", paddingBottom: 8 };
+  const dialog = (
+    <div role="dialog" aria-modal="true" aria-label={kind.apart?.name} style={{ ...sheet, display: "flex", flexDirection: "column", background: "var(--color-surface, #ffffff)", color: "var(--color-ink, #1b2230)" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 8px", borderBottom: "1px solid var(--color-line, #dde2ea)" }}>
         <button type="button" style={button} onClick={() => done(false)}>
           Cancel
@@ -1377,6 +1383,9 @@ function Apart({ block, words, zoom, retyped, done }: { block?: Block; words: st
       )}
     </div>
   );
+  if (narrow) return dialog;
+  // Over the page, dimmed behind it, and nothing behind it pressed while it's there.
+  return <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "grid", placeItems: "center", background: "rgba(0, 0, 0, 0.32)" }}>{dialog}</div>;
 }
 
 // One block: its words typed into where they are, set as its kind says. A math block is

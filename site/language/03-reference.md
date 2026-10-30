@@ -2583,8 +2583,8 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     the caret leaves; it keeps the room of the larger, so the page doesn't move. On a
     phone it's written on a sheet over the page instead, its equation at the top as
     it's typed, where the keyboard leaves it in sight, and kept with Accept or let go
-    with Cancel. On the desktop a click on it, or inserting one, writes it the same way,
-    in a dialog over the page, kept with Accept or Enter and let go with Cancel or Esc. Under its words are keys for all the notation writes, a tab of them
+    with Cancel. On a wider screen and on the desktop, a click on it, or inserting one,
+    writes it the same way, in a dialog over the page, kept with Accept or Enter and let go with Cancel or Esc. Under its words are keys for all the notation writes, a tab of them
     at a time: Basic, Powers, Greek, Calculus, Functions and Layout. Each puts its
     words at the caret, the caret then where the next thing goes, and with words
     chosen it's put around them, so √ makes `x+1` into `sqrt(x+1)`. A chem block is

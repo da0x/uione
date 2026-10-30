@@ -347,7 +347,7 @@ describe("a paper", () => {
     expect(source.runs[1]).toMatchObject({ command: "studio::passage::create", input: { kind: "text", words: "" } });
   });
 
-  it("shows a math block's words while the caret's in it, and its equation once it leaves, in the same place", async () => {
+  it("shows a math block's words while the caret's in it, and its equation once it leaves, in the same place, and writes it in a dialog when it's pressed", async () => {
     const source = sourceWith([{ id: "b1", kind: "math", words: "x^2", position: 1, align: "center" }]);
     const drawn = renderPaper(source);
     await waitFor(() => expect(blocks(drawn).length).toBe(1));
@@ -357,12 +357,18 @@ describe("a paper", () => {
     await waitFor(() => expect(block.style.opacity).toBe("0"));
     expect(equation.style.visibility).toBe("visible");
     expect(block.style.gridArea).toBe(equation.style.gridArea);
-    // Pressing the equation puts the caret in its words, which then show instead.
+    // Pressed, it's written apart, in a dialog over the page, and Escape lets it go.
     fireEvent.mouseDown(equation);
-    expect(document.activeElement).toBe(block);
+    const dialog = await drawn.findByRole("dialog");
+    const words = dialog.querySelector("textarea")!;
+    expect(words.value).toBe("x^2");
+    fireEvent.keyDown(words, { key: "Escape" });
+    await waitFor(() => expect(drawn.queryByRole("dialog")).toBeNull());
+    // Gone to with the keys, its words show instead, written in place.
     fireEvent.focus(block);
     await waitFor(() => expect(block.style.opacity).toBe(""));
     expect(equation.style.visibility).toBe("hidden");
+    expect(drawn.queryByRole("dialog")).toBeNull();
   });
 
   it("sets the page in its document's face, but for code and an equation's words", async () => {
