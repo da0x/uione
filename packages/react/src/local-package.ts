@@ -20,7 +20,8 @@
 //       .each(all("library::book").except("status", "withdrawn"))
 //       .order(by("title", sortTitle))
 //       .fields(["shelfmark", "title", "author", "status"])
-//       .value("lent_to", first("library::loan").where("book", row).where("returned_at", none), "member");
+//       .value("lent_to", first("library::loan").where("book", row).where("returned_at", none), "member")
+//       .counted("loans", all("library::loan").where("book", row));
 //
 //     localPackage("library", [book, loan], [bookCreate, withdraw], [shelf]);
 //
@@ -270,10 +271,15 @@ export function by(name: string, through?: (v: Value) => Value, descending = fal
   return name.startsWith("-") ? { field: name.slice(1), descending: true } : { field: name, descending: false };
 }
 
+// A value worked out for each row of a list, from the rows of another its query picks:
+// a field of the first, in its order or else the earliest made; how many there are; or
+// what a number of theirs adds up to.
 export interface ValueOf {
   name: string;
   from: Query;
   field: string;
+  kind: "first" | "counted" | "summed";
+  order: By[];
 }
 
 export interface Listing {
@@ -347,8 +353,16 @@ export class ViewDescription {
     this.last("fields").fields = names;
     return this;
   }
-  value(name: string, from: Query, field: string): this {
-    this.last("a value").values.push({ name, from, field });
+  value(name: string, from: Query, field: string, order: (By | string)[] = []): this {
+    this.last("a value").values.push({ name, from, field, kind: "first", order: order.map((k) => (typeof k === "string" ? by(k) : k)) });
+    return this;
+  }
+  counted(name: string, from: Query): this {
+    this.last("a count").values.push({ name, from, field: "", kind: "counted", order: [] });
+    return this;
+  }
+  summed(name: string, from: Query, field: string): this {
+    this.last("a sum").values.push({ name, from, field, kind: "summed", order: [] });
     return this;
   }
 
@@ -716,6 +730,17 @@ export class LocalPackage {
     return this.entities.get(name);
   }
 
+  // Whether a row passes every condition of one way of a query.
+  private passes(way: Query, candidate: Row, kind: EntityDescription | undefined, reading: Reading, about: Row | undefined, forRow: string): boolean {
+    return way.conditions.every((c) => {
+      const got = fieldThrough(candidate, c.field, kind, reading);
+      const wanted = wantedOf(c.wanted, about, forRow);
+      if (c.test === "holds") return isArray(got) && got.some((item) => alike(item, wanted));
+      const holds = nothing(wanted) ? nothing(got) : alike(got, wanted);
+      return c.test === "is_not" ? !holds : holds;
+    });
+  }
+
   // A query's rows, for the subject a view is per and the row a value is for.
   picked(q: Query, reading: Reading, about: Row | undefined, forRow: string): Row[] {
     const out: Row[] = [];
@@ -723,21 +748,61 @@ export class LocalPackage {
     for (const way of [q, ...q.others]) {
       const kind = this.entity(way.entity);
       for (const candidate of reading.each(way.entity)) {
-        const kept = way.conditions.every((c) => {
-          const got = fieldThrough(candidate, c.field, kind, reading);
-          const wanted = wantedOf(c.wanted, about, forRow);
-          if (c.test === "holds") return isArray(got) && got.some((item) => alike(item, wanted));
-          const holds = nothing(wanted) ? nothing(got) : alike(got, wanted);
-          return c.test === "is_not" ? !holds : holds;
-        });
         const id = text(candidate["id"]);
-        if (kept && !seen.has(id)) {
+        if (this.passes(way, candidate, kind, reading, about, forRow) && !seen.has(id)) {
           seen.add(id);
           out.push(candidate);
         }
       }
     }
     return out;
+  }
+
+  // Each row's value of one of a list's values: when its query picks those that name the
+  // row by one field, its rows are read once, each kept toward the row it names, so a
+  // view of many rows over many more reads them once, not once a row; otherwise picked
+  // for each. The same as the desktop's.
+  private rowValues(of: ValueOf, reading: Reading, about: Row | undefined): (row: string) => Value {
+    const kind = this.entity(of.from.entity);
+    type SoFar = { count: number; sum: number; best?: Row };
+    // First by its order's fields, then when it was made, then its id.
+    const before = (a: Row, b: Row) => {
+      for (const o of of.order) {
+        let x = fieldThrough(a, o.field, kind, reading), y = fieldThrough(b, o.field, kind, reading);
+        if (o.through) (x = o.through(x)), (y = o.through(y));
+        const c = compare(x, y);
+        if (c !== 0) return c < 0 !== o.descending;
+      }
+      const c = compare(a["created_at"], b["created_at"]);
+      if (c !== 0) return c < 0;
+      return byText(text(a["id"]), text(b["id"])) < 0;
+    };
+    const take = (w: SoFar, candidate: Row) => {
+      w.count++;
+      if (of.kind === "summed" && typeof candidate[of.field] === "number") w.sum += candidate[of.field] as number;
+      if (of.kind === "first" && (!w.best || before(candidate, w.best))) w.best = candidate;
+    };
+    const said = (w: SoFar): Value => (of.kind === "counted" ? w.count : of.kind === "summed" ? w.sum : (w.best?.[of.field] ?? null));
+    const namesRow = (c: Condition) => c.wanted instanceof Marker && c.wanted.kind === "row";
+    const naming = of.from.conditions.filter(namesRow);
+    const named = naming[0];
+    if (of.from.others.length > 0 || naming.length !== 1 || !named || named.test !== "is" || named.field.includes(".")) {
+      return (row) => {
+        const w: SoFar = { count: 0, sum: 0 };
+        for (const candidate of this.picked(of.from, reading, about, row)) take(w, candidate);
+        return said(w);
+      };
+    }
+    const rest = new Query(of.from.entity, of.from.conditions.filter((c) => c !== named));
+    const byRow = new Map<string, SoFar>();
+    for (const candidate of reading.each(of.from.entity)) {
+      const names = candidate[named.field];
+      if (typeof names !== "string" || !this.passes(rest, candidate, kind, reading, about, "")) continue;
+      let w = byRow.get(names);
+      if (!w) byRow.set(names, (w = { count: 0, sum: 0 }));
+      take(w, candidate);
+    }
+    return (row) => said(byRow.get(row) ?? { count: 0, sum: 0 });
   }
 
   // A view's document for its subject, or none when what it's per is gone.
@@ -770,14 +835,11 @@ export class LocalPackage {
         });
       }
       if (l.limit > 0) found = found.slice(0, l.limit);
+      const worked = l.values.map((value) => [value.name, this.rowValues(value, reading, per)] as const);
       document[l.name] = found.map((r) => {
         const out: Row = { id: r["id"] ?? null };
         for (const name of l.fields) out[name] = fieldThrough(r, name, kind, reading);
-        for (const value of l.values) {
-          const from = this.picked(value.from, reading, per, text(r["id"]));
-          byAge(from, true); // the earliest made
-          out[value.name] = from[0]?.[value.field] ?? null;
-        }
+        for (const [name, of] of worked) out[name] = of(text(r["id"]));
         return out;
       });
     }

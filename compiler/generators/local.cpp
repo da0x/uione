@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <functional>
 #include <map>
+#include <numeric>
 #include <optional>
 #include <set>
 #include <string>
@@ -607,6 +608,23 @@ namespace one::generators {
                 return std::nullopt;
             }
 
+            // What a list or a first is ordered by: a field of its own, said bare or, for
+            // a first, through what it takes, as photo.taken; -field for the other way round.
+            static std::optional<std::string> order_key(const language::expression& o, const std::string& own = "") {
+                const language::expression* key = &o;
+                auto* u = std::get_if<language::unary_expression>(&o.node);
+                bool reverse = u && u->op == language::token_kind::minus;
+                if (reverse) key = u->operand.get();
+                std::optional<std::string> field;
+                if (auto* n = std::get_if<language::name_expression>(&key->node); n && n->name.parts.size() == 1) field = n->name.parts[0];
+                if (auto* m = std::get_if<language::member_expression>(&key->node); m && !own.empty()) {
+                    auto* object = std::get_if<language::name_expression>(&m->object->node);
+                    if (object && object->name.parts.size() == 1 && object->name.parts[0] == own) field = m->member;
+                }
+                if (!field) return std::nullopt;
+                return (reverse ? "-" : "") + *field;
+            }
+
             // A view's chain, a line each, with where each came from.
             using chain = std::vector<std::pair<std::string, int>>;
 
@@ -621,15 +639,8 @@ namespace one::generators {
                 out.emplace_back(each.name ? ".list(" + str(*each.name) + ", " + q + ")" : ".each(" + q + ")", at);
                 std::vector<std::string> order;
                 for (const auto& o : each.order) {
-                    if (auto* n = std::get_if<language::name_expression>(&o->node); n && n->name.parts.size() == 1) {
-                        order.push_back(str(n->name.parts[0]));
-                    } else if (auto* u = std::get_if<language::unary_expression>(&o->node); u && u->op == language::token_kind::minus) {
-                        auto* inner = std::get_if<language::name_expression>(&u->operand->node);
-                        if (inner && inner->name.parts.size() == 1) order.push_back(str("-" + inner->name.parts[0]));
-                        else unsupported(o->where, "ordering by this");
-                    } else {
-                        unsupported(o->where, "ordering by this");
-                    }
+                    if (auto key = order_key(*o)) order.push_back(str(*key));
+                    else unsupported(o->where, "ordering by this");
                 }
                 if (!order.empty()) {
                     std::string keys;
@@ -645,19 +656,35 @@ namespace one::generators {
                         else unsupported(r.where, "this in a row");
                         continue;
                     }
-                    // name = first(other where ...).field: a field of the first that's found.
+                    // name = first(other where ... order by ...).field: a field of the first
+                    // that's found; count(other where ...): how many; sum(other where
+                    // ...).field: what a number of theirs adds up to.
                     auto* m = std::get_if<language::member_expression>(&r.value->node);
-                    auto* call = m ? std::get_if<language::call_expression>(&m->object->node) : nullptr;
+                    auto* call = std::get_if<language::call_expression>(m ? &m->object->node : &r.value->node);
                     auto* callee = call ? std::get_if<language::name_expression>(&call->callee->node) : nullptr;
-                    auto* where = call && call->arguments.size() == 1 ? std::get_if<language::where_expression>(&call->arguments[0]->node) : nullptr;
-                    auto* other = where ? std::get_if<language::name_expression>(&where->source->node) : nullptr;
-                    if (callee && callee->name.text() == "first" && other && entity(other->name.text())) {
-                        view_scope inner = v;
-                        inner.each = *rows;
-                        values.push_back(".value(" + str(*r.name) + ", " + query(other->name.text(), where->condition.get(), inner) + ", " + str(m->member) + ")");
-                    } else {
-                        unsupported(r.where, "this value in a row");
+                    std::string called = callee ? callee->name.text() : "";
+                    const language::expression* argument = call && call->arguments.size() == 1 ? call->arguments[0].get() : nullptr;
+                    auto* where = argument ? std::get_if<language::where_expression>(&argument->node) : nullptr;
+                    auto* other = argument ? std::get_if<language::name_expression>(&(where ? *where->source : *argument).node) : nullptr;
+                    bool known = other && entity(other->name.text()) && (m ? called == "first" || called == "sum" : called == "count");
+                    std::vector<std::string> keys;
+                    if (where && known) {
+                        for (const auto& k : where->order) {
+                            auto key = order_key(*k, other->name.parts.back());
+                            if (key) keys.push_back((keys.empty() ? "by(" : ", by(") + str(*key) + ")");
+                            else known = false;
+                        }
                     }
+                    if (!known) {
+                        unsupported(r.where, "this value in a row");
+                        continue;
+                    }
+                    view_scope inner = v;
+                    inner.each = *rows;
+                    std::string q = query(other->name.text(), where ? where->condition.get() : nullptr, inner);
+                    if (called == "count") values.push_back(".counted(" + str(*r.name) + ", " + q + ")");
+                    else if (called == "sum") values.push_back(".summed(" + str(*r.name) + ", " + q + ", " + str(m->member) + ")");
+                    else values.push_back(".value(" + str(*r.name) + ", " + q + ", " + str(m->member) + (keys.empty() ? "" : ", " + bracketed(std::accumulate(keys.begin(), keys.end(), std::string()))) + ")");
                 }
                 if (!fields.empty()) out.emplace_back(".fields(" + strings(fields) + ")", at);
                 for (const auto& line : values) out.emplace_back(line, at);

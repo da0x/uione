@@ -13,6 +13,7 @@
 #include <ctime>
 #include <format>
 #include <stdexcept>
+#include <unordered_set>
 
 namespace one::local {
 
@@ -204,8 +205,18 @@ namespace one::local {
 		return *this;
 	}
 
-	view_description& view_description::value(std::string value_name, query from, std::string field) {
-		last(*this, "a value").values.push_back({std::move(value_name), std::move(from), std::move(field)});
+	view_description& view_description::value(std::string value_name, query from, std::string field, std::vector<by> order) {
+		last(*this, "a value").values.push_back({std::move(value_name), std::move(from), std::move(field), value_of::first, std::move(order)});
+		return *this;
+	}
+
+	view_description& view_description::counted(std::string value_name, query from) {
+		last(*this, "a count").values.push_back({std::move(value_name), std::move(from), "", value_of::counted});
+		return *this;
+	}
+
+	view_description& view_description::summed(std::string value_name, query from, std::string field) {
+		last(*this, "a sum").values.push_back({std::move(value_name), std::move(from), std::move(field), value_of::summed});
 		return *this;
 	}
 
@@ -281,10 +292,8 @@ namespace one::local {
 	}
 
 	package::reading package::from(const store& entities) {
-		return {[&entities](const std::string& kind) {
-			        std::vector<value> rows;
-			        for (const value* row : entities.each(kind)) rows.push_back(*row);
-			        return rows;
+		return {[&entities](const std::string& kind, const std::function<void(const value&)>& row) {
+			        for (const value* each : entities.each(kind)) row(*each);
 		        },
 		        [&entities](const std::string& kind, const std::string& id) -> std::optional<value> {
 			        const value* row = entities.find(kind, id);
@@ -293,7 +302,9 @@ namespace one::local {
 	}
 
 	package::reading package::from(const step& changes) {
-		return {[&changes](const std::string& kind) { return changes.each(kind); },
+		return {[&changes](const std::string& kind, const std::function<void(const value&)>& row) {
+			        for (const value& each : changes.each(kind)) row(each);
+		        },
 		        [&changes](const std::string& kind, const std::string& id) { return changes.find(kind, id); }};
 	}
 
@@ -334,41 +345,122 @@ namespace one::local {
 			    c);
 		}
 
+		// Whether a row passes every condition of one way of a query.
+		bool passes(const query& way, const value& candidate, const entity_description* kind, const package::reading& r, const value* subject, const std::string& row) {
+			for (const auto& c : way.conditions) {
+				value got = field_of(candidate, c.field, kind, r);
+				value wanted = wanted_of(c.wanted, subject, row);
+				bool holds = false;
+				if (c.test == query::condition::holds) {
+					for (const auto& item : got.as_array()) holds = holds || alike(item, wanted);
+				} else {
+					holds = nothing(wanted) ? nothing(got) : alike(got, wanted);
+					if (c.test == query::condition::is_not) holds = !holds;
+				}
+				if (!holds) return false;
+			}
+			return true;
+		}
+
 	}  // namespace
 
 	std::vector<value> package::picked(const query& q, const reading& r, const value* subject, const std::string& row) const {
 		std::vector<value> out;
-		std::vector<std::string> seen;
+		std::unordered_set<std::string> seen;
 		std::vector<const query*> ways{&q};
 		for (const auto& other : q.others) ways.push_back(&other);
 		for (const query* way : ways) {
 			const entity_description* kind = entity(way->entity);
-			for (const value& candidate : r.each(way->entity)) {
-				bool kept = true;
-				for (const auto& c : way->conditions) {
-					value got = field_of(candidate, c.field, kind, r);
-					value wanted = wanted_of(c.wanted, subject, row);
-					bool holds = false;
-					if (c.test == query::condition::holds) {
-						for (const auto& item : got.as_array()) holds = holds || alike(item, wanted);
-					} else {
-						holds = nothing(wanted) ? nothing(got) : alike(got, wanted);
-						if (c.test == query::condition::is_not) holds = !holds;
-					}
-					if (!holds) {
-						kept = false;
-						break;
-					}
-				}
-				std::string id = candidate["id"].as_string();
-				if (kept && std::ranges::find(seen, id) == seen.end()) {
-					seen.push_back(id);
-					out.push_back(candidate);
-				}
-			}
+			r.each(way->entity, [&](const value& candidate) {
+				if (passes(*way, candidate, kind, r, subject, row) && seen.insert(candidate["id"].as_string()).second) out.push_back(candidate);
+			});
 		}
 		return out;
 	}
+
+	// Each row's value of one of a list's values: when its query picks those that name the
+	// row by one field, its rows are read once, each kept toward the row it names, so a
+	// view of many rows over many more reads them once, not once a row; otherwise
+	// picked for each.
+	class package::row_values {
+	public:
+		row_values(const view_description::value_of& of, const package& p, const reading& r, const value* about) : of_(of), kind_(p.entity(of.from.entity)), r_(r) {
+			const auto& conditions = of.from.conditions;
+			auto names_row = [](const query::condition& c) { return std::holds_alternative<row_marker>(c.wanted); };
+			auto naming = std::ranges::find_if(conditions, names_row);
+			if (!of.from.others.empty() || naming == conditions.end() || naming->test != query::condition::is || naming->field.find('.') != std::string::npos ||
+			    std::ranges::count_if(conditions, names_row) != 1) {
+				return;
+			}
+			query rest{of.from.entity, {}, {}};
+			for (const auto& c : conditions) {
+				if (&c != &*naming) rest.conditions.push_back(c);
+			}
+			grouped_ = true;
+			r.each(of.from.entity, [&](const value& candidate) {
+				const value& named = candidate[naming->field];
+				if (named.is_string() && passes(rest, candidate, kind_, r, about, "")) take(by_row_[named.text], candidate);
+			});
+			for (auto& [_, w] : by_row_) settle(w);
+		}
+
+		template <class Picking>
+		value of(const std::string& row, Picking pick) const {
+			if (!grouped_) {
+				so_far all;
+				std::vector<value> found = pick();
+				for (const value& candidate : found) take(all, candidate);
+				settle(all);
+				return said(all);
+			}
+			auto found = by_row_.find(row);
+			return said(found == by_row_.end() ? so_far{} : found->second);
+		}
+
+	private:
+		// How many so far, what they add up to, and the first in its order, while the
+		// rows are read, then the field it gives.
+		struct so_far {
+			long long count = 0;
+			double sum = 0;
+			const value* best = nullptr;
+			value first;
+		};
+
+		void take(so_far& w, const value& candidate) const {
+			++w.count;
+			if (of_.kind == view_description::value_of::summed && numeric(candidate[of_.field])) w.sum += candidate[of_.field].as_double();
+			if (of_.kind == view_description::value_of::first && (!w.best || before(candidate, *w.best))) w.best = &candidate;
+		}
+
+		void settle(so_far& w) const {
+			if (w.best) w.first = (*w.best)[of_.field];
+			w.best = nullptr;
+		}
+
+		// First by its order's fields, then when it was made, then its id.
+		bool before(const value& a, const value& b) const {
+			for (const auto& o : of_.order) {
+				value x = field_of(a, o.field, kind_, r_), y = field_of(b, o.field, kind_, r_);
+				if (o.through) x = o.through(x), y = o.through(y);
+				if (int c = compare(x, y); c != 0) return (c < 0) != o.descending;
+			}
+			if (int c = compare(a["created_at"], b["created_at"]); c != 0) return c < 0;
+			return a["id"].as_string() < b["id"].as_string();
+		}
+
+		value said(const so_far& w) const {
+			if (of_.kind == view_description::value_of::counted) return value(w.count);
+			if (of_.kind == view_description::value_of::summed) return value(w.sum);
+			return w.first;
+		}
+
+		const view_description::value_of& of_;
+		const entity_description* kind_;
+		const reading& r_;
+		bool grouped_ = false;
+		std::map<std::string, so_far> by_row_;
+	};
 
 	std::optional<value> package::build(const view_description& v, const store& entities, const std::string& subject) const {
 		reading r = from(entities);
@@ -398,16 +490,14 @@ namespace one::local {
 				});
 			}
 			if (l.limit > 0 && rows.size() > static_cast<std::size_t>(l.limit)) rows.resize(static_cast<std::size_t>(l.limit));
+			std::map<const view_description::value_of*, row_values> worked;
+			for (const auto& val : l.values) worked.emplace(&val, row_values(val, *this, r, about));
 			std::vector<value> shown;
 			for (const value& row : rows) {
 				value out = value::map();
 				out.fields["id"] = row["id"];
 				for (const auto& name : l.fields) out.fields[name] = field_of(row, name, kind, r);
-				for (const auto& val : l.values) {
-					std::vector<value> found = picked(val.from, r, about, row["id"].as_string());
-					by_age(found, true);  // the earliest made
-					out.fields[val.name] = found.empty() ? value() : found.front()[val.field];
-				}
+				for (const auto& val : l.values) out.fields[val.name] = worked.at(&val).of(row["id"].as_string(), [&] { return picked(val.from, r, about, row["id"].as_string()); });
 				shown.push_back(std::move(out));
 			}
 			document.fields[l.name] = value(std::move(shown));

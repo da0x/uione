@@ -4613,11 +4613,28 @@ namespace one::language {
             }
         }
 
+        // A field a list's rows hold: their entity's, or one a row takes from the first of
+        // another, as cover = first(photo where ...).picture holds what picture does.
+        const field* row_field(const std::string& ns, const view_each& rows, const entity_declaration& entity, const std::string& name) {
+            for (const auto& r : rows.rows) {
+                if (!r.name || *r.name != name) continue;
+                auto* m = std::get_if<member_expression>(&r.value->node);
+                auto* call = m ? std::get_if<call_expression>(&m->object->node) : nullptr;
+                auto* callee = call ? std::get_if<name_expression>(&call->callee->node) : nullptr;
+                if (!callee || callee->name.text() != "first" || call->arguments.size() != 1) return nullptr;
+                auto* w = std::get_if<where_expression>(&call->arguments[0]->node);
+                auto* source = std::get_if<name_expression>(&(w ? *w->source : *call->arguments[0]).node);
+                const entity_declaration* other = source ? find_entity(ns, source->name) : nullptr;
+                return other ? find_field(*other, m->member) : nullptr;
+            }
+            return find_field(entity, name);
+        }
+
         // picture preview fit, in cards or a table: a file each row holds.
         void verify_picture(const std::string& ns, const view_each& rows, const qualified_name& view, const std::optional<std::string>& list, const std::string& picture,
                             location where) {
             const entity_declaration* entity = listed_entity(ns, rows);
-            const field* f = entity ? find_field(*entity, picture) : nullptr;
+            const field* f = entity ? row_field(ns, rows, *entity, picture) : nullptr;
             if (entity && (!f || !f->type || f->type->text() != "file" || f->list)) error(where, entity->name + "." + picture + " is shown as a picture, so it's a file");
             else if (!in_rows(rows, picture)) error(where, "view " + view.text() + " has no " + picture + (list ? " in its " + *list : "") + "; add it to the list's block");
         }
@@ -5411,7 +5428,13 @@ namespace one::language {
                     if (found && !field_or_id(*found, m->member)) {
                         error(where, "entity " + found->name + " has no field " + m->member + nearest(m->member, field_names(*found)));
                     }
-                    return found ? field_or_id(*found, m->member) : nullptr;
+                    // sum(photo where ...).bytes: a number they hold, added up.
+                    const field* read = found ? field_or_id(*found, m->member) : nullptr;
+                    auto* callee = std::get_if<name_expression>(&call->callee->node);
+                    if (read && callee && callee->name.text() == "sum" && (!read->type || read->type->text() != "number" || read->list)) {
+                        error(where, "sum adds up a number, and " + found->name + " holds no number " + m->member);
+                    }
+                    return read;
                 }
                 // issue.project.visibility: a field of what a field points at.
                 if (std::holds_alternative<member_expression>(m->object->node)) {
@@ -5495,8 +5518,9 @@ namespace one::language {
         }
 
         // `loan where ...`: the condition is about the entity named before where, and
-        // a row's own id may be compared with it. Returns that entity.
-        const entity_declaration* where_of(const context& outer, const where_expression& w) {
+        // a row's own id may be compared with it; first's may be ordered by its fields.
+        // Returns that entity.
+        const entity_declaration* where_of(const context& outer, const where_expression& w, bool ordered = false) {
             auto* source = std::get_if<name_expression>(&w.source->node);
             const entity_declaration* e = source ? find_entity(outer.ns, source->name) : nullptr;
             if (!e) {
@@ -5506,11 +5530,20 @@ namespace one::language {
             context inner{outer.ns, e, outer.row ? outer.row : outer.entity, {}, outer.reader, outer.subject};
             inner.command = outer.command;
             if (w.condition) resolve(inner, *w.condition);
+            if (!w.order.empty() && !ordered) error(w.order[0]->where, "only first takes an order, the one it takes first, like first(loan where ... order by due descending)");
+            for (const auto& key : w.order) {
+                const expression* k = key.get();
+                if (auto* u = std::get_if<unary_expression>(&k->node); u && u->op == token_kind::minus) k = u->operand.get();
+                std::size_t errors = out_.size();
+                if (!resolve(inner, *k) && out_.size() == errors) {
+                    error(k->where, "first takes the first by a field of " + e->name + ", like order by created_at descending");
+                }
+            }
             return e;
         }
 
-        // A call: count and first of an entity, starts_with and drop on text, or a
-        // function the file declares. Returns the entity count or first is about.
+        // A call: count, first and sum of an entity, starts_with and drop on text, or a
+        // function the file declares. Returns the entity count, first or sum is about.
         const entity_declaration* called(const context& in, const call_expression& call) {
             auto* callee = std::get_if<name_expression>(&call.callee->node);
             std::string name = callee ? callee->name.text() : "";
@@ -5522,10 +5555,10 @@ namespace one::language {
                 }
                 return true;
             };
-            if (name == "count" || name == "first") {
+            if (name == "count" || name == "first" || name == "sum") {
                 if (!arguments(1)) return nullptr;
                 const auto& argument = *call.arguments[0];
-                if (auto* w = std::get_if<where_expression>(&argument.node)) return where_of(in, *w);
+                if (auto* w = std::get_if<where_expression>(&argument.node)) return where_of(in, *w, name == "first");
                 auto* entity = std::get_if<name_expression>(&argument.node);
                 const entity_declaration* e = entity ? find_entity(in.ns, entity->name) : nullptr;
                 if (!e) error(argument.where, name + " needs an entity, like " + name + "(loan)");

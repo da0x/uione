@@ -59,6 +59,7 @@ namespace one::language {
                     } else if constexpr (std::is_same_v<T, where_expression>) {
                         reader(node.source);
                         reader(node.condition);
+                        for (auto& key : node.order) reader(key);
                     } else if constexpr (std::is_same_v<T, unary_expression>) reader(node.operand);
                     else if constexpr (std::is_same_v<T, binary_expression>) {
                         reader(node.left);
@@ -221,6 +222,7 @@ namespace one::language {
                         } else if constexpr (std::is_same_v<T, where_expression>) {
                             reading(node.source);
                             reading(node.condition);
+                            for (const auto& key : node.order) reading(key);
                         } else if constexpr (std::is_same_v<T, unary_expression>) reading(node.operand);
                         else if constexpr (std::is_same_v<T, binary_expression>) {
                             reading(node.left);

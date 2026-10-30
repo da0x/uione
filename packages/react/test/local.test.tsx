@@ -64,6 +64,17 @@ function library() {
     .order(by("title", sortTitle))
     .fields(["shelfmark", "title", "author", "status"])
     .value("lent_to", first("library::loan").where("book", row).where("returned_at", none), "member");
+  // For each book: how many times it's been lent, how many are out, their numbers added
+  // up, and who had it last and first.
+  const lending = view("library::lending")
+    .each(all("library::book"))
+    .order("title")
+    .fields(["title"])
+    .counted("times_lent", where("library::loan", "book", row))
+    .counted("out", where("library::loan", "book", row).where("returned_at", none))
+    .summed("numbers", where("library::loan", "book", row), "number")
+    .value("last_member", where("library::loan", "book", row), "member", [by("-number")])
+    .value("first_member", where("library::loan", "book", row), "member");
   const desk = view("library::desk").each(where("library::loan", "returned_at", none)).order("due_at").fields(["book.title", "member", "due_at"]);
   const bookPage = view("library::book_page")
     .per("library::book")
@@ -76,7 +87,7 @@ function library() {
     .list("loans", where("library::loan", "book", subject))
     .order("-number")
     .fields(["number", "member", "returned_at"]);
-  return localPackage("library", [book, loan], [bookCreate, update, withdraw, loanCreate, checkin], [shelf, desk, bookPage]);
+  return localPackage("library", [book, loan], [bookCreate, update, withdraw, loanCreate, checkin], [shelf, lending, desk, bookPage]);
 }
 
 // A source on a store of its own, the library installed, and every command's answer.
@@ -186,6 +197,48 @@ describe("a local package", () => {
     expect(loans.map((l) => l["number"])).toEqual([3, 2, 1]);
     expect(loans[0]!["returned_at"]).toBeTruthy();
     expect(a.shown("library::book_page", "NOT-0000")).toEqual({});
+  });
+
+  it("says for each row how many of another name it, what a number of theirs adds up to, and a field of the first in an order, kept as they come and go", async () => {
+    const a = await app();
+    await a.ok("library::book::create", book("Dune", "SCI-0001"));
+    await a.ok("library::book::create", book("Emma", "LIT-0002"));
+    for (const member of ["maya", "omar", "lena"]) {
+      await a.ok("library::loan::create", { book: "SCI-0001", member, due_at: due });
+      if (member !== "lena") await a.ok("library::loan::checkin", { id: `SCI-0001-${member === "maya" ? 1 : 2}` });
+    }
+    let rows = a.shown("library::lending")!["rows"] as Row[];
+    expect(rows.map((r) => [r["title"], r["times_lent"], r["out"], r["numbers"], r["last_member"], r["first_member"]])).toEqual([
+      ["Dune", 3, 1, 6, "lena", "maya"],
+      ["Emma", 0, 0, 0, null, null],
+    ]);
+    // Lent again, it's told at once.
+    await a.ok("library::loan::create", { book: "LIT-0002", member: "maya", due_at: due });
+    rows = a.shown("library::lending")!["rows"] as Row[];
+    expect([rows[1]!["times_lent"], rows[1]!["last_member"]]).toEqual([1, "maya"]);
+  });
+
+  it("reads the rows a value for each row counts once, not once a row, so a view of many over many more is quick", () => {
+    const kept = new Rows();
+    const changes = [];
+    for (let b = 0; b < 50; b++) changes.push({ entity: "x::shelf", id: `s${b}`, fields: { name: `s${b}` } });
+    for (let i = 0; i < 20000; i++) changes.push({ entity: "x::clipping", id: `c${i}`, fields: { shelf: `s${i % 50}`, bytes: i } });
+    kept.apply({ command: "", at: "", changes });
+    const m = localPackage("x", [entity("x::shelf", [{ name: "name" }]), entity("x::clipping", [{ name: "shelf", refers: "x::shelf" }, { name: "bytes" }])], [], []);
+    const shelves = view("x::shelves")
+      .each(all("x::shelf"))
+      .fields(["name"])
+      .counted("total", where("x::clipping", "shelf", row))
+      .summed("size", where("x::clipping", "shelf", row), "bytes")
+      .value("newest", where("x::clipping", "shelf", row), "bytes", [by("-bytes")]);
+    const started = performance.now();
+    const rows = m.build(shelves, kept, "")!["rows"] as Row[];
+    const took = performance.now() - started;
+    expect(rows).toHaveLength(50);
+    expect(rows.reduce((n, r) => n + (r["total"] as number), 0)).toBe(20000);
+    const seventh = rows.find((r) => r["name"] === "s7")!;
+    expect([seventh["total"], seventh["newest"], seventh["size"]]).toEqual([400, 19957, 400 * 7 + (50 * 399 * 400) / 2]);
+    expect(took).toBeLessThan(2000);
   });
 
   it("tells a view as commands change it, and only when they do", async () => {

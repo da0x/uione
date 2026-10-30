@@ -219,6 +219,39 @@ TEST_CASE("a local view counts its own list's rows, those its where keeps, and a
     CHECK(messages(with(with(counted, "\t\t\tx  w  kind\n", "\t\t\tw  kind\n"), "sum(layers).w", "sum(layers).x")) == std::vector<std::string>{"52: layers's rows don't hold x; list it in its block to add it up"});
 }
 
+TEST_CASE("a local list's row counts, adds up and takes the first of another entity naming it, the first in an order, in both") {
+    const std::string per_row = with(with(with(board, "\ttarget   desktop\n", "\ttarget   desktop web\n"), "\t\tx      number  = 0\n", "\t\tx      number  = 0\n\t\tpicture  file\n"),
+                                     "\t\t\torder by name\n\t\t\tname\n",
+                                     "\t\t\torder by name\n\t\t\tname\n\t\t\tplaced = count(layer where layer.board == board.id)\n"
+                                     "\t\t\twidth = sum(layer where layer.board == board.id).w\n"
+                                     "\t\t\tcover = first(layer where layer.board == board.id order by layer.x descending).picture\n"
+                                     "\t\t\toldest = first(layer where layer.board == board.id).picture\n");
+    language::diagnostics out;
+    auto files = parsed(with(per_row, "\t\ttable boards {\n\t\t\tname\n\t\t}\n", "\t\tcards boards {\n\t\t\tname\n\t\t\tpicture cover fill\n\t\t}\n"), out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_local(files);
+    for (const auto& e : generated.errors) FAIL_CHECK(language::format(e));
+    REQUIRE(generated.files.size() == 1);
+    REQUIRE(generated.web.size() == 1);
+    CHECK(generated.files[0].content.find("\t\t\t\t\t.counted(\"placed\", all(\"pinned::layer\").where(\"board\", row))\n"
+                                          "\t\t\t\t\t.summed(\"width\", all(\"pinned::layer\").where(\"board\", row), \"w\")\n"
+                                          "\t\t\t\t\t.value(\"cover\", all(\"pinned::layer\").where(\"board\", row), \"picture\", {by(\"-x\")})\n"
+                                          "\t\t\t\t\t.value(\"oldest\", all(\"pinned::layer\").where(\"board\", row), \"picture\"),\n") != std::string::npos);
+    CHECK(generated.web[0].content.find("        .counted(\"placed\", all(\"pinned::layer\").where(\"board\", row))\n"
+                                        "        .summed(\"width\", all(\"pinned::layer\").where(\"board\", row), \"w\")\n"
+                                        "        .value(\"cover\", all(\"pinned::layer\").where(\"board\", row), \"picture\", [by(\"-x\")])\n") != std::string::npos);
+    // Only first is ordered, by a field of what it takes; only a number is added up; and
+    // what's taken through first is shown as what it is.
+    CHECK(messages(with(per_row, "count(layer where layer.board == board.id)", "count(layer where layer.board == board.id order by x)")) ==
+          std::vector<std::string>{"41: only first takes an order, the one it takes first, like first(loan where ... order by due descending)"});
+    CHECK(messages(with(per_row, "order by layer.x descending", "order by height descending")) ==
+          std::vector<std::string>{"43: entity layer has no field height"});
+    CHECK(messages(with(per_row, "sum(layer where layer.board == board.id).w", "sum(layer where layer.board == board.id).kind")) ==
+          std::vector<std::string>{"42: sum adds up a number, and layer holds no number kind"});
+    CHECK(says(messages(with(with(per_row, "\t\ttable boards {\n\t\t\tname\n\t\t}\n", "\t\tcards boards {\n\t\t\tname\n\t\t\tpicture placed fill\n\t\t}\n"), "", "")),
+               "board.placed is shown as a picture, so it's a file"));
+}
+
 TEST_CASE("what local storage can't do yet is an error at its line, and nothing's written") {
     language::diagnostics out;
     auto files = parsed(with(board, "\tscreen \"Boards\"", "\tfunction twice(n) {\n\t\treturn n * 2\n\t}\n\n\tscreen \"Boards\""), out);
