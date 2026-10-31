@@ -178,15 +178,25 @@ function Hero(p: LandingProps) {
 
 // A launcher the page opens on: alone on the first screen, at the center of the window
 // rather than of what's left under the bar, so it's raised by however far down it starts.
-function Opening({ group }: { group: Group }) {
+// When it's the whole page, it's in the middle of what's between the bar and what's
+// under it, like the footer, so that stays on the first screen too.
+function Opening({ group, whole }: { group: Group; whole: boolean }) {
   const place = useRef<HTMLElement>(null);
   const [raised, setRaised] = useState(0);
+  const [under, setUnder] = useState(0);
   useLayoutEffect(() => {
     const at = place.current;
-    if (at) setRaised(at.getBoundingClientRect().top + window.scrollY);
-  }, []);
+    if (!at) return;
+    const box = at.getBoundingClientRect();
+    setRaised(box.top + window.scrollY);
+    if (whole) setUnder(document.documentElement.scrollHeight - (box.bottom + window.scrollY));
+  }, [whole]);
   return (
-    <section ref={place} className="flex min-h-svh flex-col items-center justify-center gap-12 text-center" style={{ marginTop: -raised }}>
+    <section
+      ref={place}
+      className="flex min-h-svh flex-col items-center justify-center gap-12 text-center"
+      style={whole ? { minHeight: `calc(100svh - ${raised + under}px)` } : { marginTop: -raised }}
+    >
       {(group.heading?.overline !== undefined || group.heading?.title) && (
         <div className="flex flex-col items-center gap-3">
           <Quiet>{group.heading?.overline}</Quiet>
@@ -220,10 +230,12 @@ function Letter({ feature }: { feature: LandingFeature }) {
 }
 
 export function Folio(p: LandingProps) {
+  const shown = pieces(p);
+  const whole = shown.length === 1 && shown[0].kind === "group" && launched(shown[0].group);
   return (
     <div className="one-landing">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-24 px-6 pt-10 pb-24 sm:pt-16">
-        {pieces(p).map((piece, at) => {
+      <div className={`mx-auto flex w-full max-w-6xl flex-col gap-24 px-6 pt-10 sm:pt-16 ${whole ? "" : "pb-24"}`}>
+        {shown.map((piece, at) => {
           if (piece.kind === "hero") return <Hero key={at} {...p} />;
           if (piece.kind === "statement")
             return (
@@ -248,7 +260,7 @@ export function Folio(p: LandingProps) {
             );
           }
           const g = piece.group;
-          if (at === 0 && launched(g)) return <Opening key={at} group={g} />;
+          if (at === 0 && launched(g)) return <Opening key={at} group={g} whole={whole} />;
           if (alone(g)) return <Letter key={at} feature={g.features[0]} />;
           return (
             <Part key={at} overline={g.heading?.overline} title={g.heading?.title} text={g.heading?.text}>

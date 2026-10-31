@@ -2822,14 +2822,17 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   large and plain; what it offers as numbered entries between hairlines, each
   group's title in the margin, or, when every offering in a group has an icon, as a
   launcher, each icon on a tile with its name under it, alone at the center of the
-  first screen when the page opens on it; and an offering standing alone, with no
+  first screen when the page opens on it, or, when it's all the page has, between
+  the bar and the footer, so both are on that screen; and an offering standing alone, with no
   others beside it, as a letter, a narrow column of words; with no motion at all. The design takes the screen's `hero`, with its
   words and links, the first link the one it's for; its sections of words alone, as
   what the site offers, each opened pressed anywhere on it when it holds a link, like
   `link "https://notes.example.com" "Open notes"`; and its other sections, like one with a form, as what it
   asks. Anything else, like a table, comes before the design, or, in `relay`, right
   under its board. Each is drawn in the theme's colors, and its motion stops for
-  whoever asks for less. A landing page has no `layout`; its design lays it out.
+  whoever asks for less. A landing page has no `layout`; its design lays it out. Nor a title over it: its
+  design is its heading, so the screen's name is only in the window's title and the
+  top bar.
 
 ```one
 screen "Press" / landing grid {
