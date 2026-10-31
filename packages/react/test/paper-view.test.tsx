@@ -274,9 +274,22 @@ describe("a paper", () => {
 
   it("sets the face of every chemistry key, as ce( ) reads it", () => {
     const tabs = kindOf("chem").apart?.keys ?? [];
-    expect(tabs.map((t) => t.name)).toEqual(["Common", "Arrows", "States", "Charges", "Elements"]);
-    const unset = tabs.flatMap((t) => t.keys.filter((k) => !renderToStaticMarkup(<>{k.face}</>).includes('role="img"')).map((k) => `${t.name}: ${k.name}`));
+    expect(tabs.map((t) => t.name)).toEqual(["Elements", "Common", "Arrows", "States", "Charges"]);
+    const unset = tabs.slice(1).flatMap((t) => t.keys.filter((k) => !renderToStaticMarkup(<>{k.face}</>).includes('role="img"')).map((k) => `${t.name}: ${k.name}`));
     expect(unset).toEqual([]);
+  });
+
+  it("lays every element out at its own place in the periodic table, each shown whole when held", () => {
+    const elements = kindOf("chem").apart?.keys?.[0];
+    expect(elements?.columns).toBe(18);
+    const places = new Set(elements?.keys.map((k) => String(k.at)));
+    expect(elements?.keys.length).toBe(118);
+    expect(places.size).toBe(118);
+    const at = (name: string) => elements?.keys.find((k) => k.name === name)?.at;
+    expect([at("Hydrogen"), at("Helium"), at("Sodium"), at("Chlorine"), at("Iron"), at("Lanthanum"), at("Lutetium"), at("Hafnium"), at("Oganesson")]).toEqual([
+      [1, 1], [1, 18], [3, 1], [3, 17], [4, 8], [9, 3], [9, 17], [6, 4], [7, 18],
+    ]);
+    expect(renderToStaticMarkup(<>{elements?.keys[10]?.held}</>)).toContain("Sodium");
   });
 
   it("sets the face of every equation key, as the notation reads it", () => {

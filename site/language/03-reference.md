@@ -2591,9 +2591,13 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     words at the caret, the caret then where the next thing goes, and with words
     chosen it's put around them, so √ makes `x+1` into `sqrt(x+1)`. A chem block is
     written the same way, in what `ce( )` holds, like `2H2 + O2 -> 2H2O`. Its keys are
-    Common, Arrows, States, Charges and Elements, all 118, and under its words it says
-    as they're typed whether the reaction balances, or, one thing alone, its molar
-    mass, like `18.02 g/mol`. A code block written apart has its words over several
+    Elements, all 118, then Common, Arrows, States and Charges, and under its words it
+    says as they're typed whether the reaction balances, or, one thing alone, its molar
+    mass, like `18.02 g/mol`. On the web, its Elements are laid out as the periodic
+    table, each tinted by its family; a finger slid across them shows the one under it,
+    larger, with its name and weight, and puts it when it's let go. There, too, the
+    reaction is drawn over its equation as its elements' squares, each with its number
+    and weight, as the table shows them: 2 [Na] + [Cl]₂ → 2 [Na][Cl]. A code block written apart has its words over several
     lines, kept with Control and Enter, and its language chosen there, one of
     one::syntax's, like C++, Python or SQL, or plain text. It's kept in the block's
     `language`, like `cpp`, which `write` changes too, so it's in what the command

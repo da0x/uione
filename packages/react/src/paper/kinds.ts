@@ -79,10 +79,14 @@ export interface BlockKind {
 
 // A row of keys on the sheet a block's written apart on, under a tab of its name. Each
 // puts its words at the caret, the caret then where ‸ is, or after them; with words
-// chosen, it's put around them, where § is, when it says how.
+// chosen, it's put around them, where § is, when it says how. Keys laid out on a grid
+// of so many columns, each at its row and column, as the periodic table's are, are small:
+// a finger slid across them shows the one under it, as it says when held, and puts it
+// when it's let go.
 export interface ApartKeys {
   name: string;
-  keys: { name: string; face: ReactNode; put: string; around?: string }[];
+  keys: { name: string; face: ReactNode; put: string; around?: string; at?: [row: number, column: number]; held?: ReactNode }[];
+  columns?: number;
 }
 
 // The family a page's face is: a book's serif, the app's own text face, a lyric's

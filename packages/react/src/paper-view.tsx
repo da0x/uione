@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { CSSProperties, KeyboardEvent, MouseEvent } from "react";
+import { createPortal } from "react-dom";
 import { useFiles, useRunner } from "./data.js";
 import type { ViewState } from "./data.js";
 import { useSaying } from "./said.js";
@@ -19,6 +20,7 @@ import { chooseFolder, choosePictures, handPictures, hintOf, notAPicture, setPic
 import { useUI } from "./ui.js";
 import { kindOf } from "./paper/index.js";
 import type { Parts } from "./paper/index.js";
+import type { ApartKeys } from "./paper/kinds.js";
 import { languages } from "./syntax.js";
 
 type Row = Record<string, unknown>;
@@ -1421,6 +1423,9 @@ function Apart({
               </button>
             ))}
           </div>
+          {tabs[tab]?.columns ? (
+            <GriddedKeys keys={tabs[tab]!} press={press} />
+          ) : (
           <div role="tabpanel" aria-label={tabs[tab]?.name} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(52px, 1fr))", gap: 6 }}>
             {tabs[tab]?.keys.map((k) => (
               <button
@@ -1437,6 +1442,7 @@ function Apart({
               </button>
             ))}
           </div>
+          )}
         </div>
       )}
     </div>
@@ -1444,6 +1450,68 @@ function Apart({
   if (narrow) return dialog;
   // Over the page, dimmed behind it, and nothing behind it pressed while it's there.
   return <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "grid", placeItems: "center", background: "rgba(0, 0, 0, 0.32)" }}>{dialog}</div>;
+}
+
+// Keys at their places on a grid, too small to press one at a time with a finger: a
+// finger slid across them shows the one under it, larger, above it, and puts it when
+// it's let go, or nothing if it's let go off them. A key pressed from the keyboard is
+// put as any other's.
+function GriddedKeys({ keys, press }: { keys: ApartKeys; press: (key: { put: string; around?: string }) => void }) {
+  const [held, setHeld] = useState<{ key: number; x: number; y: number } | undefined>();
+  const under = (e: { clientX: number; clientY: number }) => {
+    const key = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>("[data-key]");
+    if (!key) return undefined;
+    const box = key.getBoundingClientRect();
+    return { key: Number(key.dataset.key), x: box.left + box.width / 2, y: box.top };
+  };
+  return (
+    <div
+      role="tabpanel"
+      aria-label={keys.name}
+      style={{ display: "grid", gridTemplateColumns: `repeat(${keys.columns}, minmax(0, 1fr))`, gap: 2, containerType: "inline-size", touchAction: "none", userSelect: "none", WebkitUserSelect: "none" }}
+      onPointerDown={(e) => {
+        e.preventDefault();
+        e.currentTarget.setPointerCapture(e.pointerId);
+        setHeld(under(e));
+      }}
+      onPointerMove={(e) => {
+        if (held !== undefined || e.buttons) setHeld(under(e));
+      }}
+      onPointerUp={(e) => {
+        const at = under(e);
+        setHeld(undefined);
+        if (at) press(keys.keys[at.key]!);
+      }}
+      onPointerCancel={() => setHeld(undefined)}
+    >
+      {keys.keys.map((k, i) => (
+        <button
+          key={k.name}
+          type="button"
+          data-key={i}
+          aria-label={k.name}
+          title={k.name}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={(e) => {
+            if (e.detail === 0) press(k);
+          }}
+          style={{ gridRow: k.at?.[0], gridColumn: k.at?.[1], aspectRatio: "1", padding: 0, font: "inherit", color: "inherit", background: "none", border: "none", cursor: "pointer", outlineOffset: 1, opacity: held && held.key !== i ? 0.85 : 1 }}
+        >
+          {k.face}
+        </button>
+      ))}
+      {held &&
+        createPortal(
+          <div
+            aria-hidden
+            style={{ position: "fixed", left: Math.min(Math.max(held.x, 56), window.innerWidth - 56), top: held.y - 10, transform: "translate(-50%, -100%)", zIndex: 60, fontSize: 15, pointerEvents: "none", filter: "drop-shadow(0 6px 16px rgba(0, 0, 0, 0.28))" }}
+          >
+            {keys.keys[held.key]?.held ?? keys.keys[held.key]?.face}
+          </div>,
+          document.body,
+        )}
+    </div>
+  );
 }
 
 // One block: its words typed into where they are, set as its kind says. A math block is
