@@ -998,7 +998,13 @@ namespace one::desktop::runtime {
 				const card_model& card = made[i];
 				opens[card.id] = card.address;
 				std::vector<desktop::view> inside;
-				if (!spec.picture.empty()) inside.push_back(picture_of(p, rows[i][spec.picture].as_string(), spec.fit, 180, 640));
+				if (const value& shows = spec.picture.empty() ? value() : rows[i][spec.picture]; shows.is_array()) {
+					std::vector<std::string> kept;
+					for (const auto& one : shows.as_array()) kept.push_back(one.as_string());
+					inside.push_back(pictures_of(p, kept, 0.75f, 960));
+				} else if (!spec.picture.empty()) {
+					inside.push_back(picture_of(p, shows.as_string(), spec.fit, 180, 640));
+				}
 				// Its title in the text's face, strong, as large as a small heading: a card's name,
 				// not a heading over the page's parts.
 				auto title = t.strong();
@@ -1031,16 +1037,21 @@ namespace one::desktop::runtime {
 			for (const auto& [id, address] : opens) {
 				if (!left.empty() && address == left) start = id;
 			}
-			// Cards with pictures are a gallery, side by side as many as fit, as on the web.
+			// Cards with pictures are a gallery, side by side as many as fit, as on the web; those
+			// with several set together, as a collection's cover, are larger, stretched to fill
+			// each line.
 			if (!spec.picture.empty()) {
+				bool several = std::ranges::any_of(rows, [&](const value& row) { return row[spec.picture].is_array(); });
 				std::vector<desktop::view> tiles;
 				for (auto& card : shown) {
 					std::string address = opens[card.key];
 					auto tile = desktop::pressable(std::move(card.shown), [&p, address] {
 						if (!address.empty()) p.open(address);
-					}).width(280);
+					});
+					if (!several) tile = std::move(tile).width(280);
 					tiles.push_back(card.key == start ? std::move(tile).autofocus().brought_into_view() : std::move(tile));
 				}
+				if (several) return desktop::tiles(std::move(tiles), 480).spacing(16);
 				return desktop::flow(std::move(tiles)).spacing(16);
 			}
 			auto listed = desktop::list(std::move(shown), {.on_open = [&p, opens](const std::string& id) {

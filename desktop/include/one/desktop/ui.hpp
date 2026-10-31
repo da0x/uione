@@ -82,6 +82,7 @@ namespace one::desktop {
 		std::string key;
 		edges padding;
 		std::optional<float> fixed_width, fixed_height;
+		std::optional<float> fixed_tall;  // as tall as so many times its width
 		float grow = 0;         // a share of what's left in a row or column
 		float spacing = 0;      // between children, in rows and columns
 		align cross = align::stretch;  // children across a row or column
@@ -187,6 +188,7 @@ namespace one::desktop {
 		view&& padding(edges e) && { element_->padding = e; return std::move(*this); }
 		view&& width(float w) && { element_->fixed_width = w; return std::move(*this); }
 		view&& height(float h) && { element_->fixed_height = h; return std::move(*this); }
+		view&& tall(float times) && { element_->fixed_tall = times; return std::move(*this); }
 		view&& grow(float share = 1) && { element_->grow = share; return std::move(*this); }
 		view&& spacing(float s) && { element_->spacing = s; return std::move(*this); }
 		view&& align(one::desktop::align a) && { element_->cross = a; return std::move(*this); }
@@ -287,6 +289,9 @@ namespace one::desktop {
 	// Children left to right, going on to a new line when the next doesn't fit, like
 	// buttons in a narrow column.
 	view flow(std::vector<view> children);
+	// Children in as many equal columns as fit, each at least `least` wide, stretched to
+	// fill the width, like a gallery's cards.
+	view tiles(std::vector<view> children, float least);
 	// The scale text is laid out at in the window being built, measured or drawn, for an
 	// element that lays out text of its own.
 	double text_scale();

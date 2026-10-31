@@ -97,6 +97,7 @@ function plainCards(status: string, cards: Card[], mosaic: boolean | undefined, 
       {cards.map((card, n) => (
         <article key={card.id} style={mosaic ? placed(n) : undefined}>
           {card.picture?.source && <img src={card.picture.source} alt="" />}
+          {card.picture?.sources?.map((source) => <img key={source} src={source} alt="" />)}
           <Title>{card.link ? <a {...card.link}>{card.title}</a> : card.title}</Title>
           {card.tags && card.tags.length > 0 && <p>{card.tags.join(", ")}</p>}
           {card.details.map((detail, i) => (

@@ -787,16 +787,23 @@ namespace one::generators {
                         continue;
                     }
                     // name = first(other where ... order by ...).field: a field of the first
-                    // that's found; count(other where ...): how many; sum(other where
+                    // that's found, or, as first(other where ..., 4).field, of the first so
+                    // many, a list; count(other where ...): how many; sum(other where
                     // ...).field: what a number of theirs adds up to.
                     auto* m = std::get_if<language::member_expression>(&r.value->node);
                     auto* call = std::get_if<language::call_expression>(m ? &m->object->node : &r.value->node);
                     auto* callee = call ? std::get_if<language::name_expression>(&call->callee->node) : nullptr;
                     std::string called = callee ? callee->name.text() : "";
-                    const language::expression* argument = call && call->arguments.size() == 1 ? call->arguments[0].get() : nullptr;
+                    const language::expression* argument = call && (call->arguments.size() == 1 || (called == "first" && call->arguments.size() == 2)) ? call->arguments[0].get() : nullptr;
                     auto* where = argument ? std::get_if<language::where_expression>(&argument->node) : nullptr;
                     auto* other = argument ? std::get_if<language::name_expression>(&(where ? *where->source : *argument).node) : nullptr;
                     bool known = other && entity(other->name.text()) && (m ? called == "first" || called == "sum" : called == "count");
+                    std::string many;
+                    if (known && call->arguments.size() == 2) {
+                        auto* n = std::get_if<language::literal_expression>(&call->arguments[1]->node);
+                        if (n && n->type == language::literal_expression::kind::number) many = n->value;
+                        else known = false;
+                    }
                     std::vector<std::string> keys;
                     if (where && known) {
                         for (const auto& k : where->order) {
@@ -814,7 +821,8 @@ namespace one::generators {
                     std::string q = query(other->name.text(), where ? where->condition.get() : nullptr, inner);
                     if (called == "count") values.push_back(".counted(" + str(*r.name) + ", " + q + ")");
                     else if (called == "sum") values.push_back(".summed(" + str(*r.name) + ", " + q + ", " + str(m->member) + ")");
-                    else values.push_back(".value(" + str(*r.name) + ", " + q + ", " + str(m->member) + (keys.empty() ? "" : ", " + bracketed(std::accumulate(keys.begin(), keys.end(), std::string()))) + ")");
+                    else values.push_back(".value(" + str(*r.name) + ", " + q + ", " + str(m->member) + (keys.empty() && many.empty() ? "" : ", " + bracketed(std::accumulate(keys.begin(), keys.end(), std::string()))) +
+                                          (many.empty() ? "" : ", " + many) + ")");
                 }
                 if (!fields.empty()) out.emplace_back(".fields(" + strings(fields) + ")", at);
                 for (const auto& line : values) out.emplace_back(line, at);

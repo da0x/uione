@@ -74,7 +74,8 @@ function library() {
     .counted("out", where("library::loan", "book", row).where("returned_at", none))
     .summed("numbers", where("library::loan", "book", row), "number")
     .value("last_member", where("library::loan", "book", row), "member", [by("-number")])
-    .value("first_member", where("library::loan", "book", row), "member");
+    .value("first_member", where("library::loan", "book", row), "member")
+    .value("last_two", where("library::loan", "book", row), "member", [by("-number")], 2);
   const desk = view("library::desk").each(where("library::loan", "returned_at", none)).order("due_at").fields(["book.title", "member", "due_at"]);
   const bookPage = view("library::book_page")
     .per("library::book")
@@ -199,7 +200,7 @@ describe("a local package", () => {
     expect(a.shown("library::book_page", "NOT-0000")).toEqual({});
   });
 
-  it("says for each row how many of another name it, what a number of theirs adds up to, and a field of the first in an order, kept as they come and go", async () => {
+  it("says for each row how many of another name it, what a number of theirs adds up to, and a field of the first in an order, or of the first so many, kept as they come and go", async () => {
     const a = await app();
     await a.ok("library::book::create", book("Dune", "SCI-0001"));
     await a.ok("library::book::create", book("Emma", "LIT-0002"));
@@ -208,9 +209,9 @@ describe("a local package", () => {
       if (member !== "lena") await a.ok("library::loan::checkin", { id: `SCI-0001-${member === "maya" ? 1 : 2}` });
     }
     let rows = a.shown("library::lending")!["rows"] as Row[];
-    expect(rows.map((r) => [r["title"], r["times_lent"], r["out"], r["numbers"], r["last_member"], r["first_member"]])).toEqual([
-      ["Dune", 3, 1, 6, "lena", "maya"],
-      ["Emma", 0, 0, 0, null, null],
+    expect(rows.map((r) => [r["title"], r["times_lent"], r["out"], r["numbers"], r["last_member"], r["first_member"], r["last_two"]])).toEqual([
+      ["Dune", 3, 1, 6, "lena", "maya", ["lena", "omar"]],
+      ["Emma", 0, 0, 0, null, null, []],
     ]);
     // Lent again, it's told at once.
     await a.ok("library::loan::create", { book: "LIT-0002", member: "maya", due_at: due });
@@ -230,7 +231,8 @@ describe("a local package", () => {
       .fields(["name"])
       .counted("total", where("x::clipping", "shelf", row))
       .summed("size", where("x::clipping", "shelf", row), "bytes")
-      .value("newest", where("x::clipping", "shelf", row), "bytes", [by("-bytes")]);
+      .value("newest", where("x::clipping", "shelf", row), "bytes", [by("-bytes")])
+      .value("newest_three", where("x::clipping", "shelf", row), "bytes", [by("-bytes")], 3);
     const started = performance.now();
     const rows = m.build(shelves, kept, "")!["rows"] as Row[];
     const took = performance.now() - started;
@@ -238,6 +240,7 @@ describe("a local package", () => {
     expect(rows.reduce((n, r) => n + (r["total"] as number), 0)).toBe(20000);
     const seventh = rows.find((r) => r["name"] === "s7")!;
     expect([seventh["total"], seventh["newest"], seventh["size"]]).toEqual([400, 19957, 400 * 7 + (50 * 399 * 400) / 2]);
+    expect(seventh["newest_three"]).toEqual([19957, 19907, 19857]);
     expect(took).toBeLessThan(2000);
   });
 

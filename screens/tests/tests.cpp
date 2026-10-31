@@ -9,9 +9,11 @@
 
 #include <cstdlib>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <iterator>
 #include <map>
+#include <set>
 
 #include "check.hpp"
 #include "one/screens/collage.hpp"
@@ -501,6 +503,47 @@ TEST("a mosaic's cards each go in their tile by their place alone, two blocks of
 	CHECK(mosaic_rows(4) == 2);
 	CHECK(mosaic_rows(5) == 4);
 	CHECK(mosaic_rows(11) == 6);
+}
+
+TEST("a cover takes five of its pictures by their shapes, the layout they fit best, portraits in tall places and landscapes in wide ones") {
+	auto laid = [](std::vector<double> tall, std::size_t seed) {
+		std::string out;
+		for (const auto& p : cover_places(tall, 4.0 / 3, seed)) out += std::format("{:.2f} {:.2f} {:.2f} {:.2f} {}|", p.x, p.y, p.w, p.h, p.picture);
+		return out;
+	};
+	CHECK(laid({}, 0).empty());
+	CHECK(laid({1.5}, 0) == "0.00 0.00 1.00 1.00 0|");
+	// Three portraits among landscapes stand next to each other across the top, the
+	// landscapes under them, whatever order they came in.
+	CHECK(laid({0.66, 1.5, 0.66, 1.5, 1.5, 0.66}, 0) == "0.00 0.00 0.33 0.62 1|0.33 0.00 0.33 0.62 3|0.67 0.00 0.33 0.62 4|0.00 0.62 0.50 0.38 0|0.50 0.62 0.50 0.38 2|");
+	// Portraits alone go only in tall places, and landscapes alone only in wide ones, each in
+	// several layouts as the seed picks.
+	auto alone = [](double tall, bool portrait) {
+		std::set<std::string> layouts;
+		bool fits = true;
+		for (std::size_t seed = 0; seed < 42; ++seed) {
+			std::string out;
+			for (const auto& p : cover_places(std::vector<double>(12, tall), 4.0 / 3, seed)) {
+				fits = fits && (p.w * 4 / 3 < p.h) == portrait;
+				out += std::format("{:.2f} {:.2f} {:.2f} {:.2f}|", p.x, p.y, p.w, p.h);
+			}
+			layouts.insert(out);
+		}
+		return fits ? layouts.size() : 0;
+	};
+	CHECK(alone(1.5, true) >= 4);
+	CHECK(alone(0.66, false) >= 6);
+	CHECK(alone(0.56, false) >= 4);
+	// A portrait among landscapes, when it's on the cover, takes a tall place.
+	bool taken = false, tall_place = true;
+	for (std::size_t seed = 0; seed < 42; ++seed) {
+		for (const auto& p : cover_places(std::vector<double>{0.66, 0.66, 1.5, 0.66, 0.66, 0.66}, 4.0 / 3, seed)) {
+			if (p.picture == 2) taken = true, tall_place = tall_place && p.w * 4 / 3 < p.h;
+		}
+	}
+	CHECK(taken);
+	CHECK(tall_place);
+	CHECK(cover_seed("ab") == 195);
 }
 
 TEST("a record's page steps to the one before or after it in its list's own order, and not past either end") {

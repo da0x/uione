@@ -22,7 +22,7 @@ import { Children, Fragment, useEffect, useId, useMemo, useRef, useState } from 
 import { createPortal } from "react-dom";
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
 import type { ButtonProps, CardGroup, CardsProps, ChoiceProps, ColorPickerProps, ComponentSet, DatedTimelineProps, OptionsProps, SliderProps } from "@uione/react";
-import { Surface, columnsPlace, markLength, marksAlong, mosaicRows, mosaicTile, timelineStep } from "@uione/react";
+import { Surface, columnsPlace, coverPlaces, coverSeed, markLength, marksAlong, mosaicRows, mosaicTile, timelineStep } from "@uione/react";
 import { highlight, highlightCodeBlocks } from "./highlight.js";
 import { MarkdownField, MarkdownText } from "./markdown.js";
 import { nameStyles, setCodeDisplay, tabWidths, useCodeDisplay } from "./display.js";
@@ -278,6 +278,32 @@ const tones: Record<number, string> = {
 };
 const toned = (tone: number | undefined) => (tone ? (tones[tone] ?? "") : "");
 const edged = (tone: number | undefined) => (tone && tones[tone] ? `var(--color-tone-${tone}-edge)` : undefined);
+
+// Several pictures set together across a card's top, as a collection's cover, 4:3: five
+// of them chosen and placed by coverPlaces from their shapes once all are in, each
+// filling its place, two pixels apart, as the desktop sets them.
+function Cover({ sources }: { sources: string[] }) {
+  const [tall, setTall] = useState<Record<string, number>>({});
+  const known = sources.every((source) => tall[source] !== undefined);
+  const places = known ? coverPlaces(sources.map((source) => tall[source]!), 4 / 3, sources[0] ? coverSeed(sources[0]) : 0) : [];
+  const edge = (at: number, inner: boolean) => (inner ? `calc(${at * 100}% + 1px)` : `${at * 100}%`);
+  const read = (source: string, image: HTMLImageElement) => setTall((was) => ({ ...was, [source]: image.naturalWidth > 0 ? image.naturalHeight / image.naturalWidth : 1 }));
+  return (
+    <div className="relative -mx-4 -mt-4 aspect-[4/3] overflow-hidden rounded-t-box bg-sunken">
+      {!known && sources.map((source) => <img key={source} src={source} alt="" className="hidden" onLoad={(event) => read(source, event.currentTarget)} onError={(event) => read(source, event.currentTarget)} />)}
+      {places.map((at) => {
+        const source = sources[at.picture]!;
+        const style: CSSProperties = {
+          left: edge(at.x, at.x > 0.001),
+          top: edge(at.y, at.y > 0.001),
+          right: edge(1 - at.x - at.w, at.x + at.w < 0.999),
+          bottom: edge(1 - at.y - at.h, at.y + at.h < 0.999),
+        };
+        return <img key={source} src={source} alt="" style={style} className="absolute bg-sunken object-cover" />;
+      })}
+    </div>
+  );
+}
 
 // Who's working something, each a small round face: their picture, or their first
 // letter, named for whoever can't see it, close together as a group.
@@ -1407,12 +1433,13 @@ export const radix: ComponentSet = {
     </div>
   ),
   Cards: ({ status, cards, mosaic, across, groups }) => groups ? <Grouped status={status} cards={cards} mosaic={mosaic} across={across} groups={groups} /> : across ? <Columns status={status} cards={cards} across={across} /> : (mosaic ? <Mosaic status={status} cards={cards} /> : (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy={status === "loading"}>
+    <div className={`grid gap-4 ${cards.some((card) => card.picture?.sources) ? "lg:grid-cols-2 2xl:grid-cols-3" : "sm:grid-cols-2 lg:grid-cols-3"}`} aria-busy={status === "loading"}>
       {cards.map((card) => {
         const total = card.tally?.reduce((n, part) => n + part.count, 0) ?? 0;
         return (
           <article key={card.id} className="flex flex-col gap-3 rounded-box border border-line bg-surface p-4 shadow-panel">
-            {card.picture && (
+            {card.picture?.sources && <Cover sources={card.picture.sources} />}
+            {card.picture && !card.picture.sources && (
               <div className="-mx-4 -mt-4 aspect-video overflow-hidden rounded-t-box bg-sunken">
                 {card.picture.source && <img src={card.picture.source} alt="" className={`h-full w-full ${card.picture.fit ? "object-contain" : "object-cover"}`} />}
               </div>

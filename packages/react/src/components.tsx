@@ -2893,7 +2893,7 @@ const addressesKnown = new Map<string, string>();
 function useAddresses(rows: Row[], field: string | undefined, longest?: number): Record<string, string> {
   const store = useFiles();
   const [addresses, setAddresses] = useState<Record<string, string>>({});
-  const held = field ? rows.map((row) => row[field]).filter((path): path is string => typeof path === "string" && path !== "") : [];
+  const held = field ? rows.flatMap((row) => row[field]).filter((path): path is string => typeof path === "string" && path !== "") : [];
   useEffect(() => {
     for (const path of held) {
       if (addresses[path] || !store) continue;
@@ -3044,7 +3044,11 @@ export function Cards({
           tally: sum(row),
           noun: tally?.noun,
           filters: to ? filters.map((f) => ({ label: f.label, link: links(`${to}?${new URLSearchParams({ is: f.label, ...f.query }).toString()}`), ...(f.hue ? { hue: f.hue } : {}) })) : [],
-          ...(picture ? { picture: { source: addresses[String(row[picture] ?? "")], fit, ...(across ? { tall: tallOf(row) } : {}) } } : {}),
+          ...(picture
+            ? Array.isArray(row[picture])
+              ? { picture: { fit, sources: (row[picture] as unknown[]).map((path) => addresses[String(path)]).filter((address): address is string => Boolean(address)) } }
+              : { picture: { source: addresses[String(row[picture] ?? "")], fit, ...(across ? { tall: tallOf(row) } : {}) } }
+            : {}),
         };
       })}
     />

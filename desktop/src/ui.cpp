@@ -80,7 +80,8 @@ namespace one::desktop {
 		float across = padding.left + padding.right, down = padding.top + padding.bottom;
 		float given = fixed_width.value_or(width);
 		extent content = measure_content(std::max(0.f, given - across));
-		return {fixed_width.value_or(content.width + across), fixed_height.value_or(content.height + down)};
+		float wide = fixed_width.value_or(content.width + across);
+		return {wide, fixed_height.value_or(fixed_tall ? given * *fixed_tall : content.height + down)};
 	}
 
 	std::optional<float> element::baseline(float width) {
@@ -388,6 +389,42 @@ namespace one::desktop {
 				if (now.last > now.first) out.push_back(now);
 				return out;
 			}
+		};
+
+		// Children in as many equal columns as fit, each at least `least` wide, stretched to
+		// fill the line, as a gallery's cards are; each line as tall as its tallest, its
+		// children at the top.
+		class tiles_element : public element {
+		public:
+			explicit tiles_element(float least) : least_(least) {}
+
+			extent measure_content(float width) override {
+				extent out{width, 0};
+				for_each_line(width, [&](std::size_t, std::size_t, float, float height) { out.height += height + (out.height > 0 ? spacing : 0); });
+				return out;
+			}
+
+			void place_content(const rect& area) override {
+				float y = area.y;
+				for_each_line(area.width, [&](std::size_t first, std::size_t last, float wide, float height) {
+					for (std::size_t i = first; i < last; ++i) children[i]->place({area.x + (i - first) * (wide + spacing), y, wide, children[i]->measure(wide).height});
+					y += height + spacing;
+				});
+			}
+
+		private:
+			template <class F>
+			void for_each_line(float width, F&& each) {
+				std::size_t columns = std::max<std::size_t>(1, static_cast<std::size_t>((width + spacing) / (least_ + spacing)));
+				float wide = std::max(0.f, (width - (columns - 1) * spacing) / columns);
+				for (std::size_t first = 0; first < children.size(); first += columns) {
+					std::size_t last = std::min(children.size(), first + columns);
+					float height = 0;
+					for (std::size_t i = first; i < last; ++i) height = std::max(height, children[i]->measure(wide).height);
+					each(first, last, wide, height);
+				}
+			}
+			float least_;
 		};
 
 		// scrolling
@@ -1229,6 +1266,13 @@ namespace one::desktop {
 
 	view flow(std::vector<view> children) {
 		auto e = std::make_unique<flow_element>();
+		e->children = taken(children);
+		adopt_children(*e);
+		return view(std::move(e));
+	}
+
+	view tiles(std::vector<view> children, float least) {
+		auto e = std::make_unique<tiles_element>(least);
 		e->children = taken(children);
 		adopt_children(*e);
 		return view(std::move(e));

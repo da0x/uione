@@ -25,6 +25,7 @@
 #include <limits>
 #include <mutex>
 #include <optional>
+#include <ranges>
 #include <set>
 
 #include <one/screens/collage.hpp>
@@ -2065,6 +2066,41 @@ namespace one::desktop::runtime {
 			       }
 		       })
 		    .height(height);
+	}
+
+	desktop::view pictures_of(page& p, const std::vector<std::string>& kept, float tall, int longest) {
+		std::vector<desktop::picture> shown;
+		bool waiting = false;
+		for (const auto& k : kept) {
+			bool still = false;
+			shown.push_back(shown_now(p, k, longest, &still));
+			waiting = waiting || still;
+		}
+		std::size_t seed = kept.empty() ? 0 : screens::cover_seed(kept.front());
+		return desktop::drawing([shown, seed, waiting](desktop::canvas& c, desktop::rect area) {
+			       const auto& t = current_theme();
+			       c.box(area, {.fill = t.sunken});
+			       // Laid out once every picture's shape is known, so it doesn't move as they come in.
+			       if (shown.empty() || waiting || area.width <= 0 || area.height <= 0) return;
+			       std::vector<double> tall;
+			       for (const auto& one : shown) tall.push_back(one ? static_cast<double>(one.height()) / one.width() : 1);
+			       // A pixel off each side between them, two in all, none at the cover's edges.
+			       constexpr float half = 1;
+			       for (const auto& at : screens::cover_places(tall, area.width / area.height, seed)) {
+				       float x0 = area.x + static_cast<float>(at.x) * area.width + (at.x > 0.001 ? half : 0);
+				       float y0 = area.y + static_cast<float>(at.y) * area.height + (at.y > 0.001 ? half : 0);
+				       float x1 = area.x + static_cast<float>(at.x + at.w) * area.width - (at.x + at.w < 0.999 ? half : 0);
+				       float y1 = area.y + static_cast<float>(at.y + at.h) * area.height - (at.y + at.h < 0.999 ? half : 0);
+				       desktop::rect f{x0, y0, x1 - x0, y1 - y0};
+				       const auto& one = shown[at.picture];
+				       if (!one || f.width <= 0 || f.height <= 0) continue;
+				       float pw = static_cast<float>(one.width()), ph = static_cast<float>(one.height());
+				       float s = std::max(f.width / pw, f.height / ph);
+				       float fw = f.width / (pw * s), fh = f.height / (ph * s);
+				       c.picture(one, f, {(1 - fw) / 2, (1 - fh) / 2, fw, fh});
+			       }
+		       })
+		    .tall(tall);
 	}
 
 	desktop::view collage_button(page& p, collage_ask ask) {

@@ -14,6 +14,7 @@
 #include <one/client/client.hpp>
 
 #include <algorithm>
+#include <numeric>
 #include <cctype>
 #include <array>
 #include <cmath>
@@ -1779,6 +1780,151 @@ namespace one::screens {
 	}
 
 	int mosaic_rows(std::size_t count) { return static_cast<int>((count + 3) / 4) * 2; }
+
+	namespace {
+
+		// The layouts a cover of n pictures is chosen from.
+		std::vector<std::vector<cover_place>> cover_layouts(std::size_t n) {
+			using layout = std::vector<cover_place>;
+			auto across = [](layout& at, double x, double y, double w, double h, std::size_t k) {
+				for (std::size_t i = 0; i < k; ++i) at.push_back({x + w * i / k, y, w / k, h});
+			};
+			auto down = [](layout& at, double x, double y, double w, double h, std::size_t k) {
+				for (std::size_t i = 0; i < k; ++i) at.push_back({x, y + h * i / k, w, h / k});
+			};
+			// One large at the side, so wide, the rest down beside it; or one across the top, so
+			// tall, the rest along under it.
+			auto side = [&](double first, std::size_t rest) {
+				layout at{{0, 0, first, 1}};
+				down(at, first, 0, 1 - first, 1, rest);
+				return at;
+			};
+			auto top = [&](double first, std::size_t rest) {
+				layout at{{0, 0, 1, first}};
+				across(at, 0, first, 1, 1 - first, rest);
+				return at;
+			};
+			std::vector<layout> out;
+			if (n == 1) {
+				out.push_back({{0, 0, 1, 1}});
+			} else if (n == 2) {
+				out.push_back(side(0.5, 1));
+				out.push_back(side(0.4, 1));
+				out.push_back(top(0.5, 1));
+			} else if (n == 3) {
+				layout three;
+				across(three, 0, 0, 1, 1, 3);
+				out.push_back(three);
+				out.push_back(side(0.5, 2));
+				out.push_back(top(0.62, 2));
+			} else if (n == 4) {
+				layout three;
+				across(three, 0, 0, 1, 0.65, 3);
+				across(three, 0, 0.65, 1, 0.35, 1);
+				out.push_back(three);
+				out.push_back(side(0.5, 3));
+				layout tall_first{{0, 0, 0.5, 1}, {0.5, 0, 0.5, 0.5}};
+				across(tall_first, 0.5, 0.5, 0.5, 0.5, 2);
+				out.push_back(tall_first);
+				out.push_back(top(0.62, 3));
+			} else if (n >= 5) {
+				// Three portraits over two landscapes; a portrait beside four; a portrait beside a
+				// landscape over two portraits; a landscape with two beside it and two under it;
+				// a landscape with a portrait beside it over three; a portrait between four; two
+				// portraits; and four landscapes. With six, a landscape with five around it, or
+				// six wide ones.
+				layout three;
+				across(three, 0, 0, 1, 0.62, 3);
+				across(three, 0, 0.62, 1, 0.38, 2);
+				out.push_back(three);
+				layout square{{0, 0, 0.5, 1}};
+				across(square, 0.5, 0, 0.5, 0.5, 2);
+				across(square, 0.5, 0.5, 0.5, 0.5, 2);
+				out.push_back(square);
+				layout mixed{{0, 0, 0.45, 1}, {0.45, 0, 0.55, 0.5}};
+				across(mixed, 0.45, 0.5, 0.55, 0.5, 2);
+				out.push_back(mixed);
+				layout landscapes{{0, 0, 0.6, 0.6}};
+				down(landscapes, 0.6, 0, 0.4, 0.6, 2);
+				across(landscapes, 0, 0.6, 1, 0.4, 2);
+				out.push_back(landscapes);
+				layout wide_first{{0, 0, 2.0 / 3, 0.6}, {2.0 / 3, 0, 1.0 / 3, 0.6}};
+				across(wide_first, 0, 0.6, 1, 0.4, 3);
+				out.push_back(wide_first);
+				layout centered{{0.25, 0, 0.5, 1}};
+				down(centered, 0, 0, 0.25, 1, 2);
+				down(centered, 0.75, 0, 0.25, 1, 2);
+				out.push_back(centered);
+				out.push_back(side(0.5, 1));
+				layout grid;
+				across(grid, 0, 0, 1, 0.5, 2);
+				across(grid, 0, 0.5, 1, 0.5, 2);
+				out.push_back(grid);
+				if (n >= 6) {
+					layout six{{0, 0, 2.0 / 3, 2.0 / 3}};
+					down(six, 2.0 / 3, 0, 1.0 / 3, 2.0 / 3, 2);
+					across(six, 0, 2.0 / 3, 1, 1.0 / 3, 3);
+					out.push_back(six);
+					layout wide;
+					for (int row = 0; row < 3; ++row) across(wide, 0, row / 3.0, 1, 1.0 / 3, 2);
+					out.push_back(wide);
+				}
+			}
+			return out;
+		}
+
+	}
+
+	std::vector<cover_place> cover_places(std::span<const double> tall, double wide, std::size_t seed) {
+		auto layouts = cover_layouts(std::min<std::size_t>(tall.size(), 6));
+		if (layouts.empty()) return {};
+		// Each layout filled, its largest places first, each with the picture left whose shape
+		// is nearest its own, and how far off they are in all, the larger places counting more.
+		std::vector<double> cost;
+		for (auto& at : layouts) {
+			std::vector<std::size_t> order(at.size());
+			std::iota(order.begin(), order.end(), 0);
+			std::ranges::stable_sort(order, std::greater{}, [&](std::size_t i) { return at[i].w * at[i].h; });
+			std::vector<bool> used(tall.size());
+			double off = 0;
+			for (std::size_t i : order) {
+				double shape = std::log(at[i].w * wide / at[i].h);
+				std::size_t best = 0;
+				double nearest = std::numeric_limits<double>::infinity();
+				for (std::size_t j = 0; j < tall.size(); ++j) {
+					double d = std::abs(shape + std::log(tall[j] > 0 ? tall[j] : 1));
+					if (!used[j] && d < nearest) best = j, nearest = d;
+				}
+				used[best] = true;
+				at[i].picture = best;
+				off += at[i].w * at[i].h * nearest;
+				// A portrait in a wide place, or a landscape in a tall one, is a lot further off.
+				double slot = at[i].w * wide / at[i].h, picture = 1 / (tall[best] > 0 ? tall[best] : 1);
+				if ((slot > 1.05 && picture < 0.95) || (slot < 0.95 && picture > 1.05)) off += 0.2;
+			}
+			// A cover of fewer than five counts as a little off for each it's short.
+			std::size_t full = std::min<std::size_t>(tall.size(), 5);
+			if (at.size() < full) off += 0.04 * static_cast<double>(full - at.size());
+			cost.push_back(off);
+		}
+		double least = std::ranges::min(cost);
+		std::vector<std::size_t> close;
+		for (std::size_t i = 0; i < cost.size(); ++i) {
+			if (cost[i] <= least + 0.1) close.push_back(i);
+		}
+		auto chosen = layouts[close[seed % close.size()]];
+		for (auto& p : chosen) {
+			if (seed / 7 % 2 == 1) p.x = 1 - p.x - p.w;
+			if (seed / 3 % 2 == 1) p.y = 1 - p.y - p.h;
+		}
+		return chosen;
+	}
+
+	std::size_t cover_seed(std::string_view first) {
+		std::size_t seed = 0;
+		for (unsigned char c : first) seed += c;
+		return seed;
+	}
 
 	columns_laid columns_place(std::span<const double> tall, int columns) {
 		columns_laid laid;

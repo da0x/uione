@@ -80,7 +80,7 @@ namespace {
 		                 .fields({"shelfmark", "title", "author", "status"})
 		                 .value("lent_to", first("library::loan").where("book", row).where("returned_at", none), "member");
 		// For each book: how many times it's been lent, how many are out, their numbers
-		// added up, and who had it last and first.
+		// added up, who had it last and first, and the last two who had it.
 		auto lending = view("library::lending")
 		                   .each(all("library::book"))
 		                   .order("title")
@@ -89,7 +89,8 @@ namespace {
 		                   .counted("out", where("library::loan", "book", row).where("returned_at", none))
 		                   .summed("numbers", where("library::loan", "book", row), "number")
 		                   .value("last_member", where("library::loan", "book", row), "member", {by("-number")})
-		                   .value("first_member", where("library::loan", "book", row), "member");
+		                   .value("first_member", where("library::loan", "book", row), "member")
+		                   .value("last_two", where("library::loan", "book", row), "member", {by("-number")}, 2);
 		auto desk = view("library::desk").each(where("library::loan", "returned_at", none)).order("due_at").fields({"book.title", "member", "due_at"});
 		auto book_page = view("library::book_page")
 		                     .per("library::book")
@@ -236,7 +237,7 @@ TEST("a page per book copies the book, counts and lists its loans, counts and ad
 	CHECK(a.view("library::book_page", "NOT-0000").is_null());
 }
 
-TEST("a view says for each row how many of another name it, what a number of theirs adds up to, and a field of the first in an order, kept as they come and go") {
+TEST("a view says for each row how many of another name it, what a number of theirs adds up to, and a field of the first in an order, or of the first so many, kept as they come and go") {
 	app a;
 	a.ok("library::book::create", book("Dune", "SCI-0001"));
 	a.ok("library::book::create", book("Emma", "LIT-0002"));
@@ -254,9 +255,13 @@ TEST("a view says for each row how many of another name it, what a number of the
 	CHECK(rows[0]["numbers"].as_double() == 6);
 	CHECK(rows[0]["last_member"].as_string() == "lena");
 	CHECK(rows[0]["first_member"].as_string() == "maya");
+	CHECK(rows[0]["last_two"].as_array().size() == 2);
+	CHECK(rows[0]["last_two"].as_array()[0].as_string() == "lena");
+	CHECK(rows[0]["last_two"].as_array()[1].as_string() == "omar");
 	CHECK(rows[1]["times_lent"].as_integer() == 0);
 	CHECK(rows[1]["numbers"].as_double() == 0);
 	CHECK(rows[1]["last_member"].is_null());
+	CHECK(rows[1]["last_two"].as_array().empty());
 	// Lent again, it's told at once.
 	a.ok("library::loan::create", value(fields{{"book", "LIT-0002"}, {"member", "maya"}, {"due_at", "2999-01-01T00:00:00.000000000Z"}}));
 	CHECK(seen.back()["rows"].as_array()[1]["times_lent"].as_integer() == 1);
@@ -278,7 +283,8 @@ TEST("a value for each row reads the rows it counts once, not once a row, so a v
 	             .fields({"name"})
 	             .counted("total", where("x::clipping", "shelf", row))
 	             .summed("size", where("x::clipping", "shelf", row), "bytes")
-	             .value("newest", where("x::clipping", "shelf", row), "bytes", {by("-bytes")});
+	             .value("newest", where("x::clipping", "shelf", row), "bytes", {by("-bytes")})
+	             .value("newest_three", where("x::clipping", "shelf", row), "bytes", {by("-bytes")}, 3);
 	auto started = std::chrono::steady_clock::now();
 	auto shown = m.build(v, kept, "");
 	auto took = std::chrono::steady_clock::now() - started;
@@ -293,6 +299,8 @@ TEST("a value for each row reads the rows it counts once, not once a row, so a v
 		if (r["name"].as_string() != "s7") continue;
 		CHECK(r["total"].as_integer() == 400);
 		CHECK(r["newest"].as_integer() == 19957);
+		CHECK(r["newest_three"].as_array().size() == 3);
+		CHECK(r["newest_three"].as_array()[2].as_integer() == 19857);
 		CHECK(r["size"].as_double() == 400.0 * 7 + 50.0 * 399 * 400 / 2);
 	}
 	CHECK_SAYING(took < std::chrono::seconds(2), std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(took).count()) + " ms");

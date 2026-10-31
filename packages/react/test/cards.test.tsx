@@ -6,7 +6,7 @@
 // the fields that keep them; several at once one step to undo, and a drop target while empty.
 
 import { fireEvent, render, waitFor } from "@testing-library/react";
-import { App, Cards, DatedTimeline, Link, Messages, PaperButton, Picture, StepLink, Table, Toggle, columnsPlace, memorySource, mosaicRows, mosaicTile, tallOf, screen as defineScreen, dayTitle, markLength, marksAlong, rulerOf, timeGroups, useView } from "../src/index.js";
+import { App, Cards, DatedTimeline, Link, Messages, PaperButton, Picture, StepLink, Table, Toggle, columnsPlace, coverPlaces, coverSeed, memorySource, mosaicRows, mosaicTile, tallOf, screen as defineScreen, dayTitle, markLength, marksAlong, rulerOf, timeGroups, useView } from "../src/index.js";
 import { useNavigate, useParams } from "react-router";
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
@@ -223,6 +223,35 @@ describe("pictures taken in turn", () => {
     const drawn = render(<App name="studio" screens={[only]} ui={plain} data={{ ...source, subscribe: source.subscribe, run: source.run, files }} location="/" />);
     await waitFor(() => expect(drawn.container.querySelector("img")?.getAttribute("src")).toBe("small:files/abc"));
     expect(asked).toEqual([["files/abc", 640]]);
+  });
+});
+
+describe("a collection's cover", () => {
+  it("takes five of its pictures by their shapes, the layout they fit best, portraits in tall places and landscapes in wide ones, as the desktop does", () => {
+    const laid = (tall: number[], seed: number) => coverPlaces(tall, 4 / 3, seed).map((p) => `${[p.x, p.y, p.w, p.h].map((v) => v.toFixed(2)).join(" ")} ${p.picture}`).join("|");
+    expect(laid([], 0)).toBe("");
+    expect(laid([1.5], 0)).toBe("0.00 0.00 1.00 1.00 0");
+    expect(laid([0.66, 1.5, 0.66, 1.5, 1.5, 0.66], 0)).toBe("0.00 0.00 0.33 0.62 1|0.33 0.00 0.33 0.62 3|0.67 0.00 0.33 0.62 4|0.00 0.62 0.50 0.38 0|0.50 0.62 0.50 0.38 2");
+    // Portraits alone go only in tall places, and landscapes alone only in wide ones, each in
+    // several layouts as the seed picks.
+    const alone = (tall: number, portrait: boolean) => {
+      const layouts = new Set<string>();
+      let fits = true;
+      for (let seed = 0; seed < 42; ++seed) {
+        const at = coverPlaces(new Array(12).fill(tall), 4 / 3, seed);
+        fits &&= at.every((p) => ((p.w * 4) / 3 < p.h) === portrait);
+        layouts.add(at.map((p) => [p.x, p.y, p.w, p.h].map((v) => v.toFixed(2)).join(" ")).join("|"));
+      }
+      return fits ? layouts.size : 0;
+    };
+    expect(alone(1.5, true)).toBeGreaterThanOrEqual(4);
+    expect(alone(0.66, false)).toBeGreaterThanOrEqual(6);
+    expect(alone(0.56, false)).toBeGreaterThanOrEqual(4);
+    // A portrait among landscapes, when it's on the cover, takes a tall place.
+    const placed = Array.from({ length: 42 }, (_, seed) => coverPlaces([0.66, 0.66, 1.5, 0.66, 0.66, 0.66], 4 / 3, seed).filter((p) => p.picture === 2)).flat();
+    expect(placed.length).toBeGreaterThan(0);
+    expect(placed.every((p) => (p.w * 4) / 3 < p.h)).toBe(true);
+    expect(coverSeed("ab")).toBe(195);
   });
 });
 

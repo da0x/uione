@@ -252,6 +252,26 @@ TEST_CASE("a local list's row counts, adds up and takes the first of another ent
                "board.placed is shown as a picture, so it's a file"));
 }
 
+TEST_CASE("a local list's row takes the first so many of another entity naming it, a list a card sets together, in both") {
+    const std::string per_row = with(with(with(board, "\ttarget   desktop\n", "\ttarget   desktop web\n"), "\t\tx      number  = 0\n", "\t\tx      number  = 0\n\t\tpicture  file\n"),
+                                     "\t\t\torder by name\n\t\t\tname\n",
+                                     "\t\t\torder by name\n\t\t\tname\n\t\t\tcovers = first(layer where layer.board == board.id order by layer.x descending, 4).picture\n");
+    const std::string carded = with(per_row, "\t\ttable boards {\n\t\t\tname\n\t\t}\n", "\t\tcards boards {\n\t\t\tname\n\t\t\tpicture covers fill\n\t\t}\n");
+    language::diagnostics out;
+    auto files = parsed(carded, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_local(files);
+    for (const auto& e : generated.errors) FAIL_CHECK(language::format(e));
+    REQUIRE(generated.files.size() == 1);
+    REQUIRE(generated.web.size() == 1);
+    CHECK(generated.files[0].content.find("\t\t\t\t\t.value(\"covers\", all(\"pinned::layer\").where(\"board\", row), \"picture\", {by(\"-x\")}, 4),\n") != std::string::npos);
+    CHECK(generated.web[0].content.find("        .value(\"covers\", all(\"pinned::layer\").where(\"board\", row), \"picture\", [by(\"-x\")], 4)") != std::string::npos);
+    // How many is a whole number, and only a card sets several pictures together.
+    CHECK(messages(with(carded, ", 4).picture", ", 0).picture")) == std::vector<std::string>{"41: first takes how many as a whole number, like first(photo where ..., 4)"});
+    CHECK(says(messages(with(per_row, "\t\ttable boards {\n\t\t\tname\n\t\t}\n", "\t\ttable boards {\n\t\t\tname\n\t\t\tpicture covers\n\t\t}\n")),
+               "covers is the first several pictures, which a card sets together"));
+}
+
 TEST_CASE("what local storage can't do yet is an error at its line, and nothing's written") {
     language::diagnostics out;
     auto files = parsed(with(board, "\tscreen \"Boards\"", "\tfunction layers() {\n\t\treturn count(layer)\n\t}\n\n\tscreen \"Boards\""), out);

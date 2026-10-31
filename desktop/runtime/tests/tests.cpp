@@ -1098,6 +1098,49 @@ TEST("cards as a mosaic: every eight two blocks of a tall tile, a wide one and t
 	std::filesystem::remove_all(folder);
 }
 
+TEST("cards with several pictures each set five of them together, as a collection's cover, chosen and placed by their shapes, the cards larger, stretched to fill each line") {
+	auto folder = std::filesystem::temp_directory_path() / "uione-covers";
+	std::filesystem::remove_all(folder);
+	std::filesystem::create_directories(folder);
+	const std::uint32_t colors[] = {0x2457d6, 0x1a7f37, 0xc2312d, 0x9a6700, 0x6e40c9};
+	// Each color as a landscape, p, and a portrait, q.
+	for (int i = 0; i < 10; ++i) {
+		int w = i < 5 ? 160 : 120, h = i < 5 ? 120 : 160;
+		std::vector<std::uint8_t> pixels(static_cast<std::size_t>(w * h * 4), 255);
+		for (std::size_t at = 0; at < pixels.size(); at += 4) {
+			pixels[at] = static_cast<std::uint8_t>(colors[i % 5] >> 16);
+			pixels[at + 1] = static_cast<std::uint8_t>(colors[i % 5] >> 8);
+			pixels[at + 2] = static_cast<std::uint8_t>(colors[i % 5]);
+		}
+		CHECK(one::desktop::picture::of(w, h, std::move(pixels)).write_png(folder / std::format("{}{}.png", i < 5 ? 'p' : 'q', i % 5)).has_value());
+	}
+	struct kept_there : memory_source {
+		std::filesystem::path in;
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return in / kept; }
+	} data;
+	data.in = folder;
+	// Samples of three portraits among landscapes, portraits alone, landscapes alone, three,
+	// one, and none.
+	const std::vector<std::vector<std::string>> shelves = {{"p0", "q1", "p2", "q3", "q4", "p1"}, {"q0", "q1", "q2", "q3", "q4", "q0"}, {"p0", "p1", "p2", "p3", "p4", "p2"}, {"p0", "q1", "p2"}, {"p0"}, {}};
+	list libraries;
+	for (std::size_t n = 0; n < shelves.size(); ++n) {
+		list covers;
+		for (const auto& one : shelves[n]) covers.push_back(value(one + ".png"));
+		libraries.push_back(value(fields{{"id", std::format("l{}", n)}, {"name", std::format("{} photos", shelves[n].size())}, {"covers", covers}}));
+	}
+	data.set("studio::shelves", "", value(fields{{"rows", libraries}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Libraries", "/", "", [](page& p) {
+		                     return items(cards(p, {.view = p.view("studio::shelves"), .list = "rows", .columns = {{"name", "Name"}}, .link = "/libraries/:library", .picture = "covers"}));
+	                     }});
+	s.screens.push_back({"Library", "/libraries/:library", "", [](page&) { return items(); }});
+	navigator nav(s, data);
+	nav.open("/");
+	matches_golden("cards-covers", {1100, 2140}, [&] { return drawn(nav); });
+	std::filesystem::remove_all(folder);
+}
+
 TEST("cards take pictures chosen or dropped, each a record made by their add, its file in their picture and its own size, name, bytes and date in the fields that keep them") {
 	auto folder = std::filesystem::temp_directory_path() / "uione-cards-pictures";
 	std::filesystem::remove_all(folder);

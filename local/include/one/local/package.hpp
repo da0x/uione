@@ -147,14 +147,15 @@ namespace one::local {
 
 	struct view_description {
 		// A value worked out for each row of a list, from the rows of another its query
-		// picks: a field of the first, in its order or else the earliest made; how many
-		// there are; or what a number of theirs adds up to.
+		// picks: a field of the first, in its order or else the earliest made, or a list of
+		// the first so many's; how many there are; or what a number of theirs adds up to.
 		struct value_of {
 			std::string name;
 			query from;
 			std::string field;
 			enum { first, counted, summed } kind = first;
 			std::vector<by> order = {};
+			int many = 0;  // for the first so many's, a list, rather than the first's
 		};
 		struct listing {
 			std::string name;  // rows, for each
@@ -193,7 +194,7 @@ namespace one::local {
 		view_description& order(by key) { return order(std::vector<by>{std::move(key)}); }
 		view_description& limit(int rows);
 		view_description& fields(std::vector<std::string> names);
-		view_description& value(std::string name, query from, std::string field, std::vector<by> order = {});
+		view_description& value(std::string name, query from, std::string field, std::vector<by> order = {}, int many = 0);
 		view_description& counted(std::string name, query from);
 		view_description& summed(std::string name, query from, std::string field);
 	};
