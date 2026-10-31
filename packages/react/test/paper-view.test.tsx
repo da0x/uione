@@ -299,6 +299,24 @@ describe("a paper", () => {
     expect(unset).toEqual([]);
   });
 
+  it("makes a line of words after an equation when the page under it is tapped", async () => {
+    const source = sourceWith([{ id: "b1", kind: "math", words: "x^2", position: 1, align: "center" }]);
+    const drawn = renderPaper(source);
+    await waitFor(() => expect(blocks(drawn).length).toBe(1));
+    fireEvent.click(drawn.container.querySelector(".one-paper")!, { clientY: 500 });
+    expect(source.runs.at(-1)).toMatchObject({ command: "studio::passage::create", input: { words: "", kind: "text", position: 2, poster: "p1" } });
+    expect(source.runs.at(-1)?.input).not.toHaveProperty("align");
+  });
+
+  it("goes on at the end of words when the page under them is tapped, making nothing", async () => {
+    const source = sourceWith([{ id: "b1", kind: "text", words: "Hello", position: 1, align: "left" }]);
+    const drawn = renderPaper(source);
+    await waitFor(() => expect(blocks(drawn).length).toBe(1));
+    fireEvent.click(drawn.container.querySelector(".one-paper")!, { clientY: 500 });
+    expect(source.runs.some((r) => r.command === "studio::passage::create")).toBe(false);
+    expect(document.activeElement).toBe(blocks(drawn)[0]);
+  });
+
   it("keeps the lines of words pasted into code", async () => {
     const source = sourceWith([{ id: "b1", kind: "code", words: "", position: 1, align: "left" }]);
     const drawn = renderPaper(source);

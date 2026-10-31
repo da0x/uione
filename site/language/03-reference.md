@@ -2615,6 +2615,9 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     paper's `add`, and puts the caret in it: after the caret's block, before it from its
     start, or between its two halves from its middle, as one step. A code block or an
     equation, chemical or not, isn't cut in two; the new one goes after it.
+    Pressing the page under its last block goes on writing there: at the end of its
+    words, or, under one that's drawn, like an equation, code or a picture, in a new
+    line of text after it, by `add`.
   - `empty "Title"`: where an empty page's first words go, said faintly.
   - The block the caret is in is the screen's `pick block from document_page.blocks`,
     so the toolbar's buttons, like `block::style "Center" icon align_center { align =

@@ -822,6 +822,21 @@ export function Paper({
     void run(add, fieldsOf(made, fields));
   };
 
+  // A tap under the last block goes on writing there: at the end of its words, or, when
+  // it's drawn, as an equation or a picture is, in a line of words made after it.
+  const goOnBelow = (e: MouseEvent<HTMLElement>) => {
+    const last = shown.at(-1);
+    const el = last && elements.current.get(last.id);
+    if (readOnly || !add || !last?.id || !el || e.clientY <= el.getBoundingClientRect().bottom) return;
+    if ((e.target as HTMLElement).closest("button, a, input, textarea, [contenteditable], [role=dialog]")) return;
+    if (!kindOf(last.kind).showing) return placeCaret(el, wordsOf(el).length);
+    const position = between(last.position, undefined);
+    const made: Row = { position, words: "", kind: "text" };
+    if (parent && subject) made[parent] = subject;
+    going.current = { position, at: 0, known: new Set(shown.map((b) => b.id)) };
+    void run(add, fieldsOf(made, fields));
+  };
+
   // Words pasted that run over several lines, as a document's paragraphs: the first
   // put at the caret, and each after it a text block of its own, the last ending with
   // what was after the caret. A kind where Enter types a new line, as code, keeps them.
@@ -1169,6 +1184,7 @@ export function Paper({
       onPointerDownCapture={(e) => {
         pointer.current = e.pointerType;
       }}
+      onClick={goOnBelow}
       onCopyCapture={(e) => {
         const r = acrossNow();
         if (!r) return;
@@ -1381,7 +1397,7 @@ function Apart({
         </label>
       )}
       <div style={{ display: "grid", placeItems: kind.apart?.languages ? "start stretch" : "center", minHeight: kind.apart?.languages ? 0 : 120, padding: 16, overflowX: "auto", textAlign: kind.apart?.languages ? "left" : "center" }}>
-        {made?.over && !wrong ? <div style={{ display: "grid" }}>{made.over}</div> : <span style={{ fontSize: 13, color: "var(--color-muted, #5b6577)" }}>{wrong ?? "\u00a0"}</span>}
+        {made?.over && !wrong ? <div style={{ display: "grid", width: "100%" }}>{made.over}</div> : <span style={{ fontSize: 13, color: "var(--color-muted, #5b6577)" }}>{wrong ?? "\u00a0"}</span>}
         {made?.over && !wrong && note && <span style={{ marginTop: 8, fontSize: 13, color: "var(--color-muted, #5b6577)" }}>{note}</span>}
       </div>
       <textarea
