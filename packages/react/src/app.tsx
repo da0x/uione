@@ -26,6 +26,8 @@ export interface ScreenInfo {
   // It shows something its address says after its own path, like a tab or a board
   // rather than a table: /tracker/boards/main/board/in_progress.
   shown?: boolean;
+  // It draws its own heading, like a front page, so the page has none over it.
+  untitled?: boolean;
 }
 
 export type Screen = ComponentType & { info: ScreenInfo };
@@ -746,13 +748,14 @@ function Page({ name, icon, screen: Body, screens }: { name: string; icon: strin
   useEffect(() => {
     if (shown) rememberLeftAt(base, pathname + search);
   }, [shown, base, pathname, search]);
+  const untitled = Body.info.untitled || Body.info.title === name;
   return (
-    <Shell name={name} icon={icon} title={titled ?? Body.info.title} untitled={Body.info.title === name} screens={screens}>
+    <Shell name={name} icon={icon} title={titled ?? Body.info.title} untitled={untitled} screens={screens}>
       <Rest.Provider value={rest}>
         <ShownPath.Provider value={{ base, parts, open: shown }}>
         <Titling.Provider value={setTitled}>
           <Titled.Provider value={titled ?? Body.info.title}>
-            <Untitled.Provider value={Body.info.title === name}>
+            <Untitled.Provider value={untitled}>
               <Contained key={key}>
                 <Body />
               </Contained>

@@ -513,6 +513,8 @@ namespace one::generators {
                 // The app's own name is its home, which its logo already links to.
                 if (!ns.empty() && !needs_parameter && title != name_ && !s->title.empty()) info += ", nav: " + web_detail::js_string(title);
                 if (parts.shown_in_path) info += ", shown: true";
+                // A front page's design is its heading, so the page draws none over it.
+                if (s->landing) info += ", untitled: true";
                 info += " }";
 
                 // A file with one screen names it after the file (home.one gives home);

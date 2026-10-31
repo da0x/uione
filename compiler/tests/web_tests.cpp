@@ -1716,6 +1716,8 @@ TEST_CASE("a landing page's hero and sections are drawn by its design") {
     REQUIRE(screens != nullptr);
     CHECK(screens->content.find("<Landing design=\"grid\">\n      <Hero title=\"Fast.\">") != std::string::npos);
     CHECK(screens->content.find("</Section>\n    </Landing>") != std::string::npos);
+    // Its design is its heading, so the page draws no title over it.
+    CHECK(screens->content.find("untitled: true") != std::string::npos);
     fs::remove_all(dir);
 }
 
