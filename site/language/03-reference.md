@@ -3283,7 +3283,8 @@ footer {
 }
 ```
 
-`footer` alone, or `footer bar`, puts its items in one quiet line, apart; `footer
+`footer` alone, or `footer bar`, puts its items in one quiet line, drawn as the
+status line along the foot of an app's workspace, so the two change together; `footer
 columns` puts each `section` in a column of its own, its title above it, like a
 map of the site.
 

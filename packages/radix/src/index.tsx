@@ -35,6 +35,11 @@ import { Chart, Charts, Monitor, Progress } from "./charts.js";
 import type { CodeDisplay, NameStyle } from "./display.js";
 
 // A card's dot: gray not started, blue waiting, orange working, green done, red failed.
+// A status line along the foot, as an app's is and a site's footer is too, so both
+// look the same and change together: one line on a wide screen; on a phone it wraps,
+// so a message is read whole.
+const statusLine = "flex shrink-0 flex-wrap items-center gap-x-4 gap-y-0.5 border-t border-line px-3 py-1 text-xs text-muted sm:flex-nowrap sm:overflow-hidden sm:whitespace-nowrap";
+
 const statusColors: Record<string, string> = {
   inactive: "var(--color-muted)",
   waiting: "var(--color-accent)",
@@ -867,15 +872,15 @@ export const radix: ComponentSet = {
         </div>
         <div className="flex flex-col gap-7">{children}</div>
       </main>
-      {/* Quietly, at the foot of the page: in one line, its parts apart, or in
+      {/* Quietly, at the foot of the page: in one line, an app's status line, or in
           columns, each a section with a smaller heading. Its links are quiet too,
           and leave the site without the mark that says so. */}
       {footer && (
         <footer
-          className={`border-t border-line px-4 py-4 text-xs text-muted sm:px-6 lg:px-8 [&_a]:font-normal [&_a]:text-muted [&_a]:underline-offset-4 [&_a:hover]:text-ink [&_a:hover]:underline [&_a_svg]:hidden ${
+          className={`[&_a]:font-normal [&_a]:text-muted [&_a]:underline-offset-4 [&_a:hover]:text-ink [&_a:hover]:underline [&_a_svg]:hidden ${
             footer.layout === "columns"
-              ? "grid gap-6 sm:grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] [&_h2]:text-xs [&_h2]:font-semibold [&_h2]:tracking-normal [&_h2]:text-ink [&_section]:gap-1.5 [&_p]:text-xs [&_p]:leading-5 [&_p]:text-muted"
-              : "flex flex-wrap items-baseline gap-x-2 gap-y-1 [&>*]:inline [&>*]:text-xs [&>*]:leading-5 [&>*]:text-muted [&>*+*]:before:mr-2 [&>*+*]:before:content-['·']"
+              ? "grid gap-6 border-t border-line px-4 py-4 text-xs text-muted sm:grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] sm:px-6 lg:px-8 [&_h2]:text-xs [&_h2]:font-semibold [&_h2]:tracking-normal [&_h2]:text-ink [&_section]:gap-1.5 [&_p]:text-xs [&_p]:leading-5 [&_p]:text-muted"
+              : `${statusLine} bg-surface [&>*]:text-xs [&>*]:leading-4 [&>*]:text-muted`
           }`}
         >
           {footer.children}
@@ -2656,10 +2661,7 @@ export const radix: ComponentSet = {
     // is, is that strip alone at the work's edge: not scrolled, padded or set apart.
     const strip = "has-[>[data-strip]:only-child]:w-auto has-[>[data-strip]:only-child]:overflow-visible has-[>[data-strip]:only-child]:border-0 has-[>[data-strip]:only-child]:bg-transparent has-[>[data-strip]:only-child]:p-0";
     const side = regions.side && <aside className={`w-72 shrink-0 overflow-y-auto border-l border-line p-3 ${over} ${strip} ${stays ? "visible" : ""}`}>{regions.side}</aside>;
-    // One line on a wide screen; on a phone it wraps, so a message is read whole.
-    const status = regions.status && (
-      <div className={`flex shrink-0 flex-wrap items-center gap-x-4 gap-y-0.5 border-t border-line px-3 py-1 text-xs text-muted sm:flex-nowrap sm:overflow-hidden sm:whitespace-nowrap ${over}`}>{regions.status}</div>
-    );
+    const status = regions.status && <div className={`${statusLine} ${over}`}>{regions.status}</div>;
     // Only its picture, all of the window on black, the rest over it while it's awake:
     // what's between them is the picture's to point at.
     if (name === "workspace" && alone) {
