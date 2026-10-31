@@ -960,6 +960,57 @@ TEST_CASE("cards set as a mosaic of their pictures say so to both runtimes, and 
     CHECK(messages(fitted) == std::vector<std::string>{"31: a mosaic's pictures each fill their tile, so its picture line says fill, or nothing"});
 }
 
+TEST_CASE("cards in columns say how many to both runtimes, and say why when they can't be") {
+    const std::string pieces = R"(namespace studio at / {
+	entity poster {
+		title  text
+	}
+
+	entity clipping {
+		poster          poster  required
+		name            text
+		image           file
+		picture_width   number
+		picture_height  number
+	}
+
+	view poster_page per poster {
+		title
+		clippings = each clipping in poster {
+			name  image  picture_width  picture_height
+		}
+	}
+
+	screen "Clipping" /posters/:poster/clippings/:clipping {
+	}
+
+	screen "Clippings" /posters/:poster {
+		cards poster_page.clippings columns 5 link /posters/:poster/clippings/:clipping {
+			picture image
+			name
+		}
+	}
+}
+)";
+    CHECK(messages(project + pieces).empty());
+    auto files = built(project + pieces);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    CHECK(web.find(R"(picture="image" across={5} link="/posters/:poster/clippings/:clipping")") != std::string::npos);
+    CHECK(native.find(R"(.picture = "image", .across = 5)") != std::string::npos);
+    std::string bare = project + pieces;
+    bare.replace(bare.find("\t\t\tpicture image\n"), std::string("\t\t\tpicture image\n").size(), "");
+    CHECK(messages(bare) == std::vector<std::string>{"32: columns are their cards' pictures, so its cards say which file each shows, like picture image"});
+    std::string both = project + pieces;
+    both.replace(both.find("columns 5"), std::string("columns 5").size(), "mosaic columns 5");
+    CHECK(messages(both) == std::vector<std::string>{"32: cards are a mosaic or in columns, not both"});
+    std::string many = project + pieces;
+    many.replace(many.find("columns 5"), std::string("columns 5").size(), "columns 20");
+    CHECK(messages(many) == std::vector<std::string>{"32: cards are in 1 to 12 columns, like columns 5"});
+}
+
 TEST_CASE("cards under a heading for each month of a date, and the timeline drawn along them, say so to both runtimes, at a workspace's side while a toggle is on, and say why when they can't be") {
     const std::string pieces = R"(namespace studio at / {
 	entity poster {
@@ -1685,6 +1736,119 @@ TEST_CASE("on open, a screen opens the first row a condition holds for, or runs 
     auto spread = built(project + poster + "\n\tscreen \"Studio\" / {\n\t\tlayout workspace\n\t\ton open poster::create\n\t\tmain {\n\t\t\ttext \"Hello\"\n\t\t}\n\t}\n}\n");
     CHECK(spread["web/src/screens/main.tsx"].find(R"(<OnOpen ready={true} lines={[{ run: { name: "studio::poster::create" } }]} />)") != std::string::npos);
     CHECK(spread["desktop/src/screens/main.cpp"].find(R"(on_open(p, true, {opening{.run = command_button{.command = "studio::poster::create", .label = "Create"}}}))") != std::string::npos);
+}
+
+TEST_CASE("a button can ask first, its key too, the question reading the view and its own words saying yes") {
+    auto files = built(layered_screen(R"(		layer::delete "Remove" icon delete key delete confirm "Remove it from {poster_page.title}?" then open /posters/:poster
+		poster::arrange "Ink" { tint = tint::ink } confirm "Make it ink?"
+)"));
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    // Its question reads the view, and a delete's answer is drawn as a danger.
+    CHECK(web.find(R"(<Command name="studio::layer::delete" label="Remove" icon="delete" keys={["delete"]} thenOpen="/posters/:poster" confirm={`Remove it from ${show(posterPage.data?.["title"])}?`} destroys />)") != std::string::npos);
+    CHECK(web.find(R"(confirm={"Make it ink?"} />)") != std::string::npos);
+    CHECK(native.find(R"(.then_open = "/posters/:poster", .confirm = said({words("Remove it from "), live(poster_page, "title"), words("?")}), .destroys = true})") != std::string::npos);
+    CHECK(native.find(R"(.confirm = "Make it ink?"})") != std::string::npos);
+    // What it reads is checked as any text is.
+    CHECK(messages(layered_screen(R"(		layer::delete "Remove" confirm "Remove it from {build.name}?"
+)")) == std::vector<std::string>{"43: {build.name} isn't something a site is built from; it's {build.version} or {build.commit}"});
+}
+
+TEST_CASE("a layout kept on a record, chosen from a toolbar, shows one of two cards on a list, and the timeline goes with whichever is shown") {
+    const std::string pieces = R"(namespace studio at / {
+	enum layout { mosaic "Magazine"  columns "Columns" }
+
+	entity poster {
+		title   text  required
+		layout  layout = layout::mosaic
+	}
+
+	entity clipping {
+		poster          poster  required
+		name            text
+		image           file
+		picture_date    date
+		picture_width   number
+		picture_height  number
+		starred         boolean
+	}
+
+	command poster::arrange {
+		changes layout
+	}
+
+	view poster_page per poster {
+		title  layout
+		clippings = each clipping in poster {
+			order by picture_date descending
+			name  image  picture_date  picture_width  picture_height
+		}
+	}
+
+	view starred_page per poster {
+		layout
+		clippings = each clipping in poster {
+			order by picture_date descending
+			name  image  picture_date  picture_width  picture_height
+		}
+	}
+
+	screen "Clipping" /posters/:poster/clippings/:clipping {
+	}
+
+	screen "Clippings" /posters/:poster {
+		layout workspace
+		toolbar {
+			group "Layout" small rows of 2 {
+				poster::arrange "Magazine" icon mosaic { layout = layout::mosaic } on when poster_page.layout == layout::mosaic
+				poster::arrange "Columns" icon columns { layout = layout::columns } on when poster_page.layout == layout::columns
+			}
+		}
+		main {
+			cards poster_page.clippings mosaic by picture_date month link /posters/:poster/clippings/:clipping when poster_page.layout == layout::mosaic {
+				picture image
+				name
+			}
+			cards poster_page.clippings columns 5 by picture_date month link /posters/:poster/clippings/:clipping when poster_page.layout == layout::columns {
+				picture image
+				name
+			}
+		}
+		side {
+			timeline poster_page.clippings by picture_date
+		}
+	}
+
+	screen "Starred" /posters/:poster/starred {
+		cards starred_page.clippings mosaic by picture_date month link /posters/:poster/clippings/:clipping when starred_page.layout == layout::mosaic {
+			picture image
+			name
+		}
+		cards starred_page.clippings columns 5 by picture_date month link /posters/:poster/clippings/:clipping when starred_page.layout == layout::columns {
+			picture image
+			name
+		}
+	}
+}
+)";
+    CHECK(messages(project + pieces).empty());
+    auto files = built(project + pieces);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    // The choice is the record's, set by its tools, each pressed while it's the one.
+    CHECK(web.find(R"(<Command name="studio::poster::arrange" id={posterId} label="Columns" icon="columns" given={{ "layout": "columns" }} pressed={posterPage.status === "live" && (((posterPage.data?.["layout"] ?? null) === "columns"))} />)") != std::string::npos);
+    CHECK(native.find(R"(.icon = "columns", .pressed = (ready(poster_page) && same(at(poster_page, "layout"), value("columns")))})") != std::string::npos);
+    // Either cards, as it says, under one name, which the timeline goes with whichever is shown.
+    CHECK(native.find(R"(if ((ready(poster_page) && same(at(poster_page, "layout"), value("columns")))) return cards(p, {.view = poster_page, .list = "clippings", .columns = {{"name", "Name"}}, .link = "/posters/:poster/clippings/:clipping", .picture = "image", .across = 5, .by = "picture_date", .unit = time_unit::month, .key = "/posters/:poster cards clippings"});)") != std::string::npos);
+    CHECK(web.find(R"(across={5} by={{ field: "picture_date", unit: "month" }} link="/posters/:poster/clippings/:clipping" name="/posters/:poster cards clippings" />)") != std::string::npos);
+    CHECK(web.find(R"(<DatedTimeline view={posterPage} list="clippings" by="picture_date" unit="month" cards="/posters/:poster cards clippings" />)") != std::string::npos);
+    CHECK(native.find(R"(.cards = "/posters/:poster cards clippings"})") != std::string::npos);
+    // Another screen reads the same choice through a view of its own.
+    CHECK(native.find(R"(same(at(starred_page, "layout"), value("columns")))) return cards(p, {.view = starred_page)") != std::string::npos);
 }
 
 TEST_CASE("a mode the person switches to: only when takes a toolbar's line away, and on open picks the mode a screen starts in") {

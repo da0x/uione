@@ -146,10 +146,15 @@ export function typing(target: EventTarget | null): boolean {
 }
 
 // Runs `run` when one of `keys` is pressed anywhere on the page, but where the
-// person is typing; the first line shown with a key takes it.
-export function useKeys(keys: readonly string[] | undefined, run: () => void, enabled = true): void {
+// person is typing; the first line shown with a key takes it. Says whether a key
+// just ran it, for a moment, so the tool it's a key for is drawn pushed in, as a
+// press of it is.
+export function useKeys(keys: readonly string[] | undefined, run: () => void, enabled = true): boolean {
   const latest = useRef(run);
   latest.current = run;
+  const [flashed, setFlashed] = useState(false);
+  const ending = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(ending.current), []);
   const joined = keys?.join(" ") ?? "";
   useEffect(() => {
     if (!joined || !enabled) return;
@@ -159,10 +164,14 @@ export function useKeys(keys: readonly string[] | undefined, run: () => void, en
       if (!chords.some((chord) => pressed(e, chord))) return;
       e.preventDefault();
       latest.current();
+      setFlashed(true);
+      clearTimeout(ending.current);
+      ending.current = setTimeout(() => setFlashed(false), 120);
     };
     window.addEventListener("keydown", down);
     return () => window.removeEventListener("keydown", down);
   }, [joined, enabled]);
+  return flashed;
 }
 
 // toggles
@@ -229,9 +238,9 @@ export function Toggle({ name, label, icon, keys }: { name: string; label: strin
   const flip = useCallback(() => {
     if (!stoppedJustNow(name)) setToggled(name, !stored(name));
   }, [name]);
-  useKeys(keys, flip, !off);
+  const flashed = useKeys(keys, flip, !off);
   return (
-    <ui.Button kind="secondary" icon={icon} tool={tool} pressed={on && !off} disabled={off} hint={hintOf(label, keys)} onClick={flip}>
+    <ui.Button kind="secondary" icon={icon} tool={tool} pressed={on && !off} flashed={flashed} disabled={off} hint={hintOf(label, keys)} onClick={flip}>
       {label}
     </ui.Button>
   );
@@ -311,9 +320,9 @@ export function Choose({ name, choice, first, label, icon, keys }: { name: strin
   const on = useChosen(name, first) === choice;
   const off = useOff();
   const pick = useCallback(() => setChosen(name, choice), [name, choice]);
-  useKeys(keys, pick, !off);
+  const flashed = useKeys(keys, pick, !off);
   return (
-    <ui.Button kind="secondary" icon={icon} tool={tool} pressed={on && !off} disabled={off} hint={hintOf(label, keys)} onClick={pick}>
+    <ui.Button kind="secondary" icon={icon} tool={tool} pressed={on && !off} flashed={flashed} disabled={off} hint={hintOf(label, keys)} onClick={pick}>
       {label}
     </ui.Button>
   );
@@ -343,9 +352,9 @@ export function History({ redo = false, label, icon, keys }: { redo?: boolean; l
   const kept = useView("one::history");
   const none = kept.status === "live" && !(kept.data as Record<string, unknown> | undefined)?.[redo ? "redo" : "undo"];
   const off = useOff() || none;
-  useKeys(keys, () => void take(), !off);
+  const flashed = useKeys(keys, () => void take(), !off);
   return (
-    <ui.Button kind="secondary" icon={icon} tool={tool} hint={hintOf(words, keys)} disabled={off || runner.busy(command)} onClick={() => void take()}>
+    <ui.Button kind="secondary" icon={icon} tool={tool} flashed={flashed} hint={hintOf(words, keys)} disabled={off || runner.busy(command)} onClick={() => void take()}>
       {words}
     </ui.Button>
   );
@@ -392,9 +401,9 @@ export function FullScreen({ label = "Full screen", icon, keys }: { label?: stri
   const full = useFull();
   const flip = useCallback(() => (fullNow() ? leaveFull() : enterFull()), []);
   const off = useOff();
-  useKeys(keys, flip, !off);
+  const flashed = useKeys(keys, flip, !off);
   return (
-    <ui.Button kind="secondary" icon={icon} tool={tool} pressed={full && !off} disabled={off} hint={hintOf(label, keys)} onClick={flip}>
+    <ui.Button kind="secondary" icon={icon} tool={tool} pressed={full && !off} flashed={flashed} disabled={off} hint={hintOf(label, keys)} onClick={flip}>
       {label}
     </ui.Button>
   );

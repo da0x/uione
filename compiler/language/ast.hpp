@@ -862,6 +862,9 @@ namespace one::language {
         std::optional<std::string> then_open;  // then open /:poster: where what it made is opened
         location then_where;
         std::optional<std::string> about;  // about "For slides and video": what it's for, said beside it among options
+        // confirm "Remove {photo_page.name}?": asked before it runs, its command run only
+        // once the person says yes.
+        std::optional<std::string> confirm;
     };
 
     // collage poster_page.layers size width height { ... }: a picture made of layers, as
@@ -1290,6 +1293,10 @@ namespace one::language {
         // tile, every eight two blocks of four, the second the first mirrored.
         bool mosaic = false;
         location mosaic_where;
+        // cards library.items columns 5: in so many equal columns, each picture as tall as
+        // its own shape, in the shortest column so far.
+        int across = 0;
+        location across_where;
         // by picture_date month: under a heading for each year, month or day of a date
         // field the list is ordered by, a mosaic's tiles starting again under each.
         std::optional<std::string> by;

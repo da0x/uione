@@ -200,6 +200,8 @@ namespace one::terminal::runtime {
 		auto shown = command_of(p, b);
 		if (!shown) return {};
 		if (off) return terminal::text(shown->label, terminal::dim());
+		// Asked first, its own words the answer that runs it.
+		if (!b.confirm.empty()) p.ask_before(b.command, b.confirm, b.label, b.destroys);
 		// With nothing to act on, one whose values are remembered only remembers them.
 		bool only_remembers = b.remembers && b.id.empty();
 		auto run = [&p, name = b.command, fields = shown->fields, busy = shown->busy, then = b.then_open, remembers = b.remembers, only_remembers] {
@@ -207,8 +209,8 @@ namespace one::terminal::runtime {
 			if (remembers) remember_given(p, name, fields);
 			if (only_remembers) return;
 			if (then.empty()) return p.run(name, fields);
-			p.run(name, fields, [&p, then](const answer& made) {
-				if (made) p.open(then.substr(0, then.rfind(':')) + *made);
+			p.run(name, fields, [&p, then, name](const answer& made) {
+				if (made) p.open(made_opens(then, name, *made, p.params()));
 			});
 		};
 		for (const auto& k : b.keys) p.on_key(k, run);
@@ -238,7 +240,7 @@ namespace one::terminal::runtime {
 	}
 
 	terminal::view confirm(page& p, std::string command_name, std::string question) {
-		p.ask_before(command_name, std::move(question));
+		p.ask_before(command_name, std::move(question), "", command_name.ends_with("::delete"));
 		return {};
 	}
 

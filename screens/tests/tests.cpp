@@ -9,9 +9,11 @@
 
 #include <cstdlib>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <iterator>
 #include <map>
+#include <set>
 
 #include "check.hpp"
 #include "one/screens/collage.hpp"
@@ -59,6 +61,15 @@ TEST("a row opens its own address, filled from the screen's and the row's") {
 	CHECK(row_link("/:project/boards/:board/issues/:issue", card, {{"project", "atlas"}}, {}, {{"board", 2}}) == "/atlas/boards/main/issues/atlas-12");
 	CHECK(row_link("/issues/:issue", value(fields{{"id", "change-1"}, {"issue", "atlas-12"}}), {}) == "/issues/atlas-12");
 	CHECK(filled("/:project/settings", {{"project", "atlas"}}) == "/atlas/settings");
+}
+
+TEST("then open puts a command's answer in the parameter named like its entity, and the rest as the page's address has them") {
+	std::map<std::string, std::string> here{{"library", "l1"}, {"photo", "ph7"}};
+	CHECK(made_opens("/libraries/:library", "archive::photo::delete", "ph7", here) == "/libraries/l1");
+	CHECK(made_opens("/libraries/:library", "archive::library::create", "l2", here) == "/libraries/l2");
+	CHECK(made_opens("/libraries/:library/photos/:photo", "archive::photo::create", "ph8", here) == "/libraries/l1/photos/ph8");
+	CHECK(made_opens("/posters/:poster", "studio::poster::create", "p1", {}) == "/posters/p1");
+	CHECK(made_opens("/libraries", "archive::photo::delete", "ph7", here) == "/libraries");
 }
 
 TEST("a file's path pasted on a canvas makes a card of it, named from it, uploaded where it landed") {
@@ -453,6 +464,21 @@ TEST("a canvas places its cards where they say, lays out those that don't by col
 	CHECK(p.error("tracker::issue::place") == "you can't move that one");
 }
 
+TEST("cards in columns each go in the shortest column so far, the leftmost of those, as tall as their own shape, one of no size square") {
+	std::vector<double> tall{1.5, 0.5, 1, 0.75, 1, 2};
+	auto laid = columns_place(tall, 3);
+	CHECK(laid.places.size() == 6);
+	// The first three across, then each in whichever is shortest.
+	CHECK(laid.places[0].column == 0 && laid.places[1].column == 1 && laid.places[2].column == 2);
+	CHECK(laid.places[3].column == 1 && laid.places[3].above == 0.5 && laid.places[3].before == 1);
+	CHECK(laid.places[4].column == 2 && laid.places[4].above == 1);
+	CHECK(laid.places[5].column == 1 && laid.places[5].above == 1.25 && laid.places[5].before == 2);
+	CHECK((laid.heights == std::vector<double>{1.5, 3.25, 2}));
+	CHECK((laid.counts == std::vector<int>{1, 3, 2}));
+	CHECK(tall_of(value(fields{{"picture_width", 400}, {"picture_height", 300}})) == 0.75);
+	CHECK(tall_of(value(fields{{"name", "no size"}})) == 1);
+}
+
 TEST("a mosaic's cards each go in their tile by their place alone, two blocks of four for every eight, the second the first mirrored") {
 	auto at = [](std::size_t n) {
 		auto t = mosaic_tile(n);
@@ -477,6 +503,47 @@ TEST("a mosaic's cards each go in their tile by their place alone, two blocks of
 	CHECK(mosaic_rows(4) == 2);
 	CHECK(mosaic_rows(5) == 4);
 	CHECK(mosaic_rows(11) == 6);
+}
+
+TEST("a cover takes five of its pictures by their shapes, the layout they fit best, portraits in tall places and landscapes in wide ones") {
+	auto laid = [](std::vector<double> tall, std::size_t seed) {
+		std::string out;
+		for (const auto& p : cover_places(tall, 4.0 / 3, seed)) out += std::format("{:.2f} {:.2f} {:.2f} {:.2f} {}|", p.x, p.y, p.w, p.h, p.picture);
+		return out;
+	};
+	CHECK(laid({}, 0).empty());
+	CHECK(laid({1.5}, 0) == "0.00 0.00 1.00 1.00 0|");
+	// Three portraits among landscapes stand next to each other across the top, the
+	// landscapes under them, whatever order they came in.
+	CHECK(laid({0.66, 1.5, 0.66, 1.5, 1.5, 0.66}, 0) == "0.00 0.00 0.33 0.62 1|0.33 0.00 0.33 0.62 3|0.67 0.00 0.33 0.62 4|0.00 0.62 0.50 0.38 0|0.50 0.62 0.50 0.38 2|");
+	// Portraits alone go only in tall places, and landscapes alone only in wide ones, each in
+	// several layouts as the seed picks.
+	auto alone = [](double tall, bool portrait) {
+		std::set<std::string> layouts;
+		bool fits = true;
+		for (std::size_t seed = 0; seed < 42; ++seed) {
+			std::string out;
+			for (const auto& p : cover_places(std::vector<double>(12, tall), 4.0 / 3, seed)) {
+				fits = fits && (p.w * 4 / 3 < p.h) == portrait;
+				out += std::format("{:.2f} {:.2f} {:.2f} {:.2f}|", p.x, p.y, p.w, p.h);
+			}
+			layouts.insert(out);
+		}
+		return fits ? layouts.size() : 0;
+	};
+	CHECK(alone(1.5, true) >= 4);
+	CHECK(alone(0.66, false) >= 6);
+	CHECK(alone(0.56, false) >= 4);
+	// A portrait among landscapes, when it's on the cover, takes a tall place.
+	bool taken = false, tall_place = true;
+	for (std::size_t seed = 0; seed < 42; ++seed) {
+		for (const auto& p : cover_places(std::vector<double>{0.66, 0.66, 1.5, 0.66, 0.66, 0.66}, 4.0 / 3, seed)) {
+			if (p.picture == 2) taken = true, tall_place = tall_place && p.w * 4 / 3 < p.h;
+		}
+	}
+	CHECK(taken);
+	CHECK(tall_place);
+	CHECK(cover_seed("ab") == 195);
 }
 
 TEST("a record's page steps to the one before or after it in its list's own order, and not past either end") {

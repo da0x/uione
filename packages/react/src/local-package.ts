@@ -326,14 +326,15 @@ export function by(name: string, through?: (v: Value) => Value, descending = fal
 }
 
 // A value worked out for each row of a list, from the rows of another its query picks:
-// a field of the first, in its order or else the earliest made; how many there are; or
-// what a number of theirs adds up to.
+// a field of the first, in its order or else the earliest made, or a list of the first
+// so many's; how many there are; or what a number of theirs adds up to.
 export interface ValueOf {
   name: string;
   from: Query;
   field: string;
   kind: "first" | "counted" | "summed";
   order: By[];
+  many?: number; // for the first so many's, a list, rather than the first's
 }
 
 export interface Listing {
@@ -407,8 +408,8 @@ export class ViewDescription {
     this.last("fields").fields = names;
     return this;
   }
-  value(name: string, from: Query, field: string, order: (By | string)[] = []): this {
-    this.last("a value").values.push({ name, from, field, kind: "first", order: order.map((k) => (typeof k === "string" ? by(k) : k)) });
+  value(name: string, from: Query, field: string, order: (By | string)[] = [], many = 0): this {
+    this.last("a value").values.push({ name, from, field, kind: "first", order: order.map((k) => (typeof k === "string" ? by(k) : k)), many });
     return this;
   }
   counted(name: string, from: Query): this {
@@ -818,7 +819,8 @@ export class LocalPackage {
   // for each. The same as the desktop's.
   private rowValues(of: ValueOf, reading: Reading, about: Row | undefined): (row: string) => Value {
     const kind = this.entity(of.from.entity);
-    type SoFar = { count: number; sum: number; best?: Row };
+    type SoFar = { count: number; sum: number; best?: Row; bests?: Row[] };
+    const many = of.many ?? 0;
     // First by its order's fields, then when it was made, then its id.
     const before = (a: Row, b: Row) => {
       for (const o of of.order) {
@@ -834,9 +836,21 @@ export class LocalPackage {
     const take = (w: SoFar, candidate: Row) => {
       w.count++;
       if (of.kind === "summed" && typeof candidate[of.field] === "number") w.sum += candidate[of.field] as number;
-      if (of.kind === "first" && (!w.best || before(candidate, w.best))) w.best = candidate;
+      if (of.kind !== "first") return;
+      if (many > 0) {
+        const bests = (w.bests ??= []);
+        let at = bests.length;
+        while (at > 0 && before(candidate, bests[at - 1]!)) at--;
+        if (at < many) {
+          bests.splice(at, 0, candidate);
+          if (bests.length > many) bests.pop();
+        }
+      } else if (!w.best || before(candidate, w.best)) {
+        w.best = candidate;
+      }
     };
-    const said = (w: SoFar): Value => (of.kind === "counted" ? w.count : of.kind === "summed" ? w.sum : (w.best?.[of.field] ?? null));
+    const said = (w: SoFar): Value =>
+      of.kind === "counted" ? w.count : of.kind === "summed" ? w.sum : many > 0 ? (w.bests ?? []).map((b) => b[of.field] ?? null) : (w.best?.[of.field] ?? null);
     const namesRow = (c: Condition) => c.wanted instanceof Marker && c.wanted.kind === "row";
     const naming = of.from.conditions.filter(namesRow);
     const named = naming[0];
@@ -859,8 +873,41 @@ export class LocalPackage {
     return (row) => said(byRow.get(row) ?? { count: 0, sum: 0 });
   }
 
+  // Read so a record made before a field of it had a default, like a layout added
+  // later, has that default, as one made now would; it's kept as it was. A copy only of
+  // one that lacks it. The same as the desktop's.
+  defaulted(reading: Reading): Reading {
+    const defaults = new Map<string, Field[]>();
+    for (const e of this.entities.values()) {
+      const given = e.fields.filter((f) => f.initial !== undefined);
+      if (given.length > 0) defaults.set(e.name, given);
+    }
+    if (defaults.size === 0) return reading;
+    const filled = (kind: string, row: Row): Row => {
+      const fields = defaults.get(kind);
+      if (!fields || fields.every((f) => !nothing(row[f.name]))) return row;
+      const out: Row = { ...row };
+      for (const f of fields) if (nothing(out[f.name])) out[f.name] = copied(f.initial!);
+      return out;
+    };
+    // Each entity's rows filled once while it's read, however often they're gone through.
+    const read = new Map<string, Row[]>();
+    return {
+      each: (kind) => {
+        let rows = read.get(kind);
+        if (!rows) read.set(kind, (rows = defaults.has(kind) ? reading.each(kind).map((row) => filled(kind, row)) : reading.each(kind)));
+        return rows;
+      },
+      find: (kind, id) => {
+        const row = reading.find(kind, id);
+        return row && filled(kind, row);
+      },
+    };
+  }
+
   // A view's document for its subject, or none when what it's per is gone.
-  build(v: ViewDescription, reading: Reading, about: string): Row | undefined {
+  build(v: ViewDescription, given: Reading, about: string): Row | undefined {
+    const reading = this.defaulted(given);
     let per: Row | undefined;
     if (v.perKind) {
       per = reading.find(v.perKind, about);

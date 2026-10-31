@@ -899,9 +899,17 @@ function Authorize({ name, icon, screens }: { name: string; icon: string | undef
 // command, and anything that runs that command asks it first, with {field} in the
 // question filled in from the row or form it's about.
 
+// A question, the words that say yes to it, like Remove, and whether that destroys
+// something, drawn as a danger.
+export interface Question {
+  words: string;
+  yes?: string;
+  destroys?: boolean;
+}
+
 interface ConfirmContextValue {
-  questions: Map<string, string>;
-  ask: (question: string) => Promise<boolean>;
+  questions: Map<string, Question>;
+  ask: (question: Question) => Promise<boolean>;
 }
 
 const ConfirmContext = createContext<ConfirmContextValue | null>(null);
@@ -916,19 +924,21 @@ export function fill(question: string, values: CommandInput): string {
   return question.replace(/\{(\w+)\}/g, (_, name: string) => String(values[name] ?? ""));
 }
 
+// Asked over the page, Cancel given the keyboard so a key pressed again doesn't
+// answer it: Enter says yes and Escape no, and no other key reaches what's under it.
 function Confirmations({ children }: { children: ReactNode }) {
   const ui = useUI();
-  const questions = useRef(new Map<string, string>());
-  type Pending = { question: string; answer: (yes: boolean) => void };
+  const questions = useRef(new Map<string, Question>());
+  type Pending = Question & { answer: (yes: boolean) => void };
   const [pending, setPending] = useState<Pending | null>(null);
   const open = useRef<Pending | null>(null);
   // A new question replaces one still open, and the one it replaces is answered no,
   // so whatever was waiting on it doesn't wait forever.
   const ask = useCallback(
-    (question: string) =>
+    (question: Question) =>
       new Promise<boolean>((resolve) => {
         open.current?.answer(false);
-        open.current = { question, answer: resolve };
+        open.current = { ...question, answer: resolve };
         setPending(open.current);
       }),
     [],
@@ -939,16 +949,29 @@ function Confirmations({ children }: { children: ReactNode }) {
     open.current = null;
     setPending(null);
   };
+  const asking = pending !== null;
+  useEffect(() => {
+    if (!asking) return;
+    const heard = (event: KeyboardEvent) => {
+      if (event.key === "Tab") return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.key === "Enter") answer(true);
+      else if (event.key === "Escape") answer(false);
+    };
+    window.addEventListener("keydown", heard, true);
+    return () => window.removeEventListener("keydown", heard, true);
+  }, [asking]);
   return (
     <ConfirmContext.Provider value={value}>
       {children}
-      <ui.Dialog open={pending !== null} title="Are you sure?" onClose={() => answer(false)}>
-        <ui.Text>{pending?.question}</ui.Text>
-        <ui.Button kind="secondary" onClick={() => answer(false)}>
+      <ui.Dialog open={asking} title="Are you sure?" onClose={() => answer(false)}>
+        <ui.Text>{pending?.words}</ui.Text>
+        <ui.Button kind="secondary" focused onClick={() => answer(false)}>
           Cancel
         </ui.Button>
-        <ui.Button kind="danger" onClick={() => answer(true)}>
-          Yes
+        <ui.Button kind={pending?.destroys ? "danger" : "primary"} onClick={() => answer(true)}>
+          {pending?.yes || "Yes, go ahead"}
         </ui.Button>
       </ui.Dialog>
     </ConfirmContext.Provider>

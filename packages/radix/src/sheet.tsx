@@ -6,7 +6,7 @@
 // phone, its title and × held at the top and only what's under them scrolling. It
 // sits above the page's header, Escape or the × closes it, and focus goes back to
 // whatever opened it. A form in it is typed into at once, its first field taking the
-// keyboard, as the desktop's does.
+// keyboard, as the desktop's does, unless a button is to have it, like a question's Cancel.
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { useRef } from "react";
@@ -26,7 +26,7 @@ export function Sheet({ open, title, onClose, children }: { open: boolean; title
           ref={content}
           onOpenAutoFocus={(e) => {
             opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-            const field = content.current?.querySelector<HTMLElement>("input:not([type=hidden]), textarea, select");
+            const field = content.current?.querySelector<HTMLElement>("[data-focused], input:not([type=hidden]), textarea, select");
             if (!field) return;
             e.preventDefault();
             field.focus();

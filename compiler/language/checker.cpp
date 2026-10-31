@@ -3454,7 +3454,7 @@ namespace one::language {
                 "edit",   "add",    "follow", "following", "settings", "workflow", "delete", "archive", "robot",   "building", "database",   "code",
                 "connect", "shield", "cloud", "chart",     "spark",    "people",   "lock",   "globe",   "layers",  "crop",     "copy",       "raise",
                 "lower",  "rotate_left", "rotate_right", "flip_horizontal", "flip_vertical", "check", "close", "paste", "save", "export", "undo", "redo",
-                "text",   "screenshot", "picture", "folder", "gallery", "fullscreen", "sun", "moon", "bold", "smaller", "larger", "fill", "fit", "stretch",
+                "text",   "screenshot", "picture", "folder", "gallery", "mosaic", "columns", "fullscreen", "sun", "moon", "bold", "smaller", "larger", "fill", "fit", "stretch",
                 "center", "color", "edges", "blend", "harmonize", "clear", "square", "rounded", "pointer", "rectangle", "ellipse", "line", "italic", "magic", "align_left", "align_center", "align_right",
                 "title", "heading", "quote", "equation", "flask", "book", "letters", "quill", "typewriter", "coffee", "eye", "eye_off", "opacity", "spectrum", "zoom_in", "zoom_out", "zoom_fit", "star", "polygon", "cut", "group", "ungroup", "chevron_right", "chevron_down", "spread", "contents", "calendar", "bell", "inbox", "previous", "next", "info", "play", "timeline"};
             if (name && !known.contains(*name)) error(where, "there's no icon " + *name + nearest(*name, {known.begin(), known.end()}));
@@ -3920,6 +3920,7 @@ namespace one::language {
                     if (button->pressed_when) verify_condition(ns, *button->pressed_when, route);
                     verify_given(ns, *button, route);
                     if (button->along) verify_along(ns, *button, route);
+                    if (button->confirm) verify_live_text(ns, *button->confirm, route, item.where);
                 } else if (auto* component = std::get_if<component_item>(&item.node)) {
                     snake(component->name, item.where);
                     // Its file for each kind of app built: React on the web, C++ in the others.
@@ -4678,14 +4679,17 @@ namespace one::language {
         }
 
         // A field a list's rows hold: their entity's, or one a row takes from the first of
-        // another, as cover = first(photo where ...).picture holds what picture does.
-        const field* row_field(const std::string& ns, const view_each& rows, const entity_declaration& entity, const std::string& name) {
+        // another, as cover = first(photo where ...).picture holds what picture does; from
+        // the first so many, covers = first(photo where ..., 4).picture, a list of it, said
+        // in `several`.
+        const field* row_field(const std::string& ns, const view_each& rows, const entity_declaration& entity, const std::string& name, bool* several = nullptr) {
             for (const auto& r : rows.rows) {
                 if (!r.name || *r.name != name) continue;
                 auto* m = std::get_if<member_expression>(&r.value->node);
                 auto* call = m ? std::get_if<call_expression>(&m->object->node) : nullptr;
                 auto* callee = call ? std::get_if<name_expression>(&call->callee->node) : nullptr;
-                if (!callee || callee->name.text() != "first" || call->arguments.size() != 1) return nullptr;
+                if (!callee || callee->name.text() != "first" || call->arguments.empty() || call->arguments.size() > 2) return nullptr;
+                if (several) *several = call->arguments.size() == 2;
                 auto* w = std::get_if<where_expression>(&call->arguments[0]->node);
                 auto* source = std::get_if<name_expression>(&(w ? *w->source : *call->arguments[0]).node);
                 const entity_declaration* other = source ? find_entity(ns, source->name) : nullptr;
@@ -4694,12 +4698,15 @@ namespace one::language {
             return find_field(entity, name);
         }
 
-        // picture preview fit, in cards or a table: a file each row holds.
+        // picture preview fit, in cards or a table: a file each row holds, or, on a card,
+        // the first so many of another's, set together.
         void verify_picture(const std::string& ns, const view_each& rows, const qualified_name& view, const std::optional<std::string>& list, const std::string& picture,
-                            location where) {
+                            location where, bool several_allowed = false) {
             const entity_declaration* entity = listed_entity(ns, rows);
-            const field* f = entity ? row_field(ns, rows, *entity, picture) : nullptr;
+            bool several = false;
+            const field* f = entity ? row_field(ns, rows, *entity, picture, &several) : nullptr;
             if (entity && (!f || !f->type || f->type->text() != "file" || f->list)) error(where, entity->name + "." + picture + " is shown as a picture, so it's a file");
+            else if (several && !several_allowed) error(where, picture + " is the first several pictures, which a card sets together; a table shows one, like first(... where ...).picture");
             else if (!in_rows(rows, picture)) error(where, "view " + view.text() + " has no " + picture + (list ? " in its " + *list : "") + "; add it to the list's block");
         }
 
@@ -4715,10 +4722,16 @@ namespace one::language {
                 error(cards.link_where, "there's no screen at " + full_route(ns, *cards.link) + " for these cards to open");
             }
             // A picture on each card is a file each row holds.
-            if (cards.picture) verify_picture(ns, *rows, cards.view, cards.list, *cards.picture, cards.picture_where);
+            if (cards.picture) verify_picture(ns, *rows, cards.view, cards.list, *cards.picture, cards.picture_where, !cards.mosaic && !cards.across);
             // A mosaic is its cards' pictures, each filling its tile.
             if (cards.mosaic && !cards.picture) error(cards.mosaic_where, "a mosaic is its cards' pictures, so its cards say which file each shows, like picture image");
             else if (cards.mosaic && cards.picture_sits == "fit") error(cards.picture_where, "a mosaic's pictures each fill their tile, so its picture line says fill, or nothing");
+            // Columns are their cards' pictures too, each its own shape.
+            if (cards.across) {
+                if (cards.mosaic) error(cards.across_where, "cards are a mosaic or in columns, not both");
+                else if (!cards.picture) error(cards.across_where, "columns are their cards' pictures, so its cards say which file each shows, like picture image");
+                if (cards.across < 1 || cards.across > 12) error(cards.across_where, "cards are in 1 to 12 columns, like columns 5");
+            }
             // Under a heading for each month of a date: one the rows hold, which the list is
             // ordered by first, so each month's cards are together.
             if (cards.by) {
@@ -5614,6 +5627,14 @@ namespace one::language {
             return e;
         }
 
+        // Whether what first or count is given is an entity's rows, as in first(photo where
+        // ..., 4), rather than a list.
+        bool of_entity(const context& in, const expression& e) {
+            if (std::holds_alternative<where_expression>(e.node)) return true;
+            auto* n = std::get_if<name_expression>(&e.node);
+            return n && find_entity(in.ns, n->name);
+        }
+
         // Whether a value is a whole list, to give a list field: [a, b], two joined, a list's
         // first so many or what's after them, a function's, or another list field.
         bool gives_list(const context& in, const expression& e) {
@@ -5693,7 +5714,7 @@ namespace one::language {
                 return true;
             };
             // first(deck, 13) and count(deck): of a list, its first so many and how many it holds.
-            if ((name == "first" && call.arguments.size() == 2) || (name == "count" && call.arguments.size() == 1 && lists(in, *call.arguments[0]))) {
+            if ((name == "first" && call.arguments.size() == 2 && !of_entity(in, *call.arguments[0])) || (name == "count" && call.arguments.size() == 1 && lists(in, *call.arguments[0]))) {
                 const field* listed = resolve(in, *call.arguments[0]);
                 if (listed && !listed->list) error(call.arguments[0]->where, name + " takes a list, or an entity, and " + listed->name + " isn't a list");
                 if (call.arguments.size() == 2) resolve(in, *call.arguments[1]);
@@ -5708,7 +5729,14 @@ namespace one::language {
                 return nullptr;
             }
             if (name == "count" || name == "first" || name == "sum") {
-                if (!arguments(1)) return nullptr;
+                // first(photo where ..., 4).picture: the first so many's, a list.
+                if (name == "first" && call.arguments.size() == 2) {
+                    auto* n = std::get_if<literal_expression>(&call.arguments[1]->node);
+                    if (!n || n->type != literal_expression::kind::number || n->value.find('.') != std::string::npos || std::stod(n->value) < 1) {
+                        error(call.arguments[1]->where, "first takes how many as a whole number, like first(photo where ..., 4)");
+                    }
+                }
+                else if (!arguments(1)) return nullptr;
                 const auto& argument = *call.arguments[0];
                 if (auto* w = std::get_if<where_expression>(&argument.node)) return where_of(in, *w, name == "first");
                 auto* entity = std::get_if<name_expression>(&argument.node);

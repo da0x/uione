@@ -12,7 +12,9 @@
 #include <expected>
 #include <functional>
 #include <optional>
+#include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -484,6 +486,45 @@ namespace one::screens {
 	mosaic_place mosaic_tile(std::size_t n);
 	// How many rows a mosaic of `count` cards takes: the last block ends with them.
 	int mosaic_rows(std::size_t count);
+
+	// Which of a collection's pictures go on its cover, and where, as fractions of it, so
+	// covers side by side don't all look alike: of a handful of layouts for two to six,
+	// three portraits next to each other, a portrait tall at the side or in the middle with
+	// the rest beside it, or a landscape large with the rest around it, several for a
+	// collection of only portraits or only landscapes, the one whose places the pictures'
+	// shapes fit best, those of fewer than five a little worse, each place taking the
+	// picture whose shape is nearest its own, the largest first. `tall` is each picture's height over its width, 1 for one whose size
+	// isn't known; `wide` is the cover's width over its height, the layouts made for 4:3.
+	// Of layouts that fit about as well, `seed` picks one, and whether it's mirrored or
+	// upside down. The same as the web's.
+	struct cover_place {
+		double x, y, w, h;
+		std::size_t picture = 0;
+	};
+	std::vector<cover_place> cover_places(std::span<const double> tall, double wide, std::size_t seed);
+	// A cover's seed, from its first picture's name, so it keeps its layout.
+	std::size_t cover_seed(std::string_view first);
+
+	// Cards in columns, as stone is laid in a wall: each picture as wide as a column
+	// and as tall as its own shape, uncropped, in the shortest column so far, the
+	// leftmost of those, so the columns line up and the rows don't. `tall` is each one's
+	// height over its width, 1 for one whose size isn't known. Each goes in its column,
+	// below the heights of those above it, in column widths, and so many gaps; each
+	// column ends likewise. Worked out from the sizes the rows keep, so nothing moves as
+	// pictures come in. The same as the web's.
+	struct column_place {
+		int column = 0;
+		double above = 0;
+		int before = 0;
+	};
+	struct columns_laid {
+		std::vector<column_place> places;
+		std::vector<double> heights;
+		std::vector<int> counts;
+	};
+	columns_laid columns_place(std::span<const double> tall, int columns);
+	// A row's picture's height over its width, from the sizes it keeps.
+	double tall_of(const value& row);
 
 	// What find found in each list, and how many more.
 	struct found {

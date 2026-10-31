@@ -767,7 +767,7 @@ namespace one::generators {
                 auto* named = std::get_if<language::name_expression>(&column.value->node);
                 if (!named || named->name.parts.size() != 2) continue;
                 std::string command = screens::full_command(ns, named->name);
-                language::button_item button{named->name, column.label, nullptr, std::nullopt, "", column.icon, {}, {}, {}, nullptr, std::nullopt, {}, std::nullopt};
+                language::button_item button{named->name, column.label, nullptr, std::nullopt, "", column.icon, {}, {}, {}, nullptr, std::nullopt, {}, std::nullopt, std::nullopt};
                 if (const language::form_item* f = screens::model::form_for(ns, screen, command)) tools.push_back(form(parts, ns, *f, &button));
                 else tools.push_back(command_of(parts, ns, button));
             }
@@ -872,6 +872,8 @@ namespace one::generators {
             else if (!same.empty() && same != "-") out += ", .pressed = " + same;
             if (button.then_open) out += ", .then_open = " + str(model_.full_route(ns, *button.then_open));
             if (button.about) out += ", .about = " + str(*button.about);
+            // Asked first, its own words the answer that runs it, red when it deletes.
+            if (button.confirm) out += ", .confirm = " + said_of(parts, ns, *button.confirm) + (command.ends_with("::delete") ? ", .destroys = true" : "");
             out += slide;
             if (remembers) out += ", .remembers = true";
             if (remembers && !pick_name.empty()) out += ", .picks = " + str(pick_name);
@@ -1308,6 +1310,7 @@ namespace one::generators {
             if (c.hide_empty) out += ", .hide_empty = true";
             if (c.picture) out += ", .picture = " + str(*c.picture) + (c.picture_sits == "fit" ? ", .fit = true" : "");
             if (c.mosaic) out += ", .mosaic = true";
+            if (c.across) out += ", .across = " + std::to_string(c.across);
             if (c.by) out += ", .by = " + str(*c.by) + ", .unit = time_unit::" + c.by_unit;
             // Pictures dropped, pasted or chosen, each a record made by its add, given what the
             // address names, each part in the field it's kept in.

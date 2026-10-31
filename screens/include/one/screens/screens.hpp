@@ -96,6 +96,11 @@ namespace one::screens {
 	                     const std::map<std::string, int>& named = {});
 	// An address with a page's parameters filled in, like /:project/settings.
 	std::string filled(const std::string& route, const std::map<std::string, std::string>& params);
+	// Where `then open` goes once a command answers: its answer, what it made or acted
+	// on, in the parameter named like its entity, photo::delete's in :photo, and every
+	// other parameter as the page's address has it. A route with no parameter named
+	// like the entity doesn't take the answer.
+	std::string made_opens(const std::string& route, const std::string& command, const std::string& made, const std::map<std::string, std::string>& params);
 	// Whether a row is kept by a filter's parts, each a field and what it holds, like
 	// assignees=me, or a time it's before or after, like updated_at>=-7d.
 	bool kept(const value& row, const std::vector<std::pair<std::string, std::string>>& picks, const std::string& me);
@@ -170,10 +175,19 @@ namespace one::screens {
 		void run(const std::string& command, const value& fields, attached_files files, std::function<void(const answer&)> after, bool says_why_itself);
 		bool running(const std::string& command) const;
 		// A question asked before a command runs from this page, like "Remove this
-		// person?", answered on the page itself; and the one being asked, if any.
-		void ask_before(const std::string& command, std::string question) { questions_[command] = std::move(question); }
+		// person?", answered on the page itself, with the words that say yes, like Remove,
+		// and whether it destroys something, drawn as a danger; and the one being asked, if any.
+		struct question {
+			std::string words, yes = "";
+			bool destroys = false;
+		};
+		void ask_before(const std::string& command, std::string words, std::string yes = "", bool destroys = false) {
+			questions_[command] = {std::move(words), std::move(yes), destroys};
+		}
 		struct asking {
 			std::string command, question;
+			std::string yes = "";
+			bool destroys = false;
 			value fields;
 			std::function<void(const answer&)> after;
 			bool says_why_itself = false;
@@ -219,6 +233,10 @@ namespace one::screens {
 		// Only its picture, edge to edge, its bars drawn over it, as a photo's own screen is.
 		void alone() { alone_ = true; }
 		bool take_alone() { return std::exchange(alone_, false); }
+		// Pictures set as a printed page is, as a mosaic is: the region they're in has a
+		// margin as thin as the gaps between them, rather than its own.
+		void bleed() { bleed_ = true; }
+		bool take_bleed() { return std::exchange(bleed_, false); }
 
 		// The keys its lines are run by, like ctrl+z, gathered each time it's built,
 		// while they're shown: the first said for a key takes it.
@@ -293,6 +311,7 @@ namespace one::screens {
 		bool wide_ = false;
 		bool fill_ = false;
 		bool alone_ = false;
+		bool bleed_ = false;
 		std::vector<std::pair<std::string, std::function<void()>>> keys_;
 		std::optional<bool> in_group_;
 		std::optional<state<bool>> in_options_;
@@ -302,7 +321,7 @@ namespace one::screens {
 		state<std::map<std::string, std::string>> errors_;   // why each was last turned down
 		state<std::string> problem_;
 		state<std::string> told_;
-		std::map<std::string, std::string> questions_;
+		std::map<std::string, question> questions_;
 		state<std::optional<asking>> asked_;
 	};
 

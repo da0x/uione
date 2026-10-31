@@ -222,7 +222,7 @@ describe("questions before a command", () => {
     function Asker() {
       const { ask } = useConfirmContext();
       return (
-        <button type="button" onClick={() => void ask("first?").then((yes) => answers.push(yes))}>
+        <button type="button" onClick={() => void ask({ words: "first?" }).then((yes) => answers.push(yes))}>
           ask
         </button>
       );
@@ -230,7 +230,7 @@ describe("questions before a command", () => {
     function Second() {
       const { ask } = useConfirmContext();
       return (
-        <button type="button" onClick={() => void ask("second?").then((yes) => answers.push(yes))}>
+        <button type="button" onClick={() => void ask({ words: "second?" }).then((yes) => answers.push(yes))}>
           ask again
         </button>
       );
@@ -244,7 +244,7 @@ describe("questions before a command", () => {
     render(<App name="uione" screens={[page]} ui={plain} data={memorySource()} location="/" />);
     fireEvent.click(screen.getByRole("button", { name: "ask" }));
     fireEvent.click(screen.getByRole("button", { name: "ask again" }));
-    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Yes" })));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Yes, go ahead" })));
     expect(answers).toEqual([false, true]);
   });
 });

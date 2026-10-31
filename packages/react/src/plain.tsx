@@ -7,7 +7,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import type { Card, ComponentSet, DialogProps } from "./contract.js";
-import { mosaicTile, timelineStep } from "./contract.js";
+import { columnsPlace, mosaicTile, timelineStep } from "./contract.js";
 import { Surface } from "./surface.js";
 
 // Read by screen readers, not shown.
@@ -39,6 +39,7 @@ function PlainDialog({ open, title, onClose, children }: DialogProps) {
     // showModal keeps focus inside and closes on Escape; jsdom doesn't have it.
     if (typeof dialog.showModal === "function") dialog.showModal();
     else dialog.setAttribute("open", "");
+    dialog.querySelector<HTMLElement>("[data-focused]")?.focus();
     return () => {
       if (before instanceof HTMLElement && before.isConnected) before.focus();
     };
@@ -71,13 +72,32 @@ const placed = (n: number): CSSProperties => {
 const tallyWords: Record<string, string> = { none: "not started", partial: "under way", done: "done", failed: "failed" };
 
 // Cards in turn, a mosaic's tiles from its first; under a heading, their titles a level below it.
-function plainCards(status: string, cards: Card[], mosaic: boolean | undefined, under = false) {
+// In columns, each column its cards in turn, as columnsPlace lays them.
+function plainCards(status: string, cards: Card[], mosaic: boolean | undefined, under = false, across?: number) {
+  if (across) {
+    const laid = columnsPlace(cards.map((card) => card.picture?.tall ?? 1), across);
+    return (
+      <div aria-busy={status === "loading"} style={{ display: "flex", gap: 2, alignItems: "flex-start" }}>
+        {laid.heights.map((_, c) => (
+          <div key={c} style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+            {plainCards(
+              status,
+              cards.filter((_, n) => laid.places[n]!.column === c),
+              false,
+              under,
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  }
   const Title = under ? "h3" : "h2";
   return (
-    <div aria-busy={status === "loading"} style={mosaic ? { display: "grid", gridTemplateColumns: "repeat(3, 1fr)" } : undefined}>
+    <div aria-busy={status === "loading"} style={mosaic ? { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 2 } : undefined}>
       {cards.map((card, n) => (
         <article key={card.id} style={mosaic ? placed(n) : undefined}>
           {card.picture?.source && <img src={card.picture.source} alt="" />}
+          {card.picture?.sources?.map((source) => <img key={source} src={source} alt="" />)}
           <Title>{card.link ? <a {...card.link}>{card.title}</a> : card.title}</Title>
           {card.tags && card.tags.length > 0 && <p>{card.tags.join(", ")}</p>}
           {card.details.map((detail, i) => (
@@ -593,18 +613,18 @@ export const plain: ComponentSet = {
     </section>
   ),
   FilePicture: ({ source, fit }) => <div style={{ height: 320 }}>{source && <img src={source} alt="" style={{ width: "100%", height: "100%", objectFit: fit ? "contain" : "cover" }} />}</div>,
-  Cards: ({ status, cards, mosaic, groups }) =>
+  Cards: ({ status, cards, mosaic, across, groups }) =>
     groups ? (
       <div aria-busy={status === "loading"}>
         {groups.map((group) => (
           <section key={group.id} aria-labelledby={group.id}>
             <h2 id={group.id}>{group.title}</h2>
-            {plainCards(status, cards.slice(group.first, group.first + group.count), mosaic, true)}
+            {plainCards(status, cards.slice(group.first, group.first + group.count), mosaic, true, across)}
           </section>
         ))}
       </div>
     ) : (
-      plainCards(status, cards, mosaic)
+      plainCards(status, cards, mosaic, false, across)
     ),
   DatedTimeline: ({ years, at, dayAt, onScrub, onStep }) => (
     <div
@@ -1081,9 +1101,9 @@ export const plain: ComponentSet = {
     );
   },
 
-  Button: ({ disabled, error, onClick, children, pressed, hint }) => (
+  Button: ({ disabled, error, onClick, children, pressed, hint, focused }) => (
     <>
-      <button type="button" disabled={disabled} onClick={onClick} aria-pressed={pressed} title={hint}>
+      <button type="button" disabled={disabled} onClick={onClick} aria-pressed={pressed} title={hint} data-focused={focused || undefined}>
         {children}
       </button>
       {error && <span role="alert">{error}</span>}

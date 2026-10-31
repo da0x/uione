@@ -20,9 +20,9 @@ import "@fontsource-variable/fraunces/wght.css";
 import "@fontsource-variable/fraunces/wght-italic.css";
 import { Children, Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { CSSProperties, ReactNode } from "react";
+import type { ComponentProps, CSSProperties, ReactNode } from "react";
 import type { ButtonProps, CardGroup, CardsProps, ChoiceProps, ColorPickerProps, ComponentSet, DatedTimelineProps, OptionsProps, SliderProps } from "@uione/react";
-import { Surface, markLength, marksAlong, mosaicRows, mosaicTile, timelineStep } from "@uione/react";
+import { Surface, columnsPlace, coverPlaces, coverSeed, markLength, marksAlong, mosaicRows, mosaicTile, timelineStep } from "@uione/react";
 import { highlight, highlightCodeBlocks } from "./highlight.js";
 import { MarkdownField, MarkdownText } from "./markdown.js";
 import { nameStyles, setCodeDisplay, tabWidths, useCodeDisplay } from "./display.js";
@@ -284,6 +284,32 @@ const tones: Record<number, string> = {
 const toned = (tone: number | undefined) => (tone ? (tones[tone] ?? "") : "");
 const edged = (tone: number | undefined) => (tone && tones[tone] ? `var(--color-tone-${tone}-edge)` : undefined);
 
+// Several pictures set together across a card's top, as a collection's cover, 4:3: five
+// of them chosen and placed by coverPlaces from their shapes once all are in, each
+// filling its place, two pixels apart, as the desktop sets them.
+function Cover({ sources }: { sources: string[] }) {
+  const [tall, setTall] = useState<Record<string, number>>({});
+  const known = sources.every((source) => tall[source] !== undefined);
+  const places = known ? coverPlaces(sources.map((source) => tall[source]!), 4 / 3, sources[0] ? coverSeed(sources[0]) : 0) : [];
+  const edge = (at: number, inner: boolean) => (inner ? `calc(${at * 100}% + 1px)` : `${at * 100}%`);
+  const read = (source: string, image: HTMLImageElement) => setTall((was) => ({ ...was, [source]: image.naturalWidth > 0 ? image.naturalHeight / image.naturalWidth : 1 }));
+  return (
+    <div className="relative -mx-4 -mt-4 aspect-[4/3] overflow-hidden rounded-t-box bg-sunken">
+      {!known && sources.map((source) => <img key={source} src={source} alt="" className="hidden" onLoad={(event) => read(source, event.currentTarget)} onError={(event) => read(source, event.currentTarget)} />)}
+      {places.map((at) => {
+        const source = sources[at.picture]!;
+        const style: CSSProperties = {
+          left: edge(at.x, at.x > 0.001),
+          top: edge(at.y, at.y > 0.001),
+          right: edge(1 - at.x - at.w, at.x + at.w < 0.999),
+          bottom: edge(1 - at.y - at.h, at.y + at.h < 0.999),
+        };
+        return <img key={source} src={source} alt="" style={style} className="absolute bg-sunken object-cover" />;
+      })}
+    </div>
+  );
+}
+
 // Who's working something, each a small round face: their picture, or their first
 // letter, named for whoever can't see it, close together as a group.
 function Faces({ people }: { people: { name: string; picture?: string }[] }) {
@@ -309,7 +335,7 @@ function Faces({ people }: { people: { name: string; picture?: string }[] }) {
   );
 }
 
-const pressable = "inline-flex items-center justify-center gap-2 rounded-control px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50";
+const pressable = "inline-flex items-center justify-center gap-2 rounded-control px-4 py-2 text-sm font-medium transition-colors active:translate-y-px active:brightness-95 disabled:opacity-50 disabled:active:translate-y-0 disabled:active:brightness-100";
 
 // A label's hue: the one people expect for the usual ones, like red for a bug, and
 // for any other one picked from its words, so it's the same each time.
@@ -339,6 +365,48 @@ export function labelHue(label: string): number {
 
 // A tool that opens its choices in a panel under it, over everything, closed by Esc or a
 // press anywhere else.
+// A tool in a workspace's toolbar, pushed in while the pointer's button is down on it,
+// darker and what's in it a pixel lower, until it's let go wherever the pointer is
+// then; and a moment after its key ran it, so that shows too. Pressed, it acts on
+// what's being worked on and leaves the keyboard, and any caret, with it; Tab still
+// reaches it.
+function Tool({
+  flashed,
+  pushed,
+  className,
+  children,
+  ...rest
+}: { flashed?: boolean; pushed: string; className: string; children: ReactNode } & Omit<ComponentProps<"button">, "className" | "children">) {
+  const [held, setHeld] = useState(false);
+  useEffect(() => {
+    if (!held) return;
+    const letGo = () => setHeld(false);
+    window.addEventListener("pointerup", letGo);
+    window.addEventListener("pointercancel", letGo);
+    return () => {
+      window.removeEventListener("pointerup", letGo);
+      window.removeEventListener("pointercancel", letGo);
+    };
+  }, [held]);
+  const down = (held || flashed) && !rest.disabled;
+  return (
+    <button
+      type="button"
+      {...rest}
+      onMouseDown={(e) => e.preventDefault()}
+      onPointerDown={(e) => {
+        // The main button only, as a click is.
+        if (e.button > 0) return;
+        setHeld(true);
+      }}
+      data-pushed={down || undefined}
+      className={`${className} ${down ? `${pushed} [&>*]:translate-y-px` : ""}`}
+    >
+      {children}
+    </button>
+  );
+}
+
 function Options({ label, icon, tool, open, onToggle, onClose, children }: OptionsProps) {
   const at = useRef<HTMLSpanElement>(null);
   const panel = useRef<HTMLDivElement>(null);
@@ -531,28 +599,77 @@ function ColorPicker({ label, value, disabled, onSettle }: ColorPickerProps) {
   );
 }
 
-// Cards as a mosaic of their pictures, edge to edge but for the gap cards keep, each
-// filling the tile mosaicTile gives it around its middle, its title and what else it
-// shows over its foot on a shade of it, so it reads on any picture. Its rows are as
+// Cards as a mosaic of their pictures, set as a printed page is: square cornered and
+// two pixels apart, the region around them as thin, each filling the tile mosaicTile
+// gives it around its middle, its title and what else it shows across its foot on a
+// shade of it, so it reads on any picture. The one with the keyboard is ringed inside
+// its edges. Its rows are as
 // tall as a column is wide, so it scales as it's resized and no card changes tile;
 // a tile out of view isn't drawn, and its picture isn't fetched, until it's near.
 function Mosaic({ status, cards }: CardsProps) {
   return (
-    <div className="@container" aria-busy={status === "loading"}>
-      <div className="grid grid-cols-3 gap-4" style={{ gridAutoRows: "calc((100cqw - var(--spacing) * 8) / 3)" }}>
+    <div className="@container" data-bleed aria-busy={status === "loading"}>
+      <div className="grid grid-cols-3 gap-[2px]" style={{ gridAutoRows: "calc((100cqw - 4px) / 3)" }}>
         {cards.map((card, n) => {
           const at = mosaicTile(n);
           return (
             <article
               key={card.id}
-              className="relative overflow-hidden rounded-box bg-sunken [contain-intrinsic-size:auto_16rem] [content-visibility:auto]"
+              className="relative overflow-hidden bg-sunken [contain-intrinsic-size:auto_16rem] [content-visibility:auto] has-[a:focus-visible]:after:pointer-events-none has-[a:focus-visible]:after:absolute has-[a:focus-visible]:after:inset-0 has-[a:focus-visible]:after:ring-2 has-[a:focus-visible]:after:ring-inset has-[a:focus-visible]:after:ring-accent"
               style={{ gridColumn: `${at.column + 1} / span ${at.columns}`, gridRow: `${at.row + 1} / span ${at.rows}` }}
             >
               {card.picture?.source && <img src={card.picture.source} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />}
-              <div className="absolute inset-x-2 bottom-2 flex flex-col gap-0.5 rounded-box bg-black/45 px-3 py-2 text-white">
+              <div className="absolute inset-x-0 bottom-0 flex flex-col gap-0.5 bg-black/45 px-3 py-2 text-white">
                 <h2 className="font-sans text-base leading-snug font-semibold">
                   {card.link ? (
-                    <a {...card.link} className="text-white after:absolute after:inset-0 hover:underline">
+                    <a {...card.link} className="text-white outline-none after:absolute after:inset-0 hover:underline">
+                      {card.title}
+                    </a>
+                  ) : (
+                    card.title
+                  )}
+                </h2>
+                {card.details.length > 0 && <div className="flex flex-wrap gap-x-3 text-sm text-white/85">{card.details.map((detail, i) => <span key={i}>{detail}</span>)}</div>}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+      {cards.length === 0 && <p className="text-sm text-muted">{status === "loading" ? "Loading…" : "Nothing here yet."}</p>}
+    </div>
+  );
+}
+
+// Cards in columns of their pictures, set as a mosaic is: square cornered and two
+// pixels apart, each as wide as a column and as tall as its own shape, uncropped, in
+// the place columnsPlace gives it, its title and what else it shows across its foot.
+// Each is placed from the sizes its row keeps, so nothing moves as pictures load; one
+// out of view isn't drawn, and its picture isn't fetched, until it's near.
+function Columns({ status, cards, across }: CardsProps & { across: number }) {
+  const laid = useMemo(() => columnsPlace(cards.map((card) => card.picture?.tall ?? 1), across), [cards, across]);
+  const side = `((100cqw - ${(across - 1) * 2}px) / ${across})`;
+  const tallest = laid.heights.map((h, c) => `calc(${h} * ${side} + ${Math.max(0, laid.counts[c]! - 1) * 2}px)`).join(", ");
+  return (
+    <div className="@container" data-bleed aria-busy={status === "loading"}>
+      <div className="relative" style={{ height: `max(${tallest})` }}>
+        {cards.map((card, n) => {
+          const at = laid.places[n]!;
+          return (
+            <article
+              key={card.id}
+              className="absolute overflow-hidden bg-sunken [content-visibility:auto] has-[a:focus-visible]:after:pointer-events-none has-[a:focus-visible]:after:absolute has-[a:focus-visible]:after:inset-0 has-[a:focus-visible]:after:ring-2 has-[a:focus-visible]:after:ring-inset has-[a:focus-visible]:after:ring-accent"
+              style={{
+                left: `calc(${at.column} * (${side} + 2px))`,
+                top: `calc(${at.above} * ${side} + ${at.before * 2}px)`,
+                width: `calc(${side})`,
+                height: `calc(${card.picture?.tall ?? 1} * ${side})`,
+              }}
+            >
+              {card.picture?.source && <img src={card.picture.source} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />}
+              <div className="absolute inset-x-0 bottom-0 flex flex-col gap-0.5 bg-black/45 px-3 py-2 text-white">
+                <h2 className="font-sans text-base leading-snug font-semibold">
+                  {card.link ? (
+                    <a {...card.link} className="text-white outline-none after:absolute after:inset-0 hover:underline">
                       {card.title}
                     </a>
                   ) : (
@@ -574,18 +691,20 @@ function Mosaic({ status, cards }: CardsProps) {
 // larger, a mosaic's tiles starting again under each. A part out of view isn't laid out
 // or drawn, its height reckoned from how many it holds, so the page scrolls to any
 // heading at once however many are above it.
-function Grouped({ status, cards, mosaic, groups }: CardsProps & { groups: CardGroup[] }) {
+function Grouped({ status, cards, mosaic, across, groups }: CardsProps & { groups: CardGroup[] }) {
   return (
-    <div className="@container flex flex-col gap-8" aria-busy={status === "loading"}>
+    <div className="@container flex flex-col gap-8" data-bleed={mosaic || across ? true : undefined} aria-busy={status === "loading"}>
       {groups.map((group) => {
         const rows = mosaic ? mosaicRows(group.count) : Math.ceil(group.count / 3);
-        const tall = mosaic ? `calc(${rows} * 33cqw + 3rem)` : `calc(${rows} * 22rem + 3rem)`;
+        // In columns, about as tall as its pictures shared among them.
+        const shared = across ? cards.slice(group.first, group.first + group.count).reduce((sum, card) => sum + (card.picture?.tall ?? 1), 0) / across : 0;
+        const tall = across ? `calc(${shared} * ${100 / across}cqw + 3rem)` : mosaic ? `calc(${rows} * 33cqw + 3rem)` : `calc(${rows} * 22rem + 3rem)`;
         return (
           <section key={group.id} aria-labelledby={group.id} className="flex flex-col gap-3" style={{ contentVisibility: "auto", containIntrinsicSize: `auto ${tall}` }}>
             <h2 id={group.id} className="scroll-mt-4 font-sans text-2xl font-semibold tracking-normal">
               {group.title}
             </h2>
-            <radix.Cards status={status} cards={cards.slice(group.first, group.first + group.count)} mosaic={mosaic} />
+            <radix.Cards status={status} cards={cards.slice(group.first, group.first + group.count)} mosaic={mosaic} across={across} />
           </section>
         );
       })}
@@ -981,13 +1100,13 @@ export const radix: ComponentSet = {
         target="_blank"
         rel="noreferrer"
         title="Opens in a new tab"
-        className="inline-flex items-center gap-1 font-medium text-accent decoration-accent/40 underline-offset-4 hover:underline"
+        className="inline-flex items-center gap-1 font-medium text-accent decoration-accent/40 underline-offset-4 hover:underline active:opacity-70"
       >
         {children}
         <ExternalMark />
       </a>
     ) : (
-      <a href={href} onClick={onClick} className="font-medium text-accent decoration-accent/40 underline-offset-4 hover:underline">
+      <a href={href} onClick={onClick} className="font-medium text-accent decoration-accent/40 underline-offset-4 hover:underline active:opacity-70">
         {children}
       </a>
     ),
@@ -1429,8 +1548,8 @@ export const radix: ComponentSet = {
       {source && <img src={source} alt="" className={`h-full w-full ${fit ? "object-contain" : "object-cover"}`} />}
     </div>
   ),
-  Cards: ({ status, cards, mosaic, groups }) => groups ? <Grouped status={status} cards={cards} mosaic={mosaic} groups={groups} /> : (mosaic ? <Mosaic status={status} cards={cards} /> : (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy={status === "loading"}>
+  Cards: ({ status, cards, mosaic, across, groups }) => groups ? <Grouped status={status} cards={cards} mosaic={mosaic} across={across} groups={groups} /> : across ? <Columns status={status} cards={cards} across={across} /> : (mosaic ? <Mosaic status={status} cards={cards} /> : (
+    <div className={`grid gap-4 ${cards.some((card) => card.picture?.sources) ? "lg:grid-cols-2 2xl:grid-cols-3" : "sm:grid-cols-2 lg:grid-cols-3"}`} aria-busy={status === "loading"}>
       {cards.map((card) => {
         const total = card.tally?.reduce((n, part) => n + part.count, 0) ?? 0;
         return (
@@ -1442,7 +1561,8 @@ export const radix: ComponentSet = {
               card.link ? "transition-colors hover:border-accent/50 has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-accent" : ""
             }`}
           >
-            {card.picture && (
+            {card.picture?.sources && <Cover sources={card.picture.sources} />}
+            {card.picture && !card.picture.sources && (
               <div className="-mx-4 -mt-4 aspect-video overflow-hidden rounded-t-box bg-sunken">
                 {card.picture.source && <img src={card.picture.source} alt="" className={`h-full w-full ${card.picture.fit ? "object-contain" : "object-cover"}`} />}
               </div>
@@ -2469,7 +2589,7 @@ export const radix: ComponentSet = {
     );
   },
 
-  Button: ({ kind = "secondary", disabled, error, onClick, children, icon, tool, pressed: on, hint, swatch }) => {
+  Button: ({ kind = "secondary", disabled, error, onClick, children, icon, tool, pressed: on, hint, swatch, focused, flashed }) => {
     // Drawn as an icon, its words still name it, and show when it's pointed at.
     const words = typeof children === "string" ? children : undefined;
     // A color it gives, drawn as a circle of it, outlined so white shows; none, a
@@ -2499,22 +2619,20 @@ export const radix: ComponentSet = {
       // its words when it has none, as wide as they are.
       // A large one's icon is drawn as finely as a small one's, a pixel at most.
       const shape = tool === "large" ? "h-[4.125rem] min-w-[3.75rem] flex-col gap-1 px-2 py-2 text-xs [&>svg]:size-8 [&>svg_*]:[stroke-width:0.5]" : tool === "tiny" ? "size-5 [&>svg]:size-3.5" : drawn ? "size-8 text-xs" : "h-8 min-w-8 px-1.5 text-xs";
-      // Pressed, it acts on what's being worked on and leaves the keyboard, and any
-      // caret, with it; Tab still reaches it.
       return (
-        <button
-          type="button"
+        <Tool
           disabled={disabled}
-          onMouseDown={(e) => e.preventDefault()}
+          flashed={flashed}
           onClick={onClick}
           aria-pressed={on}
           aria-label={tool !== "large" && drawn ? words : undefined}
           title={hint ?? words}
           className={`inline-flex items-center justify-center rounded-control border border-transparent transition-colors hover:bg-sunken focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-40 ${shape} ${on ? "border-accent/50 bg-accent-soft font-semibold text-accent" : "text-ink"}`}
+          pushed={on ? "!bg-accent/25" : "!bg-ink/10"}
         >
           {drawn}
           {(tool === "large" || !drawn) && <span className="whitespace-nowrap leading-none">{children}</span>}
-        </button>
+        </Tool>
       );
     }
     const pressed = (
@@ -2525,6 +2643,7 @@ export const radix: ComponentSet = {
         aria-label={icon ? words : undefined}
         aria-pressed={on}
         title={hint ?? (icon ? words : undefined)}
+        data-focused={focused || undefined}
         className={`self-start ${pressable} ${button[kind]} ${icon && buttonIcons[icon] ? "!px-2" : ""}`}
       >
         {(icon && buttonIcons[icon]) || children}
@@ -2688,7 +2807,7 @@ export const radix: ComponentSet = {
         {toolbar}
         <div className="flex min-h-0 flex-1">
           {tools}
-          <main className="relative flex min-w-0 flex-1 flex-col gap-4 overflow-auto p-3">{regions.main}</main>
+          <main className="relative flex min-w-0 flex-1 flex-col gap-4 overflow-auto p-3 has-[[data-bleed]]:p-[2px]">{regions.main}</main>
           {side}
         </div>
         {status}

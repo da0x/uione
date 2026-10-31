@@ -82,6 +82,7 @@ namespace one::desktop {
 		std::string key;
 		edges padding;
 		std::optional<float> fixed_width, fixed_height;
+		std::optional<float> fixed_tall;  // as tall as so many times its width
 		float grow = 0;         // a share of what's left in a row or column
 		float spacing = 0;      // between children, in rows and columns
 		align cross = align::stretch;  // children across a row or column
@@ -141,6 +142,9 @@ namespace one::desktop {
 		bool shows_focus() const { return focused && !focused_by_default && !focused_by_pointer; }
 		bool carried = false;             // took over from an element of the view before, rather than new
 		bool hovered = false;
+		// The pointer's button went down on it and hasn't come up yet, wherever the
+		// pointer is now, as a button is drawn pushed in.
+		bool held_down = false;
 
 		// Brings an area of this element into view, through any scroll above it.
 		void reveal(const rect& area);
@@ -184,6 +188,7 @@ namespace one::desktop {
 		view&& padding(edges e) && { element_->padding = e; return std::move(*this); }
 		view&& width(float w) && { element_->fixed_width = w; return std::move(*this); }
 		view&& height(float h) && { element_->fixed_height = h; return std::move(*this); }
+		view&& tall(float times) && { element_->fixed_tall = times; return std::move(*this); }
 		view&& grow(float share = 1) && { element_->grow = share; return std::move(*this); }
 		view&& spacing(float s) && { element_->spacing = s; return std::move(*this); }
 		view&& align(one::desktop::align a) && { element_->cross = a; return std::move(*this); }
@@ -284,6 +289,9 @@ namespace one::desktop {
 	// Children left to right, going on to a new line when the next doesn't fit, like
 	// buttons in a narrow column.
 	view flow(std::vector<view> children);
+	// Children in as many equal columns as fit, each at least `least` wide, stretched to
+	// fill the width, like a gallery's cards.
+	view tiles(std::vector<view> children, float least);
 	// The scale text is laid out at in the window being built, measured or drawn, for an
 	// element that lays out text of its own.
 	double text_scale();
@@ -346,6 +354,8 @@ namespace one::desktop {
 	// workspace is: paint is told the canvas and where on it, each time it's drawn.
 	view drawing(std::function<void(canvas& c, rect area)> paint, drawing_pointer pointer = {});
 	view button(std::string label, std::function<void()> pressed, bool primary = false);
+	// One that destroys something, like Delete, filled in the theme's danger.
+	view danger_button(std::string label, std::function<void()> pressed);
 	// Drawn as an icon, like edit or delete, as the web draws one; its words name it,
 	// shown under it while it's pointed at or has the keyboard. One with no such icon
 	// is drawn with its words.
@@ -363,6 +373,7 @@ namespace one::desktop {
 		float line = 0;                    // drawn instead as a stroke, a line this wide, as a stroke color or width is
 		bool tiny = false;                 // smaller still, its icon 14 pixels, as a list's row's buttons are
 		bool on_hover = false;             // drawn only while what it's in is pointed at, as a row's delete is
+		bool flashed = false;              // drawn pushed in a moment, as its key just ran it
 	};
 	view tool_button(std::string icon, std::string label, std::function<void()> pressed, tool_options options = {});
 	// Words that go somewhere: in the accent color, underlined while pointed at or

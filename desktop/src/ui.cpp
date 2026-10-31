@@ -80,7 +80,8 @@ namespace one::desktop {
 		float across = padding.left + padding.right, down = padding.top + padding.bottom;
 		float given = fixed_width.value_or(width);
 		extent content = measure_content(std::max(0.f, given - across));
-		return {fixed_width.value_or(content.width + across), fixed_height.value_or(content.height + down)};
+		float wide = fixed_width.value_or(content.width + across);
+		return {wide, fixed_height.value_or(fixed_tall ? given * *fixed_tall : content.height + down)};
 	}
 
 	std::optional<float> element::baseline(float width) {
@@ -141,6 +142,7 @@ namespace one::desktop {
 		focused = before.focused;
 		focused_by_default = before.focused_by_default;
 		focused_by_pointer = before.focused_by_pointer;
+		held_down = before.held_down;
 		brought = before.brought;
 	}
 
@@ -387,6 +389,42 @@ namespace one::desktop {
 				if (now.last > now.first) out.push_back(now);
 				return out;
 			}
+		};
+
+		// Children in as many equal columns as fit, each at least `least` wide, stretched to
+		// fill the line, as a gallery's cards are; each line as tall as its tallest, its
+		// children at the top.
+		class tiles_element : public element {
+		public:
+			explicit tiles_element(float least) : least_(least) {}
+
+			extent measure_content(float width) override {
+				extent out{width, 0};
+				for_each_line(width, [&](std::size_t, std::size_t, float, float height) { out.height += height + (out.height > 0 ? spacing : 0); });
+				return out;
+			}
+
+			void place_content(const rect& area) override {
+				float y = area.y;
+				for_each_line(area.width, [&](std::size_t first, std::size_t last, float wide, float height) {
+					for (std::size_t i = first; i < last; ++i) children[i]->place({area.x + (i - first) * (wide + spacing), y, wide, children[i]->measure(wide).height});
+					y += height + spacing;
+				});
+			}
+
+		private:
+			template <class F>
+			void for_each_line(float width, F&& each) {
+				std::size_t columns = std::max<std::size_t>(1, static_cast<std::size_t>((width + spacing) / (least_ + spacing)));
+				float wide = std::max(0.f, (width - (columns - 1) * spacing) / columns);
+				for (std::size_t first = 0; first < children.size(); first += columns) {
+					std::size_t last = std::min(children.size(), first + columns);
+					float height = 0;
+					for (std::size_t i = first; i < last; ++i) height = std::max(height, children[i]->measure(wide).height);
+					each(first, last, wide, height);
+				}
+			}
+			float least_;
 		};
 
 		// scrolling
@@ -744,12 +782,11 @@ namespace one::desktop {
 					paint_icon(c, t);
 					return;
 				}
-				color fill = primary_ ? t.accent : t.surface;
-				if (hovered) fill = primary_ ? mixed(t.accent, t.ink, 0.15f) : t.sunken;
+				color fill = shade(t);
 				c.box(frame, {.fill = fill, .border = primary_ ? fill : t.line, .border_width = 1, .radius = std::min(t.corners, 8.f)});
 				// The ring once the person moves to it, not where the window put the keyboard first.
 				if (shows_focus()) c.box(frame.inset(-3), {.border = mixed(t.accent, t.page, 0.4f), .border_width = 2, .radius = std::min(t.corners, 8.f) + 3});
-				rect area = inner();
+				rect area = pushed(inner());
 				const auto& laid = laid_out();
 				c.text(laid, {area.x + (area.width - laid.width()) / 2, area.y + (area.height - laid.height()) / 2});
 			}
@@ -769,17 +806,33 @@ namespace one::desktop {
 			static color mixed(color a, color b, float by) {
 				return {a.red + (b.red - a.red) * by, a.green + (b.green - a.green) * by, a.blue + (b.blue - a.blue) * by, a.alpha};
 			}
-			// Flat, tinted while it's on and shaded while it's pointed at: a large one's icon
-			// over its words, a small one's alone, its words under it while pointed at.
+			// Pushed in while the pointer's button is down on it, or a moment after its key
+			// ran it, so a press is seen to have taken.
+			bool down() const { return !tool_.off && (held_down || tool_.flashed); }
+			// What's in it, a pixel lower while it's pushed in.
+			rect pushed(rect area) const {
+				if (down()) area.y += 1;
+				return area;
+			}
+			color shade(const theme& t) const {
+				color fill = danger_ ? t.danger : primary_ ? t.accent : t.surface;
+				if (down()) return primary_ ? mixed(fill, t.ink, 0.25f) : mixed(t.sunken, t.ink, 0.08f);
+				if (hovered) return primary_ ? mixed(fill, t.ink, 0.15f) : t.sunken;
+				return fill;
+			}
+			// Flat, tinted while it's on and shaded while it's pointed at, darker still and
+			// its icon a pixel lower while it's pushed in: a large one's icon over its words,
+			// a small one's alone, its words under it while pointed at.
 			void paint_tool(canvas& c, const theme& t) {
 				// Shown only while what it's in is pointed at.
 				if (tool_.on_hover && !(hovered || (parent && parent->hovered))) return;
 				float corners = std::min(t.corners, 6.f);
 				color tint = mixed(t.surface, t.accent, 0.16f);
-				if (tool_.on) c.box(frame, {.fill = hovered ? mixed(tint, t.ink, 0.06f) : tint, .border = mixed(t.surface, t.accent, 0.45f), .border_width = 1, .radius = corners});
+				if (tool_.on) c.box(frame, {.fill = down() ? mixed(tint, t.accent, 0.14f) : hovered ? mixed(tint, t.ink, 0.06f) : tint, .border = mixed(t.surface, t.accent, 0.45f), .border_width = 1, .radius = corners});
+				else if (down()) c.box(frame, {.fill = mixed(t.sunken, t.ink, 0.08f), .radius = corners});
 				else if (hovered && !tool_.off) c.box(frame, {.fill = t.sunken, .radius = corners});
 				if (shows_focus()) c.box(frame.inset(-2), {.border = mixed(t.accent, t.page, 0.4f), .border_width = 2, .radius = corners + 2});
-				rect area = inner();
+				rect area = pushed(inner());
 				// One that doesn't apply now is faint, as a disabled button is.
 				color ink = tool_.on ? t.accent : t.ink;
 				if (tool_.off) ink = mixed(t.surface, ink, 0.35f);
@@ -879,11 +932,10 @@ namespace one::desktop {
 			}
 			// Its icon in place of its words, which show under it while it's pointed at.
 			void paint_icon(canvas& c, const theme& t) {
-				color fill = primary_ ? t.accent : t.surface;
-				if (hovered) fill = primary_ ? mixed(t.accent, t.ink, 0.15f) : t.sunken;
+				color fill = shade(t);
 				c.box(frame, {.fill = fill, .border = primary_ ? fill : t.line, .border_width = 1, .radius = std::min(t.corners, 8.f)});
 				if (shows_focus()) c.box(frame.inset(-3), {.border = mixed(t.accent, t.page, 0.4f), .border_width = 2, .radius = std::min(t.corners, 8.f) + 3});
-				rect area = inner();
+				rect area = pushed(inner());
 				draw_icon(c, icon_, {area.x + (area.width - 16) / 2, area.y + (area.height - 16) / 2, 16, 16}, primary_ ? color::hex(0xffffff) : t.ink);
 				if (hovered || (shows_focus())) tooltip(c, t);
 			}
@@ -897,6 +949,10 @@ namespace one::desktop {
 				}
 				return *laid_;
 			}
+		public:
+			bool danger_ = false;  // filled in the danger, as one that destroys something is
+
+		private:
 			std::string label_;
 			std::function<void()> pressed_;
 			bool primary_;
@@ -924,7 +980,10 @@ namespace one::desktop {
 			void paint_content(canvas& c) override {
 				rect area = inner();
 				if (shows_focus()) c.box(frame.inset(-2), {.border = current_theme().accent, .border_width = 1.5f, .radius = 3});
-				c.text(laid_out(area.width), {area.x, area.y});
+				// Pushed in while the pointer's button is down on it: shaded behind, its words a
+				// pixel lower.
+				if (held_down) c.box(frame.inset(-2), {.fill = current_theme().sunken, .radius = 3});
+				c.text(laid_out(area.width), {area.x, area.y + (held_down ? 1.f : 0.f)});
 			}
 			bool handle_key(const key_event& e) override {
 				if (!e.is(keys::enter) && !e.is(keys::keypad_enter)) return false;
@@ -1212,6 +1271,13 @@ namespace one::desktop {
 		return view(std::move(e));
 	}
 
+	view tiles(std::vector<view> children, float least) {
+		auto e = std::make_unique<tiles_element>(least);
+		e->children = taken(children);
+		adopt_children(*e);
+		return view(std::move(e));
+	}
+
 	view scroll(view content) {
 		auto e = std::make_unique<scroll_element>(false);
 		if (content.get()) e->children.push_back(std::move(content).take());
@@ -1275,6 +1341,11 @@ namespace one::desktop {
 
 	view button(std::string label, std::function<void()> pressed, bool primary) {
 		return made<button_element>(std::move(label), std::move(pressed), primary);
+	}
+	view danger_button(std::string label, std::function<void()> pressed) {
+		auto danger = std::make_unique<button_element>(std::move(label), std::move(pressed), true);
+		danger->danger_ = true;
+		return view(std::move(danger));
 	}
 	view icon_button(std::string icon, std::string label, std::function<void()> pressed, bool primary) {
 		return made<button_element>(std::move(label), std::move(pressed), primary, std::move(icon));

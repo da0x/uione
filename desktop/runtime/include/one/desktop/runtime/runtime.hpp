@@ -50,6 +50,9 @@ namespace one::desktop::runtime {
 	// about closing, stops filling the screen, or goes back, and F11 fills the screen
 	// with the app, or stops.
 	bool key(navigator& nav, const key_event& e);
+	// Whether one of these keys just ran what it's a key for, so the tool it's on is
+	// drawn pushed in a moment, as a press of it is. Read in a view, it's current.
+	bool flashing(const std::vector<std::string>& keys);
 
 	// The screen the app's window is on, in that screen's own pixels, and whether
 	// the app fills it, in which case a page is only what it's made of. Read in a

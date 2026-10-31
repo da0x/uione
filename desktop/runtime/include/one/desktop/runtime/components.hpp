@@ -261,6 +261,10 @@ namespace one::desktop::runtime {
 	// thread, and a copy no longer on its longer side than `longest` where that's given,
 	// as for a card, where the whole of a large one would be wasted.
 	desktop::view picture_of(page& p, const std::string& kept, bool fit, float height, int longest = 0);
+	// Several files' pictures set together, `tall` times as tall as it's wide, as a
+	// collection's cover is: five of them, chosen and placed by their shapes (see
+	// screens::cover_places) once all are read, each filling its place, two pixels apart.
+	desktop::view pictures_of(page& p, const std::vector<std::string>& kept, float tall, int longest = 0);
 	// A file's picture alone, the whole of the screen, as a photo's own screen is: all of
 	// it fitted in on black, edge to edge, the workspace's bars drawn over it. Zoomed by
 	// the screen's zoom buttons, by Ctrl and =, - or 0, by the wheel with Ctrl held or a

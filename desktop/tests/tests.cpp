@@ -970,6 +970,36 @@ TEST("a toolbar: large tool buttons with their words, small ones, one on and one
 	});
 }
 
+TEST("a tool pushed in draws darker than one pointed at, its icon a pixel lower, large or small, on or not, and a key's flash draws it so too") {
+	// A tool as it's drawn idle, pointed at, and pushed in under the pointer.
+	auto drawn = [](one::desktop::tool_options options, bool hovered, bool held) {
+		return one::desktop::offscreen::draw({120, 100}, 1, tested_theme().surface, [&](one::desktop::canvas& c) {
+			one::desktop::detail::theme_in_use() = &tested_theme();
+			auto root = placed(one::desktop::row(one::desktop::tool_button("delete", "Remove", [] {}, options)).padding(12), {0, 0, 120, 100});
+			auto& tool = *root->children[0];
+			tool.hovered = hovered;
+			tool.held_down = held;
+			root->paint(c);
+			c.finish();
+		});
+	};
+	auto differ = [](const auto& a, const auto& b) { return one::desktop::offscreen::differences(a, b, 3) > 20; };
+	for (auto options : {one::desktop::tool_options{}, one::desktop::tool_options{.large = true}, one::desktop::tool_options{.on = true}}) {
+		auto idle = drawn(options, false, false), pointed = drawn(options, true, false), pushed = drawn(options, true, true);
+		CHECK(differ(pushed, idle));
+		CHECK(differ(pushed, pointed));
+		// Let go off it, it's as it was.
+		CHECK(!differ(drawn(options, false, false), idle));
+	}
+	// On stays distinct from pushed in.
+	CHECK(differ(drawn({.on = true}, false, false), drawn({}, true, true)));
+	// A key that ran it pushes it in a moment, as a press does.
+	auto flashed = one::desktop::tool_options{.flashed = true};
+	CHECK(!differ(drawn(flashed, false, false), drawn({}, false, true)));
+	// One that can't be pressed isn't pushed in.
+	CHECK(!differ(drawn({.off = true}, false, true), drawn({.off = true}, false, false)));
+}
+
 namespace {
 
 	// A picture `width` × `height` whose every pixel says where it is: red its column,

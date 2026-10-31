@@ -950,6 +950,75 @@ TEST("a card's title is set in the theme's text face, strong, not in its heading
 	one::desktop::detail::theme_in_use() = &tested_theme();
 }
 
+TEST("cards in columns: each picture its column's width and its own shape, uncropped, in the shortest column, placed from the sizes its row keeps, one without square") {
+	auto folder = std::filesystem::temp_directory_path() / "uione-columns";
+	std::filesystem::remove_all(folder);
+	std::filesystem::create_directories(folder);
+	struct kept_there : memory_source {
+		std::filesystem::path in;
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return in / kept; }
+	} data;
+	data.in = folder;
+	const std::uint32_t colors[] = {0x2457d6, 0x1a7f37, 0xc2312d, 0x9a6700, 0x6e40c9, 0x0f766e, 0xb4357a};
+	const int sizes[][2] = {{160, 90}, {90, 160}, {120, 120}, {160, 120}, {90, 160}, {160, 90}, {0, 0}};
+	list clippings;
+	for (int i = 0; i < 7; ++i) {
+		std::string name = std::format("clipping-{}.png", i + 1);
+		int w = sizes[i][0] ? sizes[i][0] : 100, h = sizes[i][1] ? sizes[i][1] : 100;
+		std::vector<std::uint8_t> pixels(static_cast<std::size_t>(w) * h * 4);
+		for (std::size_t at = 0; at < pixels.size(); at += 4) {
+			pixels[at] = static_cast<std::uint8_t>(colors[i] >> 16), pixels[at + 1] = static_cast<std::uint8_t>(colors[i] >> 8), pixels[at + 2] = static_cast<std::uint8_t>(colors[i]), pixels[at + 3] = 255;
+		}
+		CHECK(one::desktop::picture::of(w, h, std::move(pixels)).write_png(folder / name).has_value());
+		fields row{{"id", std::format("c{}", i + 1)}, {"name", std::format("Clipping {}", i + 1)}, {"image", name}};
+		// The last one's size isn't known.
+		if (sizes[i][0]) row["picture_width"] = value(sizes[i][0]), row["picture_height"] = value(sizes[i][1]);
+		clippings.push_back(value(row));
+	}
+	data.set("studio::clippings_page", "", value(fields{{"clippings", clippings}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Clippings", "/", "", [](page& p) {
+		                     return items(cards(p, {.view = p.view("studio::clippings_page"), .list = "clippings", .columns = {{"name", "Name"}}, .link = "/clippings/:clipping", .picture = "image", .across = 3}));
+	                     }});
+	s.screens.push_back({"Clipping", "/clippings/:clipping", "", [](page&) { return items(); }});
+	navigator nav(s, data);
+	nav.open("/");
+	matches_golden("cards-columns", {700, 900}, [&] { return drawn(nav); });
+	std::function<one::desktop::element*(one::desktop::element&)> find = [&](one::desktop::element& e) -> one::desktop::element* {
+		if (e.focusable() && e.children.empty() && e.measure(1200).height > e.measure(600).height) return &e;
+		for (auto& child : e.children) {
+			if (auto* in = find(*child)) return in;
+		}
+		return nullptr;
+	};
+	auto root = drawn(nav).take();
+	root->place({0, 0, 900, 1500});
+	auto* columns = find(*root);
+	CHECK(columns != nullptr);
+	if (!columns) return;
+	columns->place({0, 0, 904, columns->measure(904).height});
+	float side = 300;
+	// Each in the shortest column so far, the leftmost of those, as columns_place lays them.
+	std::vector<double> tall{90 / 160., 160 / 90., 1, 0.75, 160 / 90., 90 / 160., 1};
+	auto laid = columns_place(tall, 3);
+	float tallest = 0;
+	for (std::size_t c = 0; c < 3; ++c) tallest = std::max(tallest, static_cast<float>(laid.heights[c]) * side + (laid.counts[c] - 1) * 2);
+	CHECK(std::abs(columns->measure(904).height - tallest) < 1);
+	for (std::size_t i = 0; i < tall.size(); ++i) {
+		const auto& at = laid.places[i];
+		float x = at.column * (side + 2) + side / 2, y = static_cast<float>(at.above) * side + at.before * 2 + static_cast<float>(tall[i]) * side / 2;
+		nav.open("/");
+		auto again = drawn(nav).take();
+		again->place({0, 0, 900, 1500});
+		auto* m = find(*again);
+		m->place({0, 0, 904, m->measure(904).height});
+		CHECK(m->click({x, y}));
+		CHECK(nav.current().address() == std::format("/clippings/c{}", i + 1));
+	}
+	std::filesystem::remove_all(folder);
+}
+
 TEST("cards as a mosaic: every eight two blocks of a tall tile, a wide one and two small, the second mirrored, each picture filling its tile around its middle, its title over its foot") {
 	auto folder = std::filesystem::temp_directory_path() / "uione-mosaic";
 	std::filesystem::remove_all(folder);
@@ -1026,6 +1095,49 @@ TEST("cards as a mosaic: every eight two blocks of a tall tile, a wide one and t
 		auto eleventh = mosaic_tile(10);
 		CHECK(opened(eleventh.column * (side + 16) + 10, eleventh.row * (side + 16) + 10) == "/clippings/c11");
 	}
+	std::filesystem::remove_all(folder);
+}
+
+TEST("cards with several pictures each set five of them together, as a collection's cover, chosen and placed by their shapes, the cards larger, stretched to fill each line") {
+	auto folder = std::filesystem::temp_directory_path() / "uione-covers";
+	std::filesystem::remove_all(folder);
+	std::filesystem::create_directories(folder);
+	const std::uint32_t colors[] = {0x2457d6, 0x1a7f37, 0xc2312d, 0x9a6700, 0x6e40c9};
+	// Each color as a landscape, p, and a portrait, q.
+	for (int i = 0; i < 10; ++i) {
+		int w = i < 5 ? 160 : 120, h = i < 5 ? 120 : 160;
+		std::vector<std::uint8_t> pixels(static_cast<std::size_t>(w * h * 4), 255);
+		for (std::size_t at = 0; at < pixels.size(); at += 4) {
+			pixels[at] = static_cast<std::uint8_t>(colors[i % 5] >> 16);
+			pixels[at + 1] = static_cast<std::uint8_t>(colors[i % 5] >> 8);
+			pixels[at + 2] = static_cast<std::uint8_t>(colors[i % 5]);
+		}
+		CHECK(one::desktop::picture::of(w, h, std::move(pixels)).write_png(folder / std::format("{}{}.png", i < 5 ? 'p' : 'q', i % 5)).has_value());
+	}
+	struct kept_there : memory_source {
+		std::filesystem::path in;
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return in / kept; }
+	} data;
+	data.in = folder;
+	// Samples of three portraits among landscapes, portraits alone, landscapes alone, three,
+	// one, and none.
+	const std::vector<std::vector<std::string>> shelves = {{"p0", "q1", "p2", "q3", "q4", "p1"}, {"q0", "q1", "q2", "q3", "q4", "q0"}, {"p0", "p1", "p2", "p3", "p4", "p2"}, {"p0", "q1", "p2"}, {"p0"}, {}};
+	list libraries;
+	for (std::size_t n = 0; n < shelves.size(); ++n) {
+		list covers;
+		for (const auto& one : shelves[n]) covers.push_back(value(one + ".png"));
+		libraries.push_back(value(fields{{"id", std::format("l{}", n)}, {"name", std::format("{} photos", shelves[n].size())}, {"covers", covers}}));
+	}
+	data.set("studio::shelves", "", value(fields{{"rows", libraries}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Libraries", "/", "", [](page& p) {
+		                     return items(cards(p, {.view = p.view("studio::shelves"), .list = "rows", .columns = {{"name", "Name"}}, .link = "/libraries/:library", .picture = "covers"}));
+	                     }});
+	s.screens.push_back({"Library", "/libraries/:library", "", [](page&) { return items(); }});
+	navigator nav(s, data);
+	nav.open("/");
+	matches_golden("cards-covers", {1100, 2140}, [&] { return drawn(nav); });
 	std::filesystem::remove_all(folder);
 }
 
@@ -1805,6 +1917,75 @@ TEST("a workspace: its bar, the app's name in its middle and light and dark at i
 	CHECK(key(nav, one::desktop::key_event{.symbol = 'z', .text = "", .control = true}));
 	CHECK(nav.current().told().peek() == "Undid place.");
 	matches_golden("workspace", {900, 420}, [&] { return drawn(nav); });
+}
+
+TEST("a tool that asks first asks for its key too, over the work, and nothing under the question hears a key while it's asked") {
+	memory_source data;
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Studio", "/", "", [](page& p) {
+		                     return workspace(p, region{"toolbar", along(group(p, "Piece", false, false, [&] {
+			                                                          return tools(command(p, {.command = "studio::piece::delete", .label = "Remove", .icon = "delete", .keys = {"delete"}, .confirm = "Remove this piece?", .destroys = true}),
+			                                                                       command(p, {.command = "studio::piece::create", .label = "New", .icon = "add", .keys = {"ctrl+n"}}));
+		                                                          }))},
+		                                      region{"main", items(text({words("The pieces")}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	(void)drawn(nav);
+	auto pressed = [&](std::uint32_t symbol, bool control = false) { return key(nav, one::desktop::key_event{.symbol = symbol, .text = "", .control = control}); };
+	// The key alone only asks.
+	CHECK(pressed(one::desktop::keys::delete_key));
+	CHECK(data.runs().empty());
+	CHECK(nav.current().asked().peek().has_value());
+	matches_golden("asked", {700, 360}, [&] { return drawn(nav); });
+	// Asked, the key again and any other are the question's.
+	CHECK(pressed(one::desktop::keys::delete_key));
+	CHECK(pressed('n', true));
+	CHECK(data.runs().empty());
+	CHECK(pressed(one::desktop::keys::escape));
+	CHECK(!nav.current().asked().peek().has_value());
+	CHECK(data.runs().empty());
+	// What has the keyboard is Cancel.
+	CHECK(pressed(one::desktop::keys::delete_key));
+	auto root = built(nav);
+	auto all = focusable_in(*root);
+	auto first = std::ranges::find_if(all, [](auto* e) { return e->wants_focus; });
+	CHECK(first != all.end());
+	if (first != all.end()) (*first)->click({(*first)->frame.x + 4, (*first)->frame.y + 4});
+	CHECK(!nav.current().asked().peek().has_value());
+	CHECK(data.runs().empty());
+	// Enter says yes.
+	CHECK(pressed(one::desktop::keys::delete_key));
+	CHECK(pressed(one::desktop::keys::enter));
+	CHECK(data.runs().size() == 1);
+	CHECK(!nav.current().asked().peek().has_value());
+	// A press outside it says no.
+	CHECK(pressed(one::desktop::keys::delete_key));
+	root = built(nav);
+	auto* outside = root->hit({5, 890});
+	CHECK(outside != nullptr);
+	for (auto* e = outside; e; e = e->parent)
+		if (e->press({5, 890}, 1)) break;
+	CHECK(!nav.current().asked().peek().has_value());
+	CHECK(data.runs().size() == 1);
+}
+
+TEST("a delete that then opens its library opens the library the page is in, not one named by what it deleted") {
+	memory_source data;
+	data.on("archive::photo::delete", [](const value& f, memory_source&) -> answer { return f["id"].as_string(); });
+	site s{.name = "archive", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Library", "/libraries/:library", "", [](page&) { return items(text({words("The library")})); }});
+	s.screens.push_back({"Photo", "/libraries/:library/photos/:photo", "", [](page& p) {
+		                     return items(command(p, {.command = "archive::photo::delete", .label = "Remove", .id = p.param("photo"), .keys = {"delete"}, .then_open = "/libraries/:library"}));
+	                     }});
+	navigator nav(s, data);
+	nav.open("/libraries/l1/photos/ph7");
+	(void)drawn(nav);
+	CHECK(key(nav, one::desktop::key_event{.symbol = one::desktop::keys::delete_key, .text = ""}));
+	CHECK(data.runs().size() == 1);
+	CHECK(nav.current().address() == "/libraries/l1");
 }
 
 TEST("a toolbar is a thin strip while every group it shows is a single row of small tools, and full with any other") {
@@ -4520,7 +4701,7 @@ namespace {
 
 	// Posters taken a few hours apart, newest first, from the end of October 2026 back,
 	// under a heading for each month as a mosaic, and the years and months beside them.
-	site dated_archive(int count, memory_source& data) {
+	list dated_posters(int count, int across) {
 		using namespace std::chrono;
 		list posters;
 		auto newest = sys_days(year(2026) / October / day(30)) + hours(12);
@@ -4528,14 +4709,21 @@ namespace {
 			value taken;
 			taken.type = value::kind::time;
 			taken.time.seconds = duration_cast<seconds>((newest - hours(30) * i).time_since_epoch()).count();
-			posters.push_back(value(fields{{"id", std::format("p{}", i)}, {"title", std::format("Poster {}", i)}, {"image", ""}, {"taken", taken}}));
+			fields row{{"id", std::format("p{}", i)}, {"title", std::format("Poster {}", i)}, {"image", ""}, {"taken", taken}};
+			// In columns, each its own shape, some with none.
+			if (across && i % 7 != 0) row["picture_width"] = value(3000 + (i % 5) * 400), row["picture_height"] = value(2000 + (i % 3) * 1000);
+			posters.push_back(value(row));
 		}
-		data.set("studio::archive", "", value(fields{{"posters", posters}}));
+		return posters;
+	}
+
+	site dated_archive(int count, memory_source& data, int across = 0) {
+		data.set("studio::archive", "", value(fields{{"posters", dated_posters(count, across)}}));
 		site s{.name = "studio", .id = "org.uione.runtime-tests"};
 		s.look = tested_theme();
-		s.screens.push_back({"Posters", "/posters", "", [](page& p) {
+		s.screens.push_back({"Posters", "/posters", "", [across](page& p) {
 			                     auto archive = p.view("studio::archive");
-			                     return workspace(p, region{"main", items(cards(p, {.view = archive, .list = "posters", .columns = {{"title", "Title"}}, .link = "/posters/:poster", .picture = "image", .mosaic = true, .by = "taken", .unit = time_unit::month, .key = "/posters cards"}))},
+			                     return workspace(p, region{"main", items(cards(p, {.view = archive, .list = "posters", .columns = {{"title", "Title"}}, .link = "/posters/:poster", .picture = "image", .mosaic = across == 0, .across = across, .by = "taken", .unit = time_unit::month, .key = "/posters cards"}))},
 			                                      region{"side", items(dated_timeline(p, {.view = archive, .list = "posters", .by = "taken", .unit = time_unit::month, .cards = "/posters cards"}))});
 		                     }});
 		s.screens.push_back({"Poster", "/posters/:poster", "", [](page&) { return items(); }});
@@ -4584,9 +4772,9 @@ TEST("cards by a date are under a heading for each month, a mosaic's tiles start
 	CHECK(timeline != nullptr);
 	if (mosaics.size() != 4 || !timeline) return;
 	// Each month's mosaic starts with its own tall tile, so its height is its count's.
-	float side = (mosaics[1]->frame.width - 32) / 3;
-	CHECK(std::abs(mosaics[0]->frame.height - (mosaic_rows(24) * side + (mosaic_rows(24) - 1) * 16)) < 2);
-	CHECK(std::abs(mosaics[2]->frame.height - (mosaic_rows(25) * side + (mosaic_rows(25) - 1) * 16)) < 2);
+	float side = (mosaics[1]->frame.width - 4) / 3;
+	CHECK(std::abs(mosaics[0]->frame.height - (mosaic_rows(24) * side + (mosaic_rows(24) - 1) * 2)) < 2);
+	CHECK(std::abs(mosaics[2]->frame.height - (mosaic_rows(25) * side + (mosaic_rows(25) - 1) * 2)) < 2);
 	// A strip at the window's right edge, as tall as what scrolls the cards.
 	auto scrolled = mosaics[0]->scrolled();
 	CHECK(scrolled.has_value());
@@ -4646,6 +4834,111 @@ TEST("cards by a date are under a heading for each month, a mosaic's tiles start
 	timeline->handle_key({.symbol = one::desktop::keys::end, .text = ""});
 	window.update();
 	CHECK(std::abs(offset() - (length - scrolled->visible)) < 1);
+}
+
+TEST("cards shown as a mosaic or in columns, as a field of their view says, change as it's changed, and the timeline beside them scrolls whichever is shown") {
+	use_time_zone("UTC");
+	memory_source data;
+	auto posters = dated_posters(80, 5);
+	data.set("studio::archive", "", value(fields{{"posters", posters}, {"layout", "mosaic"}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Posters", "/posters", "", [](page& p) {
+		                     auto archive = p.view("studio::archive");
+		                     auto shown = [&](bool mosaic, int across) {
+			                     return cards(p, {.view = archive, .list = "posters", .columns = {{"title", "Title"}}, .link = "/posters/:poster", .picture = "image", .mosaic = mosaic, .across = across, .by = "taken", .unit = time_unit::month, .key = "/posters cards"});
+		                     };
+		                     return workspace(p, region{"main", items([&] { if (same(at(archive, "layout"), value("mosaic"))) return shown(true, 0); return one::desktop::view(); }(), [&] { if (same(at(archive, "layout"), value("columns"))) return shown(false, 5); return one::desktop::view(); }())},
+		                                      region{"side", items(dated_timeline(p, {.view = archive, .list = "posters", .by = "taken", .unit = time_unit::month, .cards = "/posters cards"}))});
+	                     }});
+	s.screens.push_back({"Poster", "/posters/:poster", "", [](page&) { return items(); }});
+	navigator nav(s, data);
+	nav.open("/posters");
+	kept_window window(nav);
+	window.w.size = {1200, 700};
+	window.update();
+	(void)looked(window.w);
+	window.update();
+	std::vector<one::desktop::element*> parts;
+	one::desktop::element* timeline = nullptr;
+	auto again = [&] {
+		window.update();
+		(void)looked(window.w);
+		window.update();
+		parts.clear();
+		timeline = nullptr;
+		each_dated(*window.w.root, parts, timeline);
+	};
+	again();
+	CHECK(parts.size() == 4);
+	CHECK(timeline != nullptr);
+	if (parts.size() != 4 || !timeline) return;
+	float side = (parts[1]->frame.width - 4) / 3;
+	float as_mosaic = parts[0]->frame.height;
+	CHECK(std::abs(as_mosaic - (mosaic_rows(24) * side + (mosaic_rows(24) - 1) * 2)) < 2);
+	float top = parts[0]->frame.y;
+	// Changed to columns, as a command would, the same months are in columns instead.
+	data.set("studio::archive", "", value(fields{{"posters", posters}, {"layout", "columns"}}));
+	again();
+	CHECK(parts.size() == 4);
+	CHECK(timeline != nullptr);
+	if (parts.size() != 4 || !timeline) return;
+	CHECK_SAYING(std::abs(parts[0]->frame.height - as_mosaic) > 20, std::format("{} {}", parts[0]->frame.height, as_mosaic));
+	// The timeline scrolls these: down a heading, to September's, and to the end.
+	timeline->handle_key({.symbol = one::desktop::keys::home, .text = ""});
+	timeline->handle_key({.symbol = one::desktop::keys::down, .text = ""});
+	again();
+	CHECK_SAYING(std::abs(parts[1]->frame.y - top) < 50, std::format("{} {}", parts[1]->frame.y, top));
+	timeline->handle_key({.symbol = one::desktop::keys::end, .text = ""});
+	again();
+	auto scrolled = parts[0]->scrolled();
+	CHECK(scrolled.has_value());
+	if (scrolled) CHECK(std::abs(scrolled->offset - (scrolled->length - scrolled->visible)) < 1);
+	// And back to the mosaic, which the timeline scrolls in turn.
+	data.set("studio::archive", "", value(fields{{"posters", posters}, {"layout", "mosaic"}}));
+	again();
+	CHECK(parts.size() == 4);
+	if (parts.size() != 4 || !timeline) return;
+	CHECK(std::abs(parts[0]->frame.height - as_mosaic) < 2);
+	timeline->handle_key({.symbol = one::desktop::keys::home, .text = ""});
+	timeline->handle_key({.symbol = one::desktop::keys::down, .text = ""});
+	again();
+	CHECK_SAYING(std::abs(parts[1]->frame.y - top) < 50, std::format("{} {}", parts[1]->frame.y, top));
+}
+
+TEST("twenty thousand cards in columns by a date are placed from their sizes, and the oldest scrolled to as their timeline is dragged past its foot, in a moment") {
+	use_time_zone("UTC");
+	memory_source data;
+	auto s = dated_archive(20000, data, 5);
+	navigator nav(s, data);
+	nav.open("/posters");
+	kept_window window(nav);
+	window.w.size = {1200, 700};
+	using clock = std::chrono::steady_clock;
+	auto started = clock::now();
+	window.update();
+	(void)looked(window.w);
+	auto first = clock::now() - started;
+	std::vector<one::desktop::element*> parts;
+	one::desktop::element* timeline = nullptr;
+	each_dated(*window.w.root, parts, timeline);
+	CHECK(timeline != nullptr);
+	if (!timeline) return;
+	one::desktop::rect strip = timeline->frame;
+	started = clock::now();
+	one::desktop::deliver_press(window.w, {strip.x + 30, strip.bottom() - 1}, 1);
+	one::desktop::deliver_pointer(window.w, {strip.x + 30, strip.bottom() + 20});
+	one::desktop::deliver_release(window.w, {strip.x + 30, strip.bottom() + 20});
+	one::desktop::bring_up_to_date(window.w);
+	(void)looked(window.w);
+	auto jump = clock::now() - started;
+	each_dated(*window.w.root, parts = {}, timeline);
+	CHECK_SAYING(parts.back()->frame.y < 700, std::format("{}", parts.back()->frame.y));
+	auto ms = [](auto d) { return std::chrono::duration<double, std::milli>(d).count(); };
+	std::fprintf(stderr, "    20000 cards in columns: first drawn in %.1f ms, the oldest scrolled to and drawn in %.1f ms\n", ms(first), ms(jump));
+	// Unoptimized and checked as these tests are built, a good deal slower than an app.
+	CHECK(ms(first) < 3000);
+	CHECK(ms(jump) < 500);
 }
 
 TEST("twenty thousand cards by a date have their days worked out, and the oldest scrolled to as their timeline is dragged past its foot, in a moment, drawing only what's in view") {

@@ -189,8 +189,51 @@ describe("commands", () => {
     expect(source.runs).toEqual([]);
 
     fireEvent.click(screen.getByRole("button", { name: "Withdraw" }));
-    fireEvent.click(screen.getByRole("button", { name: "Yes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Yes, go ahead" }));
     await waitFor(() => expect(source.runs).toEqual([{ command: "library::book::withdraw", input: {} }]));
+  });
+
+  it("then opens the parameter named like its entity with what it answers, and the rest as the page's address has them", async () => {
+    const source = memorySource({ commands: { "archive::photo::delete": (input) => ({ id: String(input.id) }) } });
+    let at = "";
+    function Where() {
+      at = useLocation().pathname;
+      return null;
+    }
+    const photo = defineScreen({ title: "Photo", route: "/libraries/:library/photos/:photo" }, () => (
+      <>
+        <Command name="archive::photo::delete" id="ph7" label="Remove" thenOpen="/libraries/:library" />
+        <Where />
+      </>
+    ));
+    const library = defineScreen({ title: "Library", route: "/libraries/:library" }, () => <Where />);
+    render(<App name="archive" screens={[photo, library]} ui={plain} data={source} location="/libraries/l1/photos/ph7" />);
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(at).toBe("/libraries/l1"));
+  });
+
+  it("asks first when its own button says to, its key too, the answer its own words", async () => {
+    const source = memorySource();
+    renderScreen(source, () => <Command name="studio::piece::delete" label="Remove" keys={["delete"]} confirm="Remove this piece?" destroys />);
+    fireEvent.keyDown(window, { key: "Delete" });
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.textContent).toContain("Remove this piece?");
+    // Cancel has the keyboard, and the key again, or any other, reaches nothing under it.
+    await waitFor(() => expect(document.activeElement?.textContent).toBe("Cancel"));
+    fireEvent.keyDown(window, { key: "Delete" });
+    expect(source.runs).toEqual([]);
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(source.runs).toEqual([]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    fireEvent.keyDown(document.activeElement!, { key: "Enter" });
+    await waitFor(() => expect(source.runs).toEqual([{ command: "studio::piece::delete", input: {} }]));
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(source.runs).toHaveLength(2));
   });
 });
 
@@ -286,7 +329,7 @@ describe("tables", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Withdraw Dune" }));
     expect(screen.getByRole("dialog").textContent).toContain("Withdraw Dune?");
-    fireEvent.click(screen.getByRole("button", { name: "Yes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Yes, go ahead" }));
     await waitFor(() => expect(source.runs).toEqual([{ command: "library::book::withdraw", input: { id: "b2" } }]));
   });
 });
@@ -623,7 +666,7 @@ describe("why a command failed", () => {
       </>
     ));
     fireEvent.click(screen.getByRole("button", { name: "Withdraw" }));
-    fireEvent.click(screen.getByRole("button", { name: "Yes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Yes, go ahead" }));
     expect((await screen.findByRole("alert")).textContent).toBe("that book is on loan");
     fireEvent.click(screen.getByRole("button", { name: "Withdraw" }));
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));

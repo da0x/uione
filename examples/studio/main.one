@@ -37,6 +37,12 @@ namespace studio at / {
 		pen
 	}
 
+	// How the clippings are set out: as a magazine's pages, or in columns.
+	enum arrangement {
+		mosaic   "Magazine"
+		columns  "Columns"
+	}
+
 	// What a poster is made of: pictures, words and boxes, lowest first. Around a
 	// picture is nothing, its edges drawn out or its edge color to the poster's edges,
 	// or the rest filled from every harmonized picture together, it melted into that;
@@ -193,7 +199,7 @@ namespace studio at / {
 	view clippings_page {
 		clippings = each clipping {
 			order by picture_date descending
-			name  image  picture_bytes  picture_date
+			name  image  picture_bytes  picture_date  picture_width  picture_height
 		}
 		// How many there are, and how many bytes they take together.
 		total = count(clippings)
@@ -307,8 +313,8 @@ namespace studio at / {
 	}
 
 	// Pictures kept to go on posters, each one dropped, pasted or chosen made a clipping,
-	// set edge to edge as a mosaic under the month each was taken, newest first, and
-	// their timeline along it, scrolled through, while it's shown.
+	// set edge to edge as a mosaic or in columns under the month each was taken, newest
+	// first, and their timeline along it, scrolled through, while it's shown.
 	screen "Clippings" /clippings {
 		layout workspace
 		bar {
@@ -320,12 +326,22 @@ namespace studio at / {
 				add folder "Folder" icon folder
 				paste "Paste" icon paste key ctrl+v
 			}
+			group "Layout" small rows of 2 at end {
+				toggle arrangement::mosaic "Magazine" icon mosaic key m
+				toggle arrangement::columns "Columns" icon columns key c
+			}
 			group "View" small at end {
 				toggle timeline "Timeline" icon timeline key t
 			}
 		}
 		main {
-			cards clippings_page.clippings mosaic by picture_date month link /clippings/:clipping {
+			cards clippings_page.clippings mosaic by picture_date month link /clippings/:clipping when arrangement == arrangement::mosaic {
+				picture image
+				name
+				add clipping::create
+				paste
+			}
+			cards clippings_page.clippings columns 5 by picture_date month link /clippings/:clipping when arrangement == arrangement::columns {
 				picture image
 				name
 				add clipping::create

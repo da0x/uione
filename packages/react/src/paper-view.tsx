@@ -174,9 +174,9 @@ export function PaperButton({
   const step = useSizeStep();
   const off = useOff() || (by > 0 && step >= sizes.length - 1) || (by < 0 && step <= 0);
   const press = () => (chooses ? (folder ? chooseFolder : choosePictures)((files) => handPictures(paper, files)) : pasting ? handPictures(paper, "paste") : by ? resize(by) : askInsert(paper, given));
-  useKeys(keys, press, !off);
+  const flashed = useKeys(keys, press, !off);
   return (
-    <ui.Button kind="secondary" icon={icon} tool={tool} disabled={off} hint={hintOf(label, keys)} onClick={press}>
+    <ui.Button kind="secondary" icon={icon} tool={tool} flashed={flashed} disabled={off} hint={hintOf(label, keys)} onClick={press}>
       {label}
     </ui.Button>
   );

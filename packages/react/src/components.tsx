@@ -15,8 +15,9 @@ import { hintOf, leaveFull, rememberGiven, setPicked as pickRow, useInGroup, use
 import { useSaying } from "./said.js";
 import { PictureAlone, stepped, useAwakeOn, useSwipeStep } from "./alone.js";
 import { pictureSize } from "./vectors.js";
+import { madeOpens } from "./opening.js";
 import { cameraOf, factsOf, takenAt } from "./exif.js";
-import { dayTitle, rulerOf, timeGroups } from "./contract.js";
+import { dayTitle, rulerOf, tallOf, timeGroups } from "./contract.js";
 import type { BoardCard, CanvasRegion, CardGroup, ChartProps, FieldProps, Filtered, Hue, LandingFeature, LandingProps, LinkProps, PipelineRow, TimelineStep, TimeUnit, TrackStep } from "./contract.js";
 import { readValue, scaleTop, seriesOf, toneOfState, valueAt, type ChartUnit } from "./series.js";
 import { calendarGo, calendarOf, dateOf, dayOf, movedTo } from "./calendar.js";
@@ -124,7 +125,7 @@ export function StepLink({
   // A swipe across a picture alone steps too, while it can.
   useSwipeStep(next, !off && target !== undefined ? go : undefined);
   // By its key, it leaves a picture's bars hidden, as they were.
-  useKeys(
+  const flashed = useKeys(
     keys,
     () => {
       go();
@@ -133,7 +134,7 @@ export function StepLink({
     !off && target !== undefined,
   );
   return (
-    <ui.Button kind="secondary" icon={icon} tool={tool} disabled={off || target === undefined} hint={hintOf(typeof children === "string" ? children : "", keys)} onClick={go}>
+    <ui.Button kind="secondary" icon={icon} tool={tool} flashed={flashed} disabled={off || target === undefined} hint={hintOf(typeof children === "string" ? children : "", keys)} onClick={go}>
       {children}
     </ui.Button>
   );
@@ -214,11 +215,11 @@ export function Link({ to, icon, keys, children }: { to: string; icon?: string; 
   const navigate = useNavigate();
   const tool = useTool();
   const off = useOff();
-  useKeys(keys, () => void navigate(filled), !off);
+  const flashed = useKeys(keys, () => void navigate(filled), !off);
   // In a toolbar's group, a tool, as its buttons are.
   if (tool) {
     return (
-      <ui.Button kind="secondary" icon={icon} tool={tool} disabled={off} hint={hintOf(typeof children === "string" ? children : "", keys)} onClick={() => void navigate(filled)}>
+      <ui.Button kind="secondary" icon={icon} tool={tool} flashed={flashed} disabled={off} hint={hintOf(typeof children === "string" ? children : "", keys)} onClick={() => void navigate(filled)}>
         {children}
       </ui.Button>
     );
@@ -1100,7 +1101,7 @@ function useConfirmedRunner() {
   const { questions, ask } = useConfirmContext();
   const run = async (command: string, input: CommandInput = {}, about: CommandInput = input) => {
     const question = questions.get(command);
-    if (question !== undefined && !(await ask(fill(question, about)))) {
+    if (question !== undefined && !(await ask({ ...question, words: fill(question.words, about) }))) {
       // Declining is a choice about this attempt, so the last one's failure goes.
       runner.clear(command);
       return false;
@@ -1110,7 +1111,7 @@ function useConfirmedRunner() {
   // And run so what it answers is had, like the id of what it made.
   const reply = async (command: string, input: CommandInput = {}, about: CommandInput = input) => {
     const question = questions.get(command);
-    if (question !== undefined && !(await ask(fill(question, about)))) {
+    if (question !== undefined && !(await ask({ ...question, words: fill(question.words, about) }))) {
       runner.clear(command);
       return undefined;
     }
@@ -1123,7 +1124,7 @@ function useConfirmedRunner() {
 export function Confirm({ command, question }: { command: string; question: string }) {
   const { questions } = useConfirmContext();
   useEffect(() => {
-    questions.set(command, question);
+    questions.set(command, { words: question, destroys: command.endsWith("::delete") });
     return () => {
       questions.delete(command);
     };
@@ -1236,6 +1237,8 @@ export function Command({
   color,
   remembers = false,
   picks,
+  confirm,
+  destroys = false,
 }: {
   name: string;
   id?: string;
@@ -1253,11 +1256,15 @@ export function Command({
   color?: { field: string; now: unknown }; // or as a color picker, run with each one chosen
   remembers?: boolean; // what it gives remembered for what's drawn next; with nothing to act on, only that
   picks?: string; // and the pick whose collage says what it acts on, several chosen or a group's all
+  confirm?: string; // asked before it runs, its own words the answer that runs it
+  destroys?: boolean; // and that answer drawn as a danger, as a delete's is
 }) {
   const ui = useUI();
   const runner = useConfirmedRunner();
+  const { questions } = useConfirmContext();
   const replier = useRunner();
   const navigate = useNavigate();
+  const params = useParams();
   const tool = useTool();
   // In a toolbar, one that doesn't apply now is there, but off, so the toolbar keeps
   // its shape.
@@ -1292,14 +1299,22 @@ export function Command({
     if (overRun?.(name, sent)) return;
     if (!thenOpen) return void runner.run(name, sent);
     // What it made, opened: its id in the route's last parameter.
-    void replier.reply(name, sent).then((made) => {
-      if (made?.id) void navigate(thenOpen.replace(/:[a-z_]+\*?$/, encodeURIComponent(made.id)));
+    void runner.reply(name, sent).then((made) => {
+      if (made?.id) void navigate(madeOpens(thenOpen, name, made.id, params));
     });
   };
   const closeOptions = useInOptions();
-  useKeys(keys, run, shown && !off && !runner.busy(name));
-  if (!shown) return null;
+  const flashed = useKeys(keys, run, shown && !off && !runner.busy(name));
   const words = says ?? label(action(name));
+  // Asked first, while it's there.
+  useEffect(() => {
+    if (!confirm || !shown || off) return;
+    questions.set(name, { words: confirm, yes: words, destroys });
+    return () => {
+      questions.delete(name);
+    };
+  }, [questions, name, confirm, words, destroys, shown, off]);
+  if (!shown) return null;
   // Any color, from a color picker, run with each one chosen.
   if (color) {
     const was = onlyRemembers ? last[color.field] : color.now;
@@ -1346,6 +1361,7 @@ export function Command({
       icon={icon}
       tool={tool}
       pressed={pressed && !off}
+      flashed={flashed}
       swatch={tool ? swatch : undefined}
       hint={hintOf(words, keys)}
       disabled={off || runner.busy(name)}
@@ -2889,7 +2905,7 @@ const addressesKnown = new Map<string, string>();
 function useAddresses(rows: Row[], field: string | undefined, longest?: number): Record<string, string> {
   const store = useFiles();
   const [addresses, setAddresses] = useState<Record<string, string>>({});
-  const held = field ? rows.map((row) => row[field]).filter((path): path is string => typeof path === "string" && path !== "") : [];
+  const held = field ? rows.flatMap((row) => row[field]).filter((path): path is string => typeof path === "string" && path !== "") : [];
   useEffect(() => {
     for (const path of held) {
       if (addresses[path] || !store) continue;
@@ -2953,6 +2969,7 @@ export function Cards({
   picture,
   fit = false,
   mosaic = false,
+  across,
   by,
   paste,
   name,
@@ -2973,6 +2990,7 @@ export function Cards({
   picture?: string; // a file each row holds, shown on top of its card
   fit?: boolean; // all of it fitted in, or filling its place
   mosaic?: boolean; // set as a mosaic of their pictures, each filling its tile
+  across?: number; // or in so many columns of them, each its own shape, as its picture_width and picture_height say
   by?: { field: string; unit: TimeUnit }; // under a heading for each year, month or day of a date the list is ordered by
   // Pictures dropped, pasted or chosen, each a record made by this command, given what's
   // given besides, each of its parts, like picture and picture_width, in the field named.
@@ -3021,6 +3039,7 @@ export function Cards({
     <ui.Cards
       status={view.status}
       mosaic={mosaic || undefined}
+      across={across}
       groups={groups?.map((g): CardGroup => ({ id: datedId(name ?? "", g.key), title: g.title, first: g.first, count: g.count }))}
       cards={rows.map((row) => {
         const to = link ? rowLink(link, row, params, keyed, named) : undefined;
@@ -3037,7 +3056,11 @@ export function Cards({
           tally: sum(row),
           noun: tally?.noun,
           filters: to ? filters.map((f) => ({ label: f.label, link: links(`${to}?${new URLSearchParams({ is: f.label, ...f.query }).toString()}`), ...(f.hue ? { hue: f.hue } : {}) })) : [],
-          ...(picture ? { picture: { source: addresses[String(row[picture] ?? "")], fit } } : {}),
+          ...(picture
+            ? Array.isArray(row[picture])
+              ? { picture: { fit, sources: (row[picture] as unknown[]).map((path) => addresses[String(path)]).filter((address): address is string => Boolean(address)) } }
+              : { picture: { source: addresses[String(row[picture] ?? "")], fit, ...(across ? { tall: tallOf(row) } : {}) } }
+            : {}),
         };
       })}
     />
@@ -3462,6 +3485,7 @@ export function Form({
   const runner = useConfirmedRunner();
   const navigate = useNavigate();
   const filled = useFilled();
+  const params = useParams();
   const specs = fields.map((f) => (typeof f === "string" ? { name: f } : f));
   const empty = () => Object.fromEntries(specs.map((f) => [f.name, f.start ?? ""]));
   const [values, setValues] = useState<Record<string, string>>(empty);
@@ -3532,7 +3556,7 @@ export function Form({
       onDone?.();
       if (after !== undefined) void navigate(filled(after));
       // What it made, opened, like a board made from New board.
-      if (thenOpen && made?.id) void navigate(thenOpen.replace(/:[a-z_]+\*?$/, encodeURIComponent(made.id)));
+      if (thenOpen && made?.id) void navigate(madeOpens(thenOpen, command, made.id, params));
     }
   };
 

@@ -749,6 +749,22 @@ namespace one::generators {
             return out + "`}";
         }
 
+        // Words with {view.field} in them, said as one string, each value as the view
+        // reads now, like a question asked before a command runs.
+        std::string said(screen_parts& parts, const std::string& ns, std::string_view text) {
+            if (text.find('{') == std::string_view::npos) return web_detail::js_string(std::string(text));
+            std::string out = "`";
+            for (const auto& part : model_.title_parts(ns, text)) {
+                if (part.live()) {
+                    out += "${show(" + view_variable(parts, part.view) + ".data?.[" + web_detail::js_string(part.field) + "])}";
+                    continue;
+                }
+                for (char c : part.text) out += c == '`' || c == '\\' || c == '$' ? std::string("\\") + c : std::string(1, c);
+            }
+            parts.components.insert("show");
+            return out + "`";
+        }
+
         // Text with {view.field} in it: the plain parts as they are, and each value as
         // a <Live> reading that view.
         std::string live_text(screen_parts& parts, const std::string& ns, std::string_view text) {
@@ -1457,6 +1473,8 @@ namespace one::generators {
                                                                           : "";
                     std::string then = button->then_open ? " thenOpen=" + web_detail::js_string(full_route(ns, *button->then_open)) : "";
                     if (button->about) then += " about=" + web_detail::js_string(*button->about);
+                    // Asked first, its own words the answer that runs it, red when it deletes.
+                    if (button->confirm) then += " confirm={" + said(parts, ns, *button->confirm) + "}" + (command.ends_with("::delete") ? " destroys" : "");
                     if (remembers) then += " remembers";
                     if (remembers && !pick_name.empty()) then += " picks=" + web_detail::js_string(pick_name);
                     std::string icon = button->icon ? " icon=" + web_detail::js_string(*button->icon) : "";
@@ -2526,6 +2544,7 @@ namespace one::generators {
             if (cards.hide_empty) line += " hideEmpty";
             if (cards.picture) line += " picture=" + web_detail::js_string(*cards.picture) + (cards.picture_sits == "fit" ? " fit" : "");
             if (cards.mosaic) line += " mosaic";
+            if (cards.across) line += " across={" + std::to_string(cards.across) + "}";
             if (cards.by) line += " by={{ field: " + web_detail::js_string(*cards.by) + ", unit: " + web_detail::js_string(cards.by_unit) + " }}";
             if (cards.link) {
                 std::string target = full_route(ns, *cards.link);
@@ -2609,7 +2628,7 @@ namespace one::generators {
                 auto* named = std::get_if<language::name_expression>(&column.value->node);
                 if (!named || named->name.parts.size() != 2) continue;
                 std::string command = full_command(ns, named->name);
-                language::button_item button{named->name, column.label, nullptr, std::nullopt, "", column.icon, {}, {}, {}, nullptr, std::nullopt, {}, std::nullopt};
+                language::button_item button{named->name, column.label, nullptr, std::nullopt, "", column.icon, {}, {}, {}, nullptr, std::nullopt, {}, std::nullopt, std::nullopt};
                 stream jsx("\t");
                 if (const language::form_item* form = form_for(ns, screen, command)) {
                     this->form(jsx, parts, ns, *form, &button);

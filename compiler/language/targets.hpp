@@ -154,6 +154,7 @@ namespace one::language {
         drawn_by{"cards.picture", "a picture on each card", "web desktop"},
         drawn_by{"cards.paste", "pictures pasted and dropped on cards, each made a record", "web desktop"},
         drawn_by{"cards.mosaic", "cards set as a mosaic of their pictures", "web desktop"},
+        drawn_by{"cards.columns", "cards' pictures in columns, each its own shape", "web desktop"},
         drawn_by{"cards.by", "cards under a heading for each year, month or day", "web desktop"},
         drawn_by{"chart", "chart", everywhere},
         drawn_by{"monitor", "monitor", everywhere},
@@ -327,6 +328,7 @@ namespace one::language {
                         if (n.picture) use("cards.picture");
                         if (n.paste) use("cards.paste");
                         if (n.mosaic) use("cards.mosaic");
+                        if (n.across) use("cards.columns");
                         if (n.by) use("cards.by");
                     } else if constexpr (std::is_same_v<T, chart_item>) {
                         use("chart");

@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstdio>
 #include <ctime>
+#include <deque>
 #include <format>
 #include <functional>
 #include <memory>
@@ -259,8 +260,8 @@ namespace one::local {
 		return *this;
 	}
 
-	view_description& view_description::value(std::string value_name, query from, std::string field, std::vector<by> order) {
-		last(*this, "a value").values.push_back({std::move(value_name), std::move(from), std::move(field), value_of::first, std::move(order)});
+	view_description& view_description::value(std::string value_name, query from, std::string field, std::vector<by> order, int many) {
+		last(*this, "a value").values.push_back({std::move(value_name), std::move(from), std::move(field), value_of::first, std::move(order), many});
 		return *this;
 	}
 
@@ -360,6 +361,42 @@ namespace one::local {
 			        for (const value& each : changes.each(kind)) row(each);
 		        },
 		        [&changes](const std::string& kind, const std::string& id) { return changes.find(kind, id); }};
+	}
+
+	package::reading package::defaulted(reading r) const {
+		// Each entity's fields with a default, found once.
+		auto defaults = std::make_shared<std::map<std::string, std::vector<const field*>>>();
+		for (const auto& [name, e] : entities_) {
+			for (const auto& f : e.fields)
+				if (f.initial) (*defaults)[name].push_back(&f);
+		}
+		if (defaults->empty()) return r;
+		// A copy only of a record that lacks one.
+		auto filled = [defaults](const std::string& kind, const value& row) -> std::optional<value> {
+			auto found = defaults->find(kind);
+			if (found == defaults->end()) return std::nullopt;
+			std::optional<value> out;
+			for (const field* f : found->second) {
+				if (!nothing(row[f->name])) continue;
+				if (!out) out = row;
+				out->fields[f->name] = *f->initial;
+			}
+			return out;
+		};
+		// Kept while it's read, as what's read may be held on to, as the first of a list is.
+		auto kept = std::make_shared<std::deque<value>>();
+		return {[each = r.each, filled, kept](const std::string& kind, const std::function<void(const value&)>& row) {
+			        each(kind, [&](const value& v) {
+				        if (auto with = filled(kind, v)) row(kept->emplace_back(std::move(*with)));
+				        else row(v);
+			        });
+		        },
+		        [find = r.find, filled](const std::string& kind, const std::string& id) -> std::optional<value> {
+			        auto v = find(kind, id);
+			        if (!v) return v;
+			        if (auto with = filled(kind, *v)) return with;
+			        return v;
+		        }};
 	}
 
 	namespace {
@@ -468,28 +505,50 @@ namespace one::local {
 				return said(all);
 			}
 			auto found = by_row_.find(row);
-			return said(found == by_row_.end() ? so_far{} : found->second);
+			if (found == by_row_.end()) {
+				so_far none;
+				settle(none);
+				return said(none);
+			}
+			return said(found->second);
 		}
 
 	private:
-		// How many so far, what they add up to, and the first in its order, while the
-		// rows are read, then the field it gives.
+		// How many so far, what they add up to, and the first in its order, or the first
+		// so many, while the rows are read, then the field it gives, or theirs.
 		struct so_far {
 			long long count = 0;
 			double sum = 0;
 			const value* best = nullptr;
+			std::vector<const value*> bests;
 			value first;
 		};
 
 		void take(so_far& w, const value& candidate) const {
 			++w.count;
 			if (of_.kind == view_description::value_of::summed && numeric(candidate[of_.field])) w.sum += candidate[of_.field].as_double();
-			if (of_.kind == view_description::value_of::first && (!w.best || before(candidate, *w.best))) w.best = &candidate;
+			if (of_.kind != view_description::value_of::first) return;
+			if (of_.many > 0) {
+				auto at = std::ranges::upper_bound(w.bests, &candidate, [this](const value* a, const value* b) { return before(*a, *b); });
+				if (at - w.bests.begin() < of_.many) {
+					w.bests.insert(at, &candidate);
+					if (static_cast<int>(w.bests.size()) > of_.many) w.bests.pop_back();
+				}
+			} else if (!w.best || before(candidate, *w.best)) {
+				w.best = &candidate;
+			}
 		}
 
 		void settle(so_far& w) const {
-			if (w.best) w.first = (*w.best)[of_.field];
+			if (of_.many > 0) {
+				std::vector<value> theirs;
+				for (const value* b : w.bests) theirs.push_back((*b)[of_.field]);
+				w.first = value(std::move(theirs));
+			} else if (w.best) {
+				w.first = (*w.best)[of_.field];
+			}
 			w.best = nullptr;
+			w.bests.clear();
 		}
 
 		// First by its order's fields, then when it was made, then its id.
@@ -517,7 +576,7 @@ namespace one::local {
 	};
 
 	std::optional<value> package::build(const view_description& v, const store& entities, const std::string& subject) const {
-		reading r = from(entities);
+		reading r = defaulted(from(entities));
 		std::optional<value> per;
 		if (!v.per_kind.empty()) {
 			per = r.find(v.per_kind, subject);

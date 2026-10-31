@@ -270,7 +270,9 @@ the app, each command's event is kept in a log, and every file a command is give
 kept once, named by its hash: under `~/.local/share/<project>` for the desktop and
 terminal apps, and in the browser's IndexedDB, in a database named for the project,
 for the web app. Screens read views live, as they do from the cloud, and nothing
-leaves the machine. Nobody signs in to such an app, so what needs a person or a
+leaves the machine. A field given a default later, like `layout layout =
+layout::mosaic`, is read as having it on records made before it was, until a
+command changes it. Nobody signs in to such an app, so what needs a person or a
 server, like `signin`, `me`, roles, a view `per user`, webhooks and Stripe, is an
 error at its line, saying why. It names its targets, like `target desktop` or
 `target web desktop`. Its web app can still be served for anyone to open, by naming
@@ -2122,7 +2124,7 @@ form step::update "Save" {
   `building`, `chart`, `cloud`, `code`, `connect`, `database`, `globe`, `layers`,
   `lock`, `people`, `shield` and `spark`; and for a drawing app's toolbar, `undo`,
   `redo`, `save`, `export`, `paste`, `copy`, `crop`, `text`, `screenshot`, `picture`,
-  `folder`, `gallery`, `fullscreen`, `sun`, `moon`, `check`, `close`, `raise`, `lower`,
+  `folder`, `gallery`, `mosaic`, `columns`, `fullscreen`, `sun`, `moon`, `check`, `close`, `raise`, `lower`,
   `rotate_left`, `rotate_right`, `flip_horizontal`, `flip_vertical`, `bold`,
   `smaller`, `larger`, `fill`, `fit`, `stretch`, `center`, `color` and `edges`. A
   name close to one of them is told which it was likely meant to be.
@@ -2146,8 +2148,12 @@ form step::update "Save" {
   a picture on top of its card, all of it fitted in, or, with `fill` or nothing
   said, filling its place. A terminal draws no pictures, so it can't show one.
   `cards clippings_page.clippings mosaic { picture image ... }` sets them as a mosaic
-  of their pictures instead, each filling its tile, cropped around its middle, its
-  title and what else it shows over the picture's foot. Every eight cards are two
+  of their pictures instead, set as a printed page is: square cornered, two pixels
+  apart, and two pixels from the edges of the region it's in, with no other margin,
+  the one with the keyboard ringed inside its edges. Each fills its tile, cropped
+  around its middle, its title and what else it shows across the picture's foot. Its
+  headings, under `by`, line up with its tiles. Other cards keep their own look.
+  Every eight cards are two
   blocks, one above the other, each three equal columns by two rows as tall as a
   column is wide: in the first, a tile a column wide and both rows tall at the left,
   one two columns wide on the top row at the right, and two small ones under that;
@@ -2157,6 +2163,19 @@ form step::update "Save" {
   left blank. Only what's in view is drawn, each picture read as it comes near.
   A mosaic says which picture each card shows, and its pictures fill their tiles,
   so its picture line says `fill` or nothing. A terminal draws no pictures, so it can't set one.
+  `cards clippings_page.clippings columns 5 { picture image ... }` sets them in five
+  equal columns of their pictures instead, as a mosaic is set, square cornered and two
+  pixels apart: each picture is as wide as a column and as tall as its own shape,
+  uncropped, and goes in the shortest column so far, the leftmost of those, in the
+  list's order, so the columns line up and the rows don't. Its shape is the one its
+  row keeps in `picture_width` and `picture_height`, which the view's list holds, so
+  thousands are placed without reading a picture, and one whose size isn't kept is
+  square. Under `by`, the columns start level again under each heading. Cards are a
+  mosaic or in columns, not both, in 1 to 12 of them. A terminal can't set them.
+  Two cards on the same list, each with its own `when`, like `... mosaic ... when
+  library_page.layout == layout::mosaic` and `... columns 5 ... when
+  library_page.layout == layout::columns`, are one set of cards shown either way, so
+  a timeline of the list scrolls whichever is shown.
   `cards clippings_page.clippings mosaic by picture_date month` sets the cards under
   a heading for each month of a date their list holds, like "October 2026", in the
   text's face, strong and larger. `year` and `day` head each year, or each day, like
@@ -2735,6 +2754,10 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   small rows of 4` with four, it's a thin strip, its groups' names said by their tools
   as they're pointed at; a mode that shows only such groups, like reading, gets a
   thin toolbar, and one with large tools a full one.
+- A tool is pushed in while it's pressed, darker and its icon a pixel lower, until the
+  button is let go, over it or not, and for a moment after its key runs it, so a
+  press is seen to have taken. One that's on stays tinted, and pushed in it's darker
+  than that.
 - In a toolbar, `when` doesn't hide: a group or a tool whose `when` doesn't hold is
   there, faint, and can't be pressed, nor its keys used, so the toolbar keeps its
   shape as what's picked changes. `group "Rotate" small when layer.picture != none`.
@@ -2795,9 +2818,20 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   around = around::harmonize }`. It's drawn pressed while what it would set is already so, on
   the row picked or the entity the address names, or while `on when ...` holds, like
   `on when layer.weight >= 700`.
-- `then open /posters/:poster` after a button that makes something opens it, its id
-  in the route's last parameter: `poster::create "New" { width = screen.width } then
-  open /posters/:poster`.
+- `then open /posters/:poster` after a button opens that address once its command
+  answers. What it answers, the id of what it made or acted on, goes in the parameter
+  named like the command's entity, and every other parameter is the page's own:
+  `poster::create "New" { width = screen.width } then open /posters/:poster` opens the
+  poster made, and `photo::delete "Remove" then open /libraries/:library` on
+  /libraries/:library/photos/:photo opens the library the photo was in. A route with
+  no parameter named like the entity doesn't use the answer.
+- `confirm "..."` on a button asks before it runs, whether it's pressed or its key
+  is: `layer::delete "Remove" icon delete key delete confirm "Remove it from
+  {poster_page.title}?" then open /posters/:poster`. The question opens over the
+  page and reads it as text does. Its answers are Cancel, which has the keyboard so
+  the key pressed again doesn't answer it, and the button's own words, drawn as a
+  danger for a delete. Enter says yes, Escape or a press outside it says no, and no
+  other key reaches what's under it.
 - `on open` lines say what a screen does as it's opened, so an app can open straight
   into work (decision 0020). `on open open /posters/:poster for posters where
   poster.first_layer == none` opens the first row of the view's list the condition
@@ -2984,7 +3018,7 @@ issue::verify "Verify" when {
   "Comment" { body "Comment" }` asks for the body, labeled Comment.
 - A field can say what it means under it: `takes_reports "Public reports" { hint
   "Anyone may report a problem, signed in or not" }`.
-- `confirm` asks before a command runs.
+- `confirm` asks before a command runs, wherever on the screen it's run from; a button's own `confirm "..."` asks before that button.
 - `themes` tries themes made at random from a palette on the whole app at once:
   pick a scheme, complementary, analogous, triadic, split complementary or
   monochrome, and press New theme. Every role comes from the palette, light and

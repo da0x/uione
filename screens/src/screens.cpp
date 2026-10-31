@@ -304,6 +304,26 @@ namespace one::screens {
 		return out.empty() ? "/" : out;
 	}
 
+	std::string made_opens(const std::string& route, const std::string& command, const std::string& made, const std::map<std::string, std::string>& params) {
+		std::size_t last = command.rfind("::");
+		std::size_t before = last == std::string::npos ? std::string::npos : command.rfind("::", last - 1);
+		std::string entity = last == std::string::npos ? "" : command.substr(before == std::string::npos ? 0 : before + 2, last - (before == std::string::npos ? 0 : before + 2));
+		std::map<std::string, std::string> with = params;
+		if (!entity.empty()) with[entity] = made;
+		std::string out;
+		for (const auto& segment : segments(route)) {
+			if (!segment.starts_with(':')) {
+				out += "/" + segment;
+				continue;
+			}
+			std::string name = segment.substr(1);
+			while (name.ends_with('?') || name.ends_with('*')) name.pop_back();
+			auto found = with.find(name);
+			out += "/" + (found == with.end() ? std::string() : found->second);
+		}
+		return out.empty() ? "/" : out;
+	}
+
 	std::vector<std::pair<std::string, std::string>> query_of(const std::string& address) {
 		std::vector<std::pair<std::string, std::string>> out;
 		std::size_t mark = address.find('?');
@@ -511,9 +531,9 @@ namespace one::screens {
 		auto was = asked_.peek();
 		asked_.set(std::nullopt);
 		if (!yes || !was) return;
-		std::string question = std::exchange(questions_[was->command], "");  // asked once
+		question asked = std::exchange(questions_[was->command], {});  // asked once
 		run(was->command, was->fields, was->files, was->after, was->says_why_itself);
-		questions_[was->command] = question;
+		questions_[was->command] = std::move(asked);
 	}
 
 	void page_base::say(std::string words) {
@@ -538,8 +558,8 @@ namespace one::screens {
 	}
 
 	void page_base::run(const std::string& command, const value& fields, attached_files files, std::function<void(const answer&)> after, bool says_why_itself) {
-		if (auto q = questions_.find(command); q != questions_.end() && !q->second.empty()) {
-			asked_.set(asking{command, q->second, fields, std::move(after), says_why_itself, std::move(files)});
+		if (auto q = questions_.find(command); q != questions_.end() && !q->second.words.empty()) {
+			asked_.set(asking{command, q->second.words, q->second.yes, q->second.destroys, fields, std::move(after), says_why_itself, std::move(files)});
 			return;
 		}
 		// Told through states, which outlive the page if it's left before the answer.

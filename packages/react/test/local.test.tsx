@@ -74,7 +74,8 @@ function library() {
     .counted("out", where("library::loan", "book", row).where("returned_at", none))
     .summed("numbers", where("library::loan", "book", row), "number")
     .value("last_member", where("library::loan", "book", row), "member", [by("-number")])
-    .value("first_member", where("library::loan", "book", row), "member");
+    .value("first_member", where("library::loan", "book", row), "member")
+    .value("last_two", where("library::loan", "book", row), "member", [by("-number")], 2);
   const desk = view("library::desk").each(where("library::loan", "returned_at", none)).order("due_at").fields(["book.title", "member", "due_at"]);
   const bookPage = view("library::book_page")
     .per("library::book")
@@ -199,7 +200,7 @@ describe("a local package", () => {
     expect(a.shown("library::book_page", "NOT-0000")).toEqual({});
   });
 
-  it("says for each row how many of another name it, what a number of theirs adds up to, and a field of the first in an order, kept as they come and go", async () => {
+  it("says for each row how many of another name it, what a number of theirs adds up to, and a field of the first in an order, or of the first so many, kept as they come and go", async () => {
     const a = await app();
     await a.ok("library::book::create", book("Dune", "SCI-0001"));
     await a.ok("library::book::create", book("Emma", "LIT-0002"));
@@ -208,9 +209,9 @@ describe("a local package", () => {
       if (member !== "lena") await a.ok("library::loan::checkin", { id: `SCI-0001-${member === "maya" ? 1 : 2}` });
     }
     let rows = a.shown("library::lending")!["rows"] as Row[];
-    expect(rows.map((r) => [r["title"], r["times_lent"], r["out"], r["numbers"], r["last_member"], r["first_member"]])).toEqual([
-      ["Dune", 3, 1, 6, "lena", "maya"],
-      ["Emma", 0, 0, 0, null, null],
+    expect(rows.map((r) => [r["title"], r["times_lent"], r["out"], r["numbers"], r["last_member"], r["first_member"], r["last_two"]])).toEqual([
+      ["Dune", 3, 1, 6, "lena", "maya", ["lena", "omar"]],
+      ["Emma", 0, 0, 0, null, null, []],
     ]);
     // Lent again, it's told at once.
     await a.ok("library::loan::create", { book: "LIT-0002", member: "maya", due_at: due });
@@ -230,7 +231,8 @@ describe("a local package", () => {
       .fields(["name"])
       .counted("total", where("x::clipping", "shelf", row))
       .summed("size", where("x::clipping", "shelf", row), "bytes")
-      .value("newest", where("x::clipping", "shelf", row), "bytes", [by("-bytes")]);
+      .value("newest", where("x::clipping", "shelf", row), "bytes", [by("-bytes")])
+      .value("newest_three", where("x::clipping", "shelf", row), "bytes", [by("-bytes")], 3);
     const started = performance.now();
     const rows = m.build(shelves, kept, "")!["rows"] as Row[];
     const took = performance.now() - started;
@@ -238,6 +240,7 @@ describe("a local package", () => {
     expect(rows.reduce((n, r) => n + (r["total"] as number), 0)).toBe(20000);
     const seventh = rows.find((r) => r["name"] === "s7")!;
     expect([seventh["total"], seventh["newest"], seventh["size"]]).toEqual([400, 19957, 400 * 7 + (50 * 399 * 400) / 2]);
+    expect(seventh["newest_three"]).toEqual([19957, 19907, 19857]);
     expect(took).toBeLessThan(2000);
   });
 
@@ -395,6 +398,33 @@ describe("the same app in two tabs", () => {
     await a.ok("library::book::create", book("Dune", "SCI-0001"));
     // Before b could hear, its own create of the same key is refused, as it would be in one tab.
     expect(await b.run("library::book::create", book("Dune", "SCI-0001"))).toEqual({ error: "Shelfmark is already taken" });
+  });
+});
+
+describe("a field given a default later", () => {
+  it("reads as that default on a record made before it, as one made now would, until it's changed", async () => {
+    const store = memoryStore();
+    const shelf = (laidOut: boolean) =>
+      localPackage(
+        "archive",
+        [entity("archive::shelf", [{ name: "name", required: true }, ...(laidOut ? [{ name: "layout", choices: ["mosaic", "columns"], initial: "mosaic" }] : [])])],
+        [command("archive::shelf::create").creates("archive::shelf"), command("archive::shelf::arrange").updates("archive::shelf").fields(["layout"])],
+        [view("archive::shelf_page").per("archive::shelf").copy("name", "name").copy("layout", "layout"), view("archive::shelves").each(all("archive::shelf")).order("name").fields(["name", "layout"])],
+      );
+    const before = localSource({ name: "archive", packages: [shelf(false)], store });
+    await before.opened;
+    const made = (await before.run("archive::shelf::create", { name: "Harbor" })) as CommandReply;
+    const after = localSource({ name: "archive", packages: [shelf(true)], store });
+    await after.opened;
+    const shown = (name: string, about?: string) => {
+      let seen: ViewState | undefined;
+      after.subscribe(name, about, (state) => (seen = state))();
+      return seen?.data as Row | undefined;
+    };
+    expect(shown("archive::shelf_page", made.id)?.["layout"]).toBe("mosaic");
+    expect((shown("archive::shelves")?.["rows"] as Row[])[0]?.["layout"]).toBe("mosaic");
+    await after.run("archive::shelf::arrange", { id: made.id, layout: "columns" });
+    expect(shown("archive::shelf_page", made.id)?.["layout"]).toBe("columns");
   });
 });
 

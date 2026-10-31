@@ -285,11 +285,12 @@ namespace one::desktop::runtime {
 			}
 			return desktop::view(std::make_unique<alone_element>(taken("main").grow(), std::move(over))).grow();
 		}
-		// Filling the screen, it's only its work, like a picture on a wall.
-		if (fullscreen()) return taken("main").grow();
+		// Filling the screen, it's only its work, like a picture on a wall, with a side that's
+		// open, like a timeline along it; still scrolled as it was.
+		bool only_work = fullscreen();
 		std::vector<desktop::view> parts;
 		for (const char* across : {"bar", "toolbar"}) {
-			if (auto v = taken(across); v.get()) {
+			if (auto v = taken(across); v.get() && !only_work) {
 				v = drawn_across(across, std::move(v));
 				parts.push_back(std::move(v).padding(edges(6, 12)).background({.fill = t.surface}));
 				parts.push_back(desktop::divider());
@@ -297,7 +298,7 @@ namespace one::desktop::runtime {
 		}
 		std::vector<desktop::view> middle;
 		// Its tools in a column down its left side, as a drawing app's are.
-		if (auto tools = taken("tools"); tools.get()) {
+		if (auto tools = taken("tools"); tools.get() && !only_work) {
 			middle.push_back(std::move(tools).padding(edges(8, 6)).background({.fill = t.surface}));
 			middle.push_back(desktop::spacer().grow(0).width(1).background({.fill = t.line}));
 		}
@@ -313,8 +314,9 @@ namespace one::desktop::runtime {
 			main = desktop::column(std::move(opened)).spacing(12).align(align::stretch).grow();
 		}
 		bool fills = main.get() && std::ranges::any_of(main.get()->children, [](const auto& c) { return c && c->grow > 0; });
-		if (fills || !main.get()) middle.push_back(std::move(main).padding(edges(12, 12)).grow());
-		else middle.push_back(desktop::scroll(std::move(main).padding(edges(12, 12)), p.where_left().scroll).grow());
+		float margin = p.take_bleed() ? 2 : 12;
+		if (fills || !main.get()) middle.push_back(std::move(main).padding(edges(margin, margin)).grow());
+		else middle.push_back(desktop::scroll(std::move(main).padding(edges(margin, margin)), p.where_left().scroll).grow());
 		if (auto side = taken("side"); side.get()) {
 			// A side holding only something as wide as it says, like a timeline drawn along
 			// the cards as a scrollbar is, is that alone at the work's edge: as tall as it,
@@ -328,7 +330,7 @@ namespace one::desktop::runtime {
 			}
 		}
 		parts.push_back(desktop::row(std::move(middle)).align(align::stretch).grow());
-		if (auto status = taken("status"); status.get()) {
+		if (auto status = taken("status"); status.get() && !only_work) {
 			parts.push_back(desktop::divider());
 			parts.push_back(std::move(status).padding(edges(4, 12)).background({.fill = t.surface}));
 		}
@@ -411,7 +413,7 @@ namespace one::desktop::runtime {
 		};
 		if (!(p.in_group() && p.off())) for (const auto& k : keys) p.on_key(k, flip);
 		if (p.in_group()) return tool(p, icon, label, keys, flip, on);
-		return desktop::tool_button(desktop::has_icon(icon) ? icon : "", hint_of(label, keys), flip, {.on = on});
+		return desktop::tool_button(desktop::has_icon(icon) ? icon : "", hint_of(label, keys), flip, {.on = on, .flashed = flashing(keys)});
 	}
 
 	desktop::view choose(page& p, std::string name, std::string choice, std::string first, std::string label, std::string icon, std::vector<std::string> keys) {
@@ -419,7 +421,7 @@ namespace one::desktop::runtime {
 		auto pick = [&p, name, choice] { p.choose(name, choice); };
 		if (!(p.in_group() && p.off())) for (const auto& k : keys) p.on_key(k, pick);
 		if (p.in_group()) return tool(p, icon, label, keys, pick, on);
-		return desktop::tool_button(desktop::has_icon(icon) ? icon : "", hint_of(label, keys), pick, {.on = on});
+		return desktop::tool_button(desktop::has_icon(icon) ? icon : "", hint_of(label, keys), pick, {.on = on, .flashed = flashing(keys)});
 	}
 
 	desktop::view history(page& p, bool redo, std::string label, std::string icon, std::vector<std::string> keys) {
@@ -437,7 +439,7 @@ namespace one::desktop::runtime {
 		if (!(p.in_group() && p.off()) && !none) for (const auto& k : keys) p.on_key(k, take);
 		if (label.empty()) label = redo ? "Redo" : "Undo";
 		if (p.in_group()) return tool(p, icon, label, keys, take, false, none);
-		return desktop::tool_button(desktop::has_icon(icon) ? icon : "", hint_of(label, keys), take, {.off = none});
+		return desktop::tool_button(desktop::has_icon(icon) ? icon : "", hint_of(label, keys), take, {.off = none, .flashed = flashing(keys)});
 	}
 
 	desktop::view messages(page& p) {
@@ -484,7 +486,7 @@ namespace one::desktop::runtime {
 		if (!(p.in_group() && p.off())) for (const auto& k : keys) p.on_key(k, flip);
 		if (label.empty()) label = "Full screen";
 		if (p.in_group()) return tool(p, icon, label, keys, flip, fullscreen());
-		return desktop::tool_button(desktop::has_icon(icon) ? icon : "", hint_of(label, keys), flip, {.on = fullscreen()});
+		return desktop::tool_button(desktop::has_icon(icon) ? icon : "", hint_of(label, keys), flip, {.on = fullscreen(), .flashed = flashing(keys)});
 	}
 
 }  // namespace one::desktop::runtime

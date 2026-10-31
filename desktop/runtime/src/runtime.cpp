@@ -31,57 +31,127 @@
 
 namespace one::desktop::runtime {
 
+	namespace {
+
+		// A question asked before a command runs, over what the page shows: the page
+		// veiled under it, and none of it pressed or scrolled while it's asked. A press
+		// beside the question is a no.
+		class asked_element : public element {
+		public:
+			asked_element(desktop::view under, desktop::view question, std::function<void()> no) : no_(std::move(no)) {
+				children.push_back(std::move(under).take());
+				children.push_back(std::move(question).take());
+				for (auto& child : children) child->parent = this;
+			}
+
+			extent measure_content(float width) override { return children[0]->measure(width); }
+
+			void place_content(const rect& area) override {
+				children[0]->place(area);
+				float wide = std::min(440.f, std::max(0.f, area.width - 32));
+				float tall = children[1]->measure(wide).height;
+				children[1]->place({area.x + (area.width - wide) / 2, area.y + std::max(16.f, (area.height - tall) / 3), wide, tall});
+			}
+
+			void paint_content(canvas& c) override {
+				children[0]->paint(c);
+				auto veil = current_theme().ink;
+				veil.alpha = 0.3f;
+				c.box(frame, {.fill = veil});
+				children[1]->paint(c);
+			}
+
+			element* hit(point at) override {
+				if (auto* in = children[1]->hit(at)) return in;
+				return frame.contains(at) ? this : nullptr;
+			}
+			bool press(point at, int) override {
+				if (!children[1]->frame.contains(at)) no_();
+				return true;
+			}
+			bool wheel(point, float, float) override { return true; }
+
+		private:
+			std::function<void()> no_;
+		};
+
+		desktop::view page_shown(navigator& nav, page& p, bool* alone);
+
+	}  // namespace
+
 	desktop::view page_view(navigator& nav, page& p, bool* alone) {
-		const auto& t = current_theme();
-		const auto& s = nav.site();
-		const auto& shows = nav.shown(p);
-		p.forget_keys();
-		typing({});
-		desktop::view built = shows.build ? shows.build(p) : desktop::column();
-		auto around = p.take_around();
-		bool wide = p.take_wide();
-		// Filling the screen, or a page that fills the window, is only what it's made of.
-		bool only = p.take_fill() || fullscreen();
-		if (alone) *alone = only;
-		if (only) return built;
-		std::vector<desktop::view> parts;
-		for (auto& v : around.above) parts.push_back(std::move(v));
-		// A page called by the app's own name, like its front page, doesn't say it again under the bar.
-		std::string title = p.title();
-		if (!(title.empty() || title == s.name) || !around.beside.empty()) {
-			std::vector<desktop::view> title_row;
-			title_row.push_back(desktop::text(title == s.name ? "" : title, t.heading(26)).grow());
-			for (auto& v : around.beside) title_row.push_back(std::move(v));
-			parts.push_back(desktop::row(std::move(title_row)).spacing(10).align(align::center));
-		}
-		for (auto& v : around.under) parts.push_back(std::move(v));
-		// A question asked before a command runs, answered here.
+		auto shown = page_shown(nav, p, alone);
+		// A question asked before a command runs, over the page: Cancel has the keyboard,
+		// so a key pressed again doesn't answer it, and Enter says yes.
 		auto asked = p.asked();
-		if (const auto& asking = asked.get()) {
-			parts.push_back(desktop::column(desktop::text(asking->question, t.strong()),
-			                                desktop::row(desktop::button("Yes, go ahead", [&p] { p.answer_asked(true); }, true).autofocus(),
-			                                             desktop::button("Cancel", [&p] { p.answer_asked(false); }))
-			                                    .spacing(8))
-			                    .spacing(10)
-			                    .padding(16)
-			                    .background({.fill = t.surface, .border = t.warning, .border_width = 1.5f, .radius = t.corners}));
-		}
-		if (std::string wrong = *p.problem(); !wrong.empty()) {
-			auto style = t.strong();
-			style.color = t.danger;
-			parts.push_back(desktop::text(wrong, style));
-		}
-		parts.push_back(std::move(built));
-		if (s.footer) {
-			parts.push_back(desktop::divider());
-			parts.push_back(s.footer(p));
-		}
-		// Scrolled where it was left, when it's shown again.
-		if (wide) return desktop::scroll(desktop::column(std::move(parts)).spacing(16).padding(edges(24, 32)), p.where_left().scroll);
-		return desktop::scroll(desktop::column(std::move(parts)).spacing(16).padding(edges(24, 32)).width(880), p.where_left().scroll).align(align::center);
+		const auto& asking = asked.get();
+		if (!asking) return shown;
+		const auto& t = current_theme();
+		std::string yes = asking->yes.empty() ? "Yes, go ahead" : asking->yes;
+		auto answer = asking->destroys ? desktop::danger_button(yes, [&p] { p.answer_asked(true); }) : desktop::button(yes, [&p] { p.answer_asked(true); }, true);
+		auto question = desktop::column(desktop::text(asking->question, t.strong()),
+		                                desktop::row(desktop::spacer(), desktop::button("Cancel", [&p] { p.answer_asked(false); }).autofocus(), std::move(answer)).spacing(8))
+		                    .spacing(18)
+		                    .padding(20)
+		                    .background({.fill = t.surface, .border = t.line, .border_width = 1, .radius = t.corners});
+		return desktop::view(std::make_unique<asked_element>(std::move(shown), std::move(question), [&p] { p.answer_asked(false); })).grow();
 	}
 
 	namespace {
+		// A key while a question is asked: Enter says yes and Escape no, and any other is
+		// the question's, so none under it runs, like Delete again.
+		bool answered(navigator& nav, const key_event& e) {
+			auto& p = nav.current();
+			if (!p.asked().peek()) return false;
+			if (e.is(keys::enter) || e.is(keys::keypad_enter)) p.answer_asked(true);
+			else if (e.is(keys::escape)) p.answer_asked(false);
+			return true;
+		}
+	}  // namespace
+
+	namespace {
+
+		desktop::view page_shown(navigator& nav, page& p, bool* alone) {
+			const auto& t = current_theme();
+			const auto& s = nav.site();
+			const auto& shows = nav.shown(p);
+			p.forget_keys();
+			(void)p.take_bleed();
+			typing({});
+			desktop::view built = shows.build ? shows.build(p) : desktop::column();
+			auto around = p.take_around();
+			bool wide = p.take_wide();
+			// Filling the screen, or a page that fills the window, is only what it's made of.
+			bool only = p.take_fill() || fullscreen();
+			if (alone) *alone = only;
+			if (only) return built;
+			std::vector<desktop::view> parts;
+			for (auto& v : around.above) parts.push_back(std::move(v));
+			// A page called by the app's own name, like its front page, doesn't say it again under the bar.
+			std::string title = p.title();
+			if (!(title.empty() || title == s.name) || !around.beside.empty()) {
+				std::vector<desktop::view> title_row;
+				title_row.push_back(desktop::text(title == s.name ? "" : title, t.heading(26)).grow());
+				for (auto& v : around.beside) title_row.push_back(std::move(v));
+				parts.push_back(desktop::row(std::move(title_row)).spacing(10).align(align::center));
+			}
+			for (auto& v : around.under) parts.push_back(std::move(v));
+			if (std::string wrong = *p.problem(); !wrong.empty()) {
+				auto style = t.strong();
+				style.color = t.danger;
+				parts.push_back(desktop::text(wrong, style));
+			}
+			parts.push_back(std::move(built));
+			if (s.footer) {
+				parts.push_back(desktop::divider());
+				parts.push_back(s.footer(p));
+			}
+			// Scrolled where it was left, when it's shown again.
+			if (wide) return desktop::scroll(desktop::column(std::move(parts)).spacing(16).padding(edges(24, 32)), p.where_left().scroll);
+			return desktop::scroll(desktop::column(std::move(parts)).spacing(16).padding(edges(24, 32)).width(880), p.where_left().scroll).align(align::center);
+		}
+
+
 		// What agents were working on when the window was asked to close, while it asks
 		// whether to, which stops them.
 		state<std::optional<std::vector<std::string>>> asking_to_close;
@@ -113,7 +183,31 @@ namespace one::desktop::runtime {
 
 	void typing(std::function<bool(const key_event&)> taking) { typed_into = std::move(taking); }
 
+	namespace {
+		// The chord that just ran a line of the page, until a moment after, and which
+		// time it was, so an earlier wait doesn't end a later flash.
+		state<std::string> flashed;
+		int flashes = 0;
+
+		void flash(const std::string& chord) {
+			if (!posting()) return;
+			flashed.set(chord);
+			std::thread([at = ++flashes] {
+				std::this_thread::sleep_for(std::chrono::milliseconds(120));
+				post([at] {
+					if (at == flashes) flashed.set("");
+				});
+			}).detach();
+		}
+	}  // namespace
+
+	bool flashing(const std::vector<std::string>& keys) {
+		const std::string& chord = flashed.get();
+		return !chord.empty() && std::ranges::find(keys, chord) != keys.end();
+	}
+
 	bool key(navigator& nav, const key_event& e) {
+		if (answered(nav, e)) return true;
 		if (typed_into && typed_into(e)) return true;
 		if (e.is(keys::escape) && asking_to_close.peek()) {
 			asking_to_close.set(std::nullopt);
@@ -121,6 +215,7 @@ namespace one::desktop::runtime {
 		}
 		if (e.is(keys::f11) && shown_in) {
 			shown_in->fullscreen(!shown_in->fullscreen());
+			flash("f11");
 			return true;
 		}
 		// Esc leaves the screen filled before it goes back, as a browser's does.
@@ -132,6 +227,7 @@ namespace one::desktop::runtime {
 		auto lines = nav.current().keys();
 		for (const auto& [chord, run] : lines) {
 			if (pressed(e, chord)) {
+				flash(chord);
 				run();
 				return true;
 			}
@@ -455,8 +551,9 @@ namespace one::desktop::runtime {
 			return shown;
 		});
 		window.on_key = [&](const key_event& e) { return key(nav, e); };
-		window.on_key_first = [](const key_event& e) {
+		window.on_key_first = [&nav](const key_event& e) {
 			key_down(e);
+			if (answered(nav, e)) return true;
 			return typed_into && typed_into(e);
 		};
 		window.on_pointer = [] { wake(); };

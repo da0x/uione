@@ -76,34 +76,51 @@ namespace one::desktop::runtime {
 			std::vector<desktop::view> said;
 			said.push_back(desktop::text(card.title, title));
 			for (const auto& d : card.details) said.push_back(desktop::text(d, rest));
-			return desktop::column(std::move(said)).spacing(2).padding(edges(10, 12)).background({.fill = color::hex(0x000000, 0.45f), .radius = t.corners});
+			return desktop::column(std::move(said)).spacing(2).padding(edges(10, 12)).background({.fill = color::hex(0x000000, 0.45f)});
 		}
 
-		// Cards as a mosaic of their pictures, each in the tile mosaic_tile gives it, filling
-		// it, cropped around its middle, what else it shows over its foot. Its columns share
-		// its width, less the gaps between, and its rows are as tall as a column is wide, so
+		// Cards as a mosaic of their pictures, set as a printed page is: square cornered and
+		// two pixels apart, each in the tile mosaic_tile gives it, filling it, cropped around
+		// its middle, what else it shows across its foot. Its columns share its width, less
+		// the gaps between, and its rows are as tall as a column is wide, so
 		// it scales as it's resized and no card changes tile. Only what's in view, and as
 		// much again around it, is drawn, each picture read and each caption made as it
 		// comes into view, so a mosaic of many thousands is placed from its count alone. One
 		// tile is chosen, ringed while the mosaic has the keyboard: moved with the arrows, to
 		// the card before or after, or to the one above or below, and opened with Enter.
+		// In columns instead, as columns_place lays them, each picture is its column's width
+		// and as tall as its own shape, uncropped, placed from the sizes its row keeps.
 		class mosaic_element : public element {
 		public:
 			struct tile {
 				std::string picture, address;
 				card_model card;
+				double tall = 1;  // in columns, its height over its width
 			};
 			// `start` is the address of the tile chosen first, like the card a page was left
-			// from, brought into view as it's first placed.
-			mosaic_element(page& p, std::vector<tile> tiles, const std::string& start) : p_(p), tiles_(std::move(tiles)), captions_(tiles_.size()) {
+			// from, brought into view as it's first placed. `across` columns, or none for a mosaic.
+			mosaic_element(page& p, std::vector<tile> tiles, const std::string& start, int across = 0)
+			    : p_(p), tiles_(std::move(tiles)), captions_(tiles_.size()), across_(across) {
 				for (std::size_t i = 0; i < tiles_.size(); ++i) {
 					if (!start.empty() && tiles_[i].address == start) chosen_ = i, shown_ = false;
+				}
+				if (across_ > 0) {
+					std::vector<double> tall;
+					tall.reserve(tiles_.size());
+					for (const auto& t : tiles_) tall.push_back(t.tall);
+					laid_ = columns_place(tall, across_);
 				}
 			}
 
 			bool focusable() const override { return !tiles_.empty(); }
 
 			extent measure_content(float width) override {
+				if (across_ > 0) {
+					float side = column(width), tallest = 0;
+					for (std::size_t c = 0; c < laid_.heights.size(); ++c)
+						tallest = std::max(tallest, static_cast<float>(laid_.heights[c]) * side + std::max(0, laid_.counts[c] - 1) * gap);
+					return {width, tallest};
+				}
 				int rows = mosaic_rows(tiles_.size());
 				return {width, rows * column(width) + std::max(0, rows - 1) * gap};
 			}
@@ -112,6 +129,11 @@ namespace one::desktop::runtime {
 				frames_.resize(tiles_.size());
 				float side = column(area.width);
 				for (std::size_t i = 0; i < tiles_.size(); ++i) {
+					if (across_ > 0) {
+						const auto& at = laid_.places[i];
+						frames_[i] = {area.x + at.column * (side + gap), area.y + static_cast<float>(at.above) * side + at.before * gap, side, static_cast<float>(tiles_[i].tall) * side};
+						continue;
+					}
 					auto at = mosaic_tile(i);
 					frames_[i] = {area.x + at.column * (side + gap), area.y + at.row * (side + gap), at.columns * side + (at.columns - 1) * gap, at.rows * side + (at.rows - 1) * gap};
 				}
@@ -127,23 +149,24 @@ namespace one::desktop::runtime {
 					const rect& f = frames_[i];
 					if (f.y > near.y + near.height) break;
 					if (f.y + f.height < near.y) continue;
-					c.box(f, {.fill = t.sunken, .radius = t.corners});
+					c.box(f, {.fill = t.sunken});
 					if (auto shown = picture_soon(p_, tiles_[i].picture, 640); shown && *shown) {
 						float pw = static_cast<float>(shown->width()), ph = static_cast<float>(shown->height());
 						float s = std::max(f.width / pw, f.height / ph);
 						float fw = f.width / (pw * s), fh = f.height / (ph * s);
-						c.picture(*shown, f, {(1 - fw) / 2, (1 - fh) / 2, fw, fh}, 1, t.corners);
+						c.picture(*shown, f, {(1 - fw) / 2, (1 - fh) / 2, fw, fh});
 					}
 					auto& caption = captions_[i];
 					if (!caption) {
 						caption = caption_of(tiles_[i].card).take();
 						caption->parent = this;
 					}
-					extent e = caption->measure(f.width - 2 * inset);
-					caption->place({f.x + inset, f.y + f.height - e.height - inset, f.width - 2 * inset, e.height});
+					extent e = caption->measure(f.width);
+					caption->place({f.x, f.y + f.height - e.height, f.width, e.height});
 					caption->paint(c);
 				}
-				if (shows_focus() && chosen_ < frames_.size()) c.box(frames_[chosen_].inset(-2), {.border = t.accent, .border_width = 2, .radius = t.corners + 2});
+				// The ring inside the chosen tile, square, so it neither rounds nor spills into the gaps.
+				if (shows_focus() && chosen_ < frames_.size()) c.box(frames_[chosen_].inset(1), {.border = t.accent, .border_width = 2});
 			}
 
 			bool handle_key(const key_event& e) override {
@@ -199,12 +222,27 @@ namespace one::desktop::runtime {
 			one::desktop::cursor cursor() const override { return cursor::pointer; }
 
 		private:
-			static constexpr float gap = 16;   // as plain cards are apart
-			static constexpr float inset = 8;  // a caption from its tile's edges
-			static float column(float width) { return std::max(0.f, (width - 2 * gap) / 3); }
-			// The first tile of the first block of four whose rows reach what's near.
+			static constexpr float gap = 2;  // as photos on a printed page are apart
+			float column(float width) const {
+				int n = across_ > 0 ? across_ : 3;
+				return std::max(0.f, (width - (n - 1) * gap) / n);
+			}
+			// The first tile of the first block of four whose rows reach what's near. In
+			// columns, each goes no higher than the one before it, so it's the first whose top
+			// reaches it, less the last before that in each column, which may reach down into it.
 			std::size_t first_near(const rect& near) const {
 				if (frames_.empty()) return 0;
+				if (across_ > 0) {
+					auto from = static_cast<std::size_t>(std::ranges::lower_bound(frames_, near.y, {}, [](const rect& r) { return r.y; }) - frames_.begin());
+					std::vector<bool> seen(static_cast<std::size_t>(across_), false);
+					int left = across_;
+					while (from > 0 && left > 0) {
+						auto c = static_cast<std::size_t>(laid_.places[from - 1].column);
+						if (!seen[c]) seen[c] = true, --left;
+						--from;
+					}
+					return from;
+				}
 				float side = column(frame.width - padding.left - padding.right);
 				float top = frames_[0].y;
 				if (side <= 0 || near.y <= top) return 0;
@@ -233,6 +271,8 @@ namespace one::desktop::runtime {
 			std::vector<rect> frames_;
 			std::size_t chosen_ = 0;
 			bool shown_ = true;  // whether the chosen tile was brought into view, as it's first placed
+			int across_ = 0;
+			columns_laid laid_;
 		};
 
 		// What cards under headings by a date and their timeline share, by the cards' key:
@@ -698,8 +738,8 @@ namespace one::desktop::runtime {
 			});
 		}
 		std::string drawn = desktop::has_icon(icon) ? icon : "";
-		if (auto small = p.in_group()) return desktop::tool_button(drawn, *small ? hint_of(words, keys) : words, std::move(go), {.large = !*small, .off = off});
-		return desktop::tool_button(drawn, drawn.empty() ? words : hint_of(words, keys), std::move(go), {.off = off});
+		if (auto small = p.in_group()) return desktop::tool_button(drawn, *small ? hint_of(words, keys) : words, std::move(go), {.large = !*small, .off = off, .flashed = flashing(keys)});
+		return desktop::tool_button(drawn, drawn.empty() ? words : hint_of(words, keys), std::move(go), {.off = off, .flashed = flashing(keys)});
 	}
 
 	desktop::view link(page& p, std::string words, std::string to, std::string icon, std::vector<std::string> keys) {
@@ -710,7 +750,7 @@ namespace one::desktop::runtime {
 		// In a toolbar's group, a tool, as its buttons are.
 		if (auto small = p.in_group()) {
 			return desktop::tool_button(desktop::has_icon(icon) ? icon : "", *small ? hint_of(words, keys) : words, [&p, address = address_of(p, to)] { p.open(address); },
-			                            {.large = !*small, .off = off});
+			                            {.large = !*small, .off = off, .flashed = flashing(keys)});
 		}
 		// One of the web's icons is a quiet button drawn as just that, as on the web.
 		if (desktop::has_icon(icon) && !leaves(to) && !to.starts_with("#")) {
@@ -753,6 +793,8 @@ namespace one::desktop::runtime {
 		auto shown = command_of(p, b);
 		if (!shown) return {};
 		std::string label_now = shown->label;
+		// Asked first, its own words the answer that runs it.
+		if (!b.confirm.empty() && !off) p.ask_before(b.command, b.confirm, b.label, b.destroys);
 		auto give = [&p, many](const std::string& name, value sent) {
 			if (many.empty()) return p.run(name, sent);
 			bool joined = false;
@@ -769,8 +811,8 @@ namespace one::desktop::runtime {
 			if (several) return give(name, fields);
 			if (then.empty()) return p.run(name, fields);
 			// What it made, opened: its id in the route's last parameter.
-			p.run(name, fields, [&p, then](const answer& made) {
-				if (made) p.open(then.substr(0, then.rfind(':')) + *made);
+			p.run(name, fields, [&p, then, name](const answer& made) {
+				if (made) p.open(made_opens(then, name, *made, p.params()));
 			});
 		};
 		if (!off) {
@@ -863,7 +905,7 @@ namespace one::desktop::runtime {
 			if (color.size() == 7) swatch = desktop::color::hex(static_cast<std::uint32_t>(std::strtoul(color.c_str() + 1, nullptr, 16)));
 			bool clear = color == "none";
 			return desktop::tool_button(desktop::has_icon(b.icon) ? b.icon : "", *small || swatch || clear ? hint_of(label_now, b.keys) : label_now, std::move(run),
-			                            {.large = !*small, .on = b.pressed && !off, .off = off, .swatch = swatch, .clear = clear, .line = line});
+			                            {.large = !*small, .on = b.pressed && !off, .off = off, .swatch = swatch, .clear = clear, .line = line, .flashed = flashing(b.keys)});
 		}
 		if (desktop::has_icon(b.icon)) return desktop::icon_button(b.icon, label_now, std::move(run), b.primary);
 		if (std::string g = glyph_of(b.icon); !g.empty()) label_now = g + " " + label_now;
@@ -877,7 +919,7 @@ namespace one::desktop::runtime {
 	}
 
 	desktop::view confirm(page& p, std::string command, std::string question) {
-		p.ask_before(command, std::move(question));
+		p.ask_before(command, std::move(question), "", command.ends_with("::delete"));
 		return {};
 	}
 
@@ -954,16 +996,17 @@ namespace one::desktop::runtime {
 		// Cards made of the rows they show, in turn: as a mosaic, a gallery of pictures, or a list.
 		desktop::view cards_shown(page& p, const cards_spec& spec, std::vector<card_model> made, std::span<const value> rows) {
 			const auto& t = current_theme();
-			if (spec.mosaic) {
+			if (spec.mosaic || spec.across > 0) {
+				p.bleed();
 				std::vector<mosaic_element::tile> tiles;
 				for (std::size_t i = 0; i < made.size(); ++i) {
 					std::string address = made[i].address;
-					tiles.push_back({rows[i][spec.picture].as_string(), std::move(address), std::move(made[i])});
+					tiles.push_back({rows[i][spec.picture].as_string(), std::move(address), std::move(made[i]), spec.across > 0 ? tall_of(rows[i]) : 1});
 				}
 				// The card the page was left from, when it's back, chosen and given the keyboard.
 				const std::string& left = p.where_left().opened;
 				bool back = std::ranges::any_of(tiles, [&](const auto& tile) { return !left.empty() && tile.address == left; });
-				desktop::view shown(std::make_unique<mosaic_element>(p, std::move(tiles), left));
+				desktop::view shown(std::make_unique<mosaic_element>(p, std::move(tiles), left, spec.across));
 				return back ? std::move(shown).autofocus() : std::move(shown);
 			}
 			std::vector<desktop::list_row> shown;
@@ -972,7 +1015,13 @@ namespace one::desktop::runtime {
 				const card_model& card = made[i];
 				opens[card.id] = card.address;
 				std::vector<desktop::view> inside;
-				if (!spec.picture.empty()) inside.push_back(picture_of(p, rows[i][spec.picture].as_string(), spec.fit, 180, 640));
+				if (const value& shows = spec.picture.empty() ? value() : rows[i][spec.picture]; shows.is_array()) {
+					std::vector<std::string> kept;
+					for (const auto& one : shows.as_array()) kept.push_back(one.as_string());
+					inside.push_back(pictures_of(p, kept, 0.75f, 960));
+				} else if (!spec.picture.empty()) {
+					inside.push_back(picture_of(p, shows.as_string(), spec.fit, 180, 640));
+				}
 				// Its title in the text's face, strong, as large as a small heading: a card's name,
 				// not a heading over the page's parts.
 				auto title = t.strong();
@@ -1005,16 +1054,21 @@ namespace one::desktop::runtime {
 			for (const auto& [id, address] : opens) {
 				if (!left.empty() && address == left) start = id;
 			}
-			// Cards with pictures are a gallery, side by side as many as fit, as on the web.
+			// Cards with pictures are a gallery, side by side as many as fit, as on the web; those
+			// with several set together, as a collection's cover, are larger, stretched to fill
+			// each line.
 			if (!spec.picture.empty()) {
+				bool several = std::ranges::any_of(rows, [&](const value& row) { return row[spec.picture].is_array(); });
 				std::vector<desktop::view> tiles;
 				for (auto& card : shown) {
 					std::string address = opens[card.key];
 					auto tile = desktop::pressable(std::move(card.shown), [&p, address] {
 						if (!address.empty()) p.open(address);
-					}).width(280);
+					});
+					if (!several) tile = std::move(tile).width(280);
 					tiles.push_back(card.key == start ? std::move(tile).autofocus().brought_into_view() : std::move(tile));
 				}
+				if (several) return desktop::tiles(std::move(tiles), 480).spacing(16);
 				return desktop::flow(std::move(tiles)).spacing(16);
 			}
 			auto listed = desktop::list(std::move(shown), {.on_open = [&p, opens](const std::string& id) {

@@ -392,6 +392,7 @@ export interface CardsProps {
   status: ViewStatus;
   cards: Card[];
   mosaic?: boolean;
+  across?: number; // or in so many columns of their pictures, each its own shape, as columnsPlace lays them
   groups?: CardGroup[];
 }
 export interface CardGroup {
@@ -581,6 +582,139 @@ export function mosaicRows(count: number): number {
   return Math.ceil(count / 4) * 2;
 }
 
+// Which of a collection's pictures go on its cover, and where, as fractions of it, so
+// covers side by side don't all look alike: of a handful of layouts for two to six,
+// three portraits next to each other, a portrait tall at the side or in the middle with
+// the rest beside it, or a landscape large with the rest around it, several for a
+// collection of only portraits or only landscapes, the one whose places the pictures'
+// shapes fit best, those of fewer than five a little worse, each place taking the
+// picture whose shape is nearest its own, the largest first. `tall` is each picture's height over its width, 1 for one whose size
+// isn't known; `wide` is the cover's width over its height, the layouts made for 4:3. Of
+// layouts that fit about as well, `seed` picks one, and whether it's mirrored or upside
+// down. The same as the desktop's.
+export interface CoverPlace {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  picture: number;
+}
+function coverLayouts(n: number): CoverPlace[][] {
+  const place = (x: number, y: number, w: number, h: number): CoverPlace => ({ x, y, w, h, picture: 0 });
+  const across = (at: CoverPlace[], x: number, y: number, w: number, h: number, k: number) => {
+    for (let i = 0; i < k; ++i) at.push(place(x + (w * i) / k, y, w / k, h));
+    return at;
+  };
+  const down = (at: CoverPlace[], x: number, y: number, w: number, h: number, k: number) => {
+    for (let i = 0; i < k; ++i) at.push(place(x, y + (h * i) / k, w, h / k));
+    return at;
+  };
+  const side = (first: number, rest: number) => down([place(0, 0, first, 1)], first, 0, 1 - first, 1, rest);
+  const top = (first: number, rest: number) => across([place(0, 0, 1, first)], 0, first, 1, 1 - first, rest);
+  if (n === 1) return [[place(0, 0, 1, 1)]];
+  if (n === 2) return [side(0.5, 1), side(0.4, 1), top(0.5, 1)];
+  if (n === 3) return [across([], 0, 0, 1, 1, 3), side(0.5, 2), top(0.62, 2)];
+  if (n === 4) return [across(across([], 0, 0, 1, 0.65, 3), 0, 0.65, 1, 0.35, 1), side(0.5, 3), across([place(0, 0, 0.5, 1), place(0.5, 0, 0.5, 0.5)], 0.5, 0.5, 0.5, 0.5, 2), top(0.62, 3)];
+  if (n >= 5) {
+    // Three portraits over two landscapes; a portrait beside four; a portrait beside a
+    // landscape over two portraits; a landscape with two beside it and two under it; a
+    // landscape with a portrait beside it over three; a portrait between four; two
+    // portraits; and four landscapes. With six, a landscape with five around it, or six
+    // wide ones.
+    const out = [
+      across(across([], 0, 0, 1, 0.62, 3), 0, 0.62, 1, 0.38, 2),
+      across(across([place(0, 0, 0.5, 1)], 0.5, 0, 0.5, 0.5, 2), 0.5, 0.5, 0.5, 0.5, 2),
+      across([place(0, 0, 0.45, 1), place(0.45, 0, 0.55, 0.5)], 0.45, 0.5, 0.55, 0.5, 2),
+      across(down([place(0, 0, 0.6, 0.6)], 0.6, 0, 0.4, 0.6, 2), 0, 0.6, 1, 0.4, 2),
+      across([place(0, 0, 2 / 3, 0.6), place(2 / 3, 0, 1 / 3, 0.6)], 0, 0.6, 1, 0.4, 3),
+      down(down([place(0.25, 0, 0.5, 1)], 0, 0, 0.25, 1, 2), 0.75, 0, 0.25, 1, 2),
+      side(0.5, 1),
+      across(across([], 0, 0, 1, 0.5, 2), 0, 0.5, 1, 0.5, 2),
+    ];
+    if (n >= 6) {
+      out.push(across(down([place(0, 0, 2 / 3, 2 / 3)], 2 / 3, 0, 1 / 3, 2 / 3, 2), 0, 2 / 3, 1, 1 / 3, 3));
+      out.push(across(across(across([], 0, 0, 1, 1 / 3, 2), 0, 1 / 3, 1, 1 / 3, 2), 0, 2 / 3, 1, 1 / 3, 2));
+    }
+    return out;
+  }
+  return [];
+}
+export function coverPlaces(tall: number[], wide: number, seed: number): CoverPlace[] {
+  const layouts = coverLayouts(Math.min(tall.length, 6));
+  if (layouts.length === 0) return [];
+  // Each layout filled, its largest places first, each with the picture left whose shape
+  // is nearest its own, and how far off they are in all, the larger places counting more.
+  const cost = layouts.map((at) => {
+    const order = at.map((_, i) => i).sort((a, b) => at[b]!.w * at[b]!.h - at[a]!.w * at[a]!.h || a - b);
+    const used = tall.map(() => false);
+    let off = 0;
+    for (const i of order) {
+      const shape = Math.log((at[i]!.w * wide) / at[i]!.h);
+      let best = 0;
+      let nearest = Infinity;
+      tall.forEach((t, j) => {
+        const d = Math.abs(shape + Math.log(t > 0 ? t : 1));
+        if (!used[j] && d < nearest) [best, nearest] = [j, d];
+      });
+      used[best] = true;
+      at[i]!.picture = best;
+      off += at[i]!.w * at[i]!.h * nearest;
+      // A portrait in a wide place, or a landscape in a tall one, is a lot further off.
+      const slot = (at[i]!.w * wide) / at[i]!.h;
+      const picture = 1 / (tall[best]! > 0 ? tall[best]! : 1);
+      if ((slot > 1.05 && picture < 0.95) || (slot < 0.95 && picture > 1.05)) off += 0.2;
+    }
+    // A cover of fewer than five counts as a little off for each it's short.
+    return off + 0.04 * Math.max(0, Math.min(tall.length, 5) - at.length);
+  });
+  const least = Math.min(...cost);
+  const close = cost.flatMap((c, i) => (c <= least + 0.1 ? [i] : []));
+  return layouts[close[seed % close.length]!]!.map((p) => ({
+    ...p,
+    x: Math.floor(seed / 7) % 2 === 1 ? 1 - p.x - p.w : p.x,
+    y: Math.floor(seed / 3) % 2 === 1 ? 1 - p.y - p.h : p.y,
+  }));
+}
+// A cover's seed, from its first picture's name, so it keeps its layout.
+export function coverSeed(first: string): number {
+  let seed = 0;
+  for (const c of new TextEncoder().encode(first)) seed += c;
+  return seed;
+}
+
+// Cards in columns, as stone is laid in a wall: each picture as wide as a column and
+// as tall as its own shape, uncropped, in the shortest column so far, the leftmost of
+// those, so the columns line up and the rows don't. `tall` is each one's height over
+// its width, 1 for one whose size isn't known. Each goes in its column, below the
+// heights of those above it, in column widths, and so many gaps; each column ends
+// likewise. Worked out from the sizes the rows keep, so nothing moves as pictures come
+// in. The same as the desktop's.
+export interface ColumnPlace {
+  column: number;
+  above: number;
+  before: number;
+}
+export function columnsPlace(tall: number[], columns: number): { places: ColumnPlace[]; heights: number[]; counts: number[] } {
+  const n = Math.max(1, columns);
+  const heights = new Array<number>(n).fill(0);
+  const counts = new Array<number>(n).fill(0);
+  const places = tall.map((t) => {
+    let shortest = 0;
+    for (let c = 1; c < n; c++) if (heights[c]! < heights[shortest]!) shortest = c;
+    const at = { column: shortest, above: heights[shortest]!, before: counts[shortest]! };
+    heights[shortest] = heights[shortest]! + t;
+    counts[shortest] = counts[shortest]! + 1;
+    return at;
+  });
+  return { places, heights, counts };
+}
+// A row's picture's height over its width, from the sizes it keeps.
+export function tallOf(row: Record<string, unknown>): number {
+  const wide = Number(row["picture_width"]);
+  const high = Number(row["picture_height"]);
+  return wide > 0 && high > 0 ? high / wide : 1;
+}
+
 export interface Card {
   id: string;
   title: ReactNode;
@@ -593,8 +727,10 @@ export interface Card {
   noun?: string; // what it holds, counted, like issues
   filters: { label: string; link: LinkProps; hue?: Hue }[];
   // A picture on top of it, all of it fitted in or filling its place; its address,
-  // none while it's found or when there's none.
-  picture?: { source?: string; fit: boolean };
+  // none while it's found or when there's none; in columns, its height over its width.
+  // Or several set together, as a collection's cover: the first large, the rest beside
+  // it, each filling its place, and the card larger.
+  picture?: { source?: string; fit: boolean; tall?: number; sources?: string[] };
 }
 
 // A run of numbers over time, newest at the right, as btop draws one: its title, its
@@ -869,6 +1005,8 @@ export interface ButtonProps {
   pressed?: boolean; // a toggle, or a choice already made, drawn as pressed
   hint?: string; // said when it's pointed at, like "Undo (Ctrl+Z)"
   swatch?: string; // in a toolbar, drawn as a circle of this color, like #ffffff, its words said when it's pointed at
+  focused?: boolean; // given the keyboard when the dialog it's in opens, like a question's Cancel
+  flashed?: boolean; // drawn pushed in a moment, as its key just ran it
 }
 
 // A named part of a workspace's toolbar, like Rotate, with a line between it and the

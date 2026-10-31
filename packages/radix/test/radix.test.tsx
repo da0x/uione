@@ -24,6 +24,7 @@ import {
   Table,
   Text,
   Thread,
+  Toggle,
   memorySource,
   screen as defineScreen,
   useView,
@@ -159,7 +160,46 @@ describe("forms", () => {
   });
 });
 
+describe("a tool", () => {
+  it("is pushed in while the pointer's button is down on it, until it's let go anywhere, on or not, and a moment after its key ran it", async () => {
+    renderScreen(() => <Toggle name="/ grid" label="Grid" icon="grid" keys={["g"]} />);
+    const tool = screen.getByRole("button", { name: "Grid" });
+    expect(tool.dataset.pushed).toBeUndefined();
+    fireEvent.pointerDown(tool, { button: 0 });
+    expect(tool.dataset.pushed).toBe("true");
+    expect(tool.className).toContain("!bg-ink/10");
+    // Let go off it, it's out again.
+    fireEvent.pointerUp(document.body);
+    expect(tool.dataset.pushed).toBeUndefined();
+    // On, it's tinted, and pushed in it's darker than that, not the same.
+    fireEvent.click(tool);
+    expect(tool.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.pointerDown(tool, { button: 0 });
+    expect(tool.className).toContain("!bg-accent/25");
+    fireEvent.pointerUp(window);
+    expect(tool.className).not.toContain("!bg-accent/25");
+    // Its key pushes it in a moment, as a press does.
+    fireEvent.keyDown(window, { key: "g" });
+    expect(tool.dataset.pushed).toBe("true");
+    await waitFor(() => expect(tool.dataset.pushed).toBeUndefined());
+  });
+});
+
 describe("dialogs", () => {
+  it("asks before a button that says to, Cancel holding the keyboard and its own words, in red, saying yes", async () => {
+    const source = memorySource();
+    renderScreen(() => <Command name="studio::piece::delete" label="Remove" keys={["delete"]} confirm="Remove this piece?" destroys />, source);
+    fireEvent.keyDown(window, { key: "Delete" });
+    const dialog = await screen.findByRole("dialog", { name: "Are you sure?" });
+    await waitFor(() => expect(document.activeElement).toBe(within(dialog).getByRole("button", { name: "Cancel" })));
+    expect(within(dialog).getByRole("button", { name: "Remove" }).className).toContain("bg-danger");
+    fireEvent.keyDown(document.activeElement!, { key: "Delete" });
+    expect(source.runs).toEqual([]);
+    fireEvent.keyDown(document.activeElement!, { key: "Enter" });
+    await waitFor(() => expect(source.runs).toEqual([{ command: "studio::piece::delete", input: {} }]));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
   it("moves focus into the dialog, and closes on Escape without running anything", async () => {
     const source = memorySource();
     renderScreen(
@@ -226,6 +266,37 @@ describe("cards", () => {
     expect([tiles[4]!.style.gridColumn, tiles[4]!.style.gridRow]).toEqual(["3 / span 1", "3 / span 2"]);
     const title = within(tiles[0]!).getByRole("heading", { name: "Clipping 1" });
     expect(title.className.split(" ")).toContain("font-sans");
+    // Set as a printed page is: square cornered, two pixels apart, its region's margin as thin.
+    expect(tiles.every((tile) => !/\brounded/.test(tile.className))).toBe(true);
+    expect(tiles[0]!.parentElement!.className.split(" ")).toContain("gap-[2px]");
+    expect(tiles[0]!.closest("[data-bleed]")).not.toBeNull();
+  });
+});
+
+describe("cards in columns", () => {
+  it("place each picture in the shortest column so far, as wide as a column and as tall as its own shape, one of no size square", () => {
+    const source = memorySource();
+    const sizes = [[160, 90], [90, 160], [100, 100], [160, 120], [0, 0]];
+    source.set("studio::room_page", {
+      pieces: sizes.map(([w, h], i) => ({ id: `c${i + 1}`, name: `Clipping ${i + 1}`, ...(w ? { picture_width: w, picture_height: h } : {}) })),
+    });
+    function Pieces() {
+      const page = useView("studio::room_page");
+      return <Cards view={page} list="pieces" columns={{ name: "Name" }} picture="image" across={3} />;
+    }
+    renderScreen(() => <Pieces />, source);
+    const tiles = screen.getAllByRole("article");
+    expect(tiles.length).toBe(5);
+    // Which column each is in, and how far down, in column widths.
+    const column = (tile: HTMLElement) => Number(/^calc\((\d+) \*/.exec(tile.style.left)?.[1]);
+    const down = (tile: HTMLElement) => Number(/([\d.]+) \*/.exec(tile.style.top)?.[1]);
+    // The first three across; the fourth under the shortest, the first; the fifth, of no size, square under the third.
+    expect(tiles.map(column)).toEqual([0, 1, 2, 0, 2]);
+    expect(down(tiles[3]!)).toBeCloseTo(90 / 160);
+    expect(down(tiles[4]!)).toBe(1);
+    expect(tiles[4]!.style.height).toMatch(/\b1 \*/);
+    expect(tiles.every((tile) => !/\brounded/.test(tile.className))).toBe(true);
+    expect(tiles[0]!.closest("[data-bleed]")).not.toBeNull();
   });
 });
 
