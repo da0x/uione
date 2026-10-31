@@ -8,6 +8,7 @@
 
 #include <array>
 #include <cmath>
+#include <filesystem>
 #include <functional>
 #include <map>
 #include <memory>
@@ -46,6 +47,8 @@ namespace one::desktop {
 		inline void wp_viewporter_destroy(wp_viewporter* held) { ::wp_viewporter_destroy(held); }
 		inline void wp_cursor_shape_manager_v1_destroy(wp_cursor_shape_manager_v1* held) { ::wp_cursor_shape_manager_v1_destroy(held); }
 		inline void wl_surface_destroy(wl_surface* held) { ::wl_surface_destroy(held); }
+		inline void wl_buffer_destroy(wl_buffer* held) { ::wl_buffer_destroy(held); }
+		inline void wl_shm_release(wl_shm* held) { ::wl_shm_destroy(held); }
 		inline void xdg_surface_destroy(xdg_surface* held) { ::xdg_surface_destroy(held); }
 		inline void xdg_toplevel_destroy(xdg_toplevel* held) { ::xdg_toplevel_destroy(held); }
 		inline void zxdg_toplevel_decoration_v1_destroy(zxdg_toplevel_decoration_v1* held) { ::zxdg_toplevel_decoration_v1_destroy(held); }
@@ -106,6 +109,17 @@ namespace one::desktop {
 		bool dragged_files = false;
 		std::string dragged_picture;  // the kind of picture it has, when it has one
 		point dragged_at;
+		// A file carried out of one of our windows to another program, while it's carried:
+		// the drag's source, the file, and the kind of picture it is, when it's one.
+		owned<wl_data_source, released::wl_data_source_destroy> carried_out;
+		std::filesystem::path carried_file;
+		std::string carried_picture;
+		// What's under the pointer while it's carried: a small copy of its picture.
+		owned<wl_surface, released::wl_surface_destroy> carried_icon;
+		owned<wl_buffer, released::wl_buffer_destroy> carried_pixels;
+		// An offer of ours, or one we can't take, turned away over our window but kept until
+		// the drag leaves it: a compositor takes an offer let go as the drag's end.
+		owned<wl_data_offer, released::wl_data_offer_destroy> turned_away;
 	};
 
 	// What an input method was last told of the field with the keyboard.
@@ -183,6 +197,7 @@ namespace one::desktop {
 		owned<wp_cursor_shape_manager_v1, released::wp_cursor_shape_manager_v1_destroy> cursors;
 		owned<zwp_pointer_gestures_v1, released::zwp_pointer_gestures_v1_destroy> gestures;
 		owned<wl_data_device_manager, released::wl_data_device_manager_destroy> data_devices;
+		owned<wl_shm, released::wl_shm_release> shm;  // for pixels shared plainly, like a drag's picture
 		owned<zwp_text_input_manager_v3, released::zwp_text_input_manager_v3_destroy> text_inputs;
 		std::optional<gpu::device> gpu;
 		std::optional<one::desktop::seat> input;
@@ -243,7 +258,7 @@ namespace one::desktop {
 	void bring_up_to_date(window::state& w);
 	void deliver_key(window::state& w, const key_event& e);
 	void deliver_pointer(window::state& w, point at);
-	void deliver_press(window::state& w, point at, int clicks);
+	void deliver_press(window::state& w, point at, int clicks, bool finger = false);  // a finger's on a touchscreen, or the pointer's
 	void deliver_release(window::state& w, point at);
 	void deliver_wheel(window::state& w, point at, float dx, float dy);
 	void deliver_leave(window::state& w);

@@ -1019,7 +1019,7 @@ TEST("cards in columns: each picture its column's width and its own shape, uncro
 	std::filesystem::remove_all(folder);
 }
 
-TEST("cards as a mosaic: every eight two blocks of a tall tile, a wide one and two small, the second mirrored, each picture filling its tile around its middle, its title over its foot") {
+TEST("cards as a mosaic: every eight two blocks of a tall tile, a wide one and two small, the second mirrored, each picture filling its tile around its middle, its title over its foot, and a tile pressed and moved carried out, not opened") {
 	auto folder = std::filesystem::temp_directory_path() / "uione-mosaic";
 	std::filesystem::remove_all(folder);
 	std::filesystem::create_directories(folder);
@@ -1094,6 +1094,22 @@ TEST("cards as a mosaic: every eight two blocks of a tall tile, a wide one and t
 		CHECK(opened(side + 26, 10) == "/clippings/c2");
 		auto eleventh = mosaic_tile(10);
 		CHECK(opened(eleventh.column * (side + 16) + 10, eleventh.row * (side + 16) + 10) == "/clippings/c11");
+		// Pressed and moved, a tile is carried out, to another program, and isn't opened;
+		// pressed again and let go where it was, it is.
+		nav.open("/");
+		auto again = drawn(nav).take();
+		again->place({0, 0, 1200, 1500});
+		auto* m = find(*again);
+		m->place({0, 0, 1200, m->measure(1200).height});
+		CHECK(m->press({10, side * 1.5f}, 1));
+		m->drag({40, side * 1.5f});
+		m->release({40, side * 1.5f}, m);
+		m->click({40, side * 1.5f});
+		CHECK(nav.current().address() == "/");
+		m->press({10, side * 1.5f}, 1);
+		m->release({10, side * 1.5f}, m);
+		CHECK(m->click({10, side * 1.5f}));
+		CHECK(nav.current().address() == "/clippings/c1");
 	}
 	std::filesystem::remove_all(folder);
 }
@@ -4319,7 +4335,7 @@ TEST("on a picture alone, left and right step through the list whatever has the 
 	std::filesystem::remove_all(folder);
 }
 
-TEST("a picture alone steps by a swipe across it at fit, a finger's, a drag's or three fingers' on a touchpad, following it, and not for one too short, nor while it's zoomed") {
+TEST("a picture alone steps by a swipe across it at fit, a finger's or three fingers' on a touchpad, following it, and not for one too short, nor while it's zoomed, nor for the pointer's drag, which carries it out") {
 	auto folder = banded_picture(std::filesystem::temp_directory_path() / "uione-alone-swiped");
 	struct kept_there : memory_source {
 		std::filesystem::path in;
@@ -4349,7 +4365,7 @@ TEST("a picture alone steps by a swipe across it at fit, a finger's, a drag's or
 	};
 	CHECK(left_edge() == 0);
 	// Too short: it follows the finger, then goes back.
-	one::desktop::deliver_press(window.w, {500, 300}, 1);
+	one::desktop::deliver_press(window.w, {500, 300}, 1, true);
 	one::desktop::deliver_pointer(window.w, {470, 300});
 	CHECK(left_edge() == 0);  // its left edge is under the window's, moved left
 	CHECK(looked(window.w).at(875, 300) == black);
@@ -4359,7 +4375,7 @@ TEST("a picture alone steps by a swipe across it at fit, a finger's, a drag's or
 	CHECK(left_edge() == 0);
 	CHECK(looked(window.w).at(875, 300) != black);
 	// To the left, far enough: the next.
-	one::desktop::deliver_press(window.w, {600, 300}, 1);
+	one::desktop::deliver_press(window.w, {600, 300}, 1, true);
 	one::desktop::deliver_pointer(window.w, {400, 300});
 	one::desktop::deliver_release(window.w, {400, 300});
 	window.update();
@@ -4374,10 +4390,16 @@ TEST("a picture alone steps by a swipe across it at fit, a finger's, a drag's or
 	one::desktop::deliver_swipe(window.w, {450, 300}, 200, 0, true);
 	window.update();
 	CHECK(nav.current().address() == "/posters/p2");
+	// The pointer's drag carries it out instead, to let go over another program.
+	one::desktop::deliver_press(window.w, {600, 300}, 1);
+	one::desktop::deliver_pointer(window.w, {300, 300});
+	one::desktop::deliver_release(window.w, {300, 300});
+	window.update();
+	CHECK(nav.current().address() == "/posters/p2");
 	// Zoomed, a drag moves it about instead.
 	(void)looked(window.w);
 	one::desktop::deliver_pinch(window.w, {450, 300}, 2.f);
-	one::desktop::deliver_press(window.w, {600, 300}, 1);
+	one::desktop::deliver_press(window.w, {600, 300}, 1, true);
 	one::desktop::deliver_pointer(window.w, {300, 300});
 	one::desktop::deliver_release(window.w, {300, 300});
 	window.update();

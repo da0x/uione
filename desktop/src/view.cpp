@@ -247,7 +247,14 @@ namespace one::desktop {
 		w.redraw();
 	}
 
-	void deliver_press(window::state& w, one::desktop::point at, int clicks) {
+	namespace {
+		bool pressed_by_finger = false;
+	}
+
+	bool by_finger() { return pressed_by_finger; }
+
+	void deliver_press(window::state& w, one::desktop::point at, int clicks, bool finger) {
+		pressed_by_finger = finger;
 		bring_up_to_date(w);
 		in_window context(w);
 		if (w.outside && w.outside->on_press) w.outside->on_press();

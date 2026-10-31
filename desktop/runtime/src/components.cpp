@@ -193,7 +193,30 @@ namespace one::desktop::runtime {
 				return true;
 			}
 
+			// A tile pressed and moved a few pixels is carried out, its picture's file, to
+			// another program to let it go over, and isn't opened.
+			bool press(point at, int) override {
+				pressed_ = at;
+				carried_ = false;
+				return true;
+			}
+			void drag(point at) override {
+				if (!pressed_ || std::hypot(at.x - pressed_->x, at.y - pressed_->y) < 6) return;
+				point from = *std::exchange(pressed_, std::nullopt);
+				for (std::size_t i = 0; i < frames_.size(); ++i) {
+					if (!frames_[i].contains(from)) continue;
+					carried_ = true;
+					if (auto file = tiles_[i].picture.empty() ? std::nullopt : p_.file_here(tiles_[i].picture)) {
+						auto shown = picture_soon(p_, tiles_[i].picture, 640);
+						desktop::carry_out(*file, tiles_[i].card.title, shown ? *shown : desktop::picture());
+					}
+					return;
+				}
+			}
+			void release(point, element*) override { pressed_.reset(); }
+
 			bool click(point at) override {
+				if (std::exchange(carried_, false)) return true;
 				for (std::size_t i = 0; i < frames_.size(); ++i) {
 					if (frames_[i].contains(at) && !tiles_[i].address.empty()) {
 						chosen_ = i;
@@ -271,6 +294,8 @@ namespace one::desktop::runtime {
 			bool shown_ = true;  // whether the chosen tile was brought into view, as it's first placed
 			int across_ = 0;
 			columns_laid laid_;
+			std::optional<point> pressed_;  // where the pointer's button went down, until it's moved off
+			bool carried_ = false;          // whether that press carried a tile out
 		};
 
 		// What cards under headings by a date and their timeline share, by the cards' key:

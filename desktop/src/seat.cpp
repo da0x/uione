@@ -109,7 +109,7 @@ namespace one::desktop {
 			        if (!s.touched) return;
 			        if (s.fingers.size() == 1) {
 				        deliver_pointer(*s.touched, at);
-				        deliver_press(*s.touched, at, 1);
+				        deliver_press(*s.touched, at, 1, true);
 			        } else if (s.fingers.size() == 2) {
 				        // The first finger's press is let go where it began, so it neither drags on nor clicks.
 				        deliver_leave(*s.touched);

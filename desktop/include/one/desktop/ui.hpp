@@ -404,6 +404,12 @@ namespace one::desktop {
 	std::optional<std::vector<std::uint8_t>> clipboard_picture();
 	// Files on the clipboard, as a file manager copies them; none when there are none.
 	std::vector<std::filesystem::path> clipboard_files();
+	// Carries a file out of the window to another program, from the press the pointer's
+	// button is held down in, as a file manager drags one: offered as a file, under
+	// `name` with its kind's extension, and a picture's bytes too, as a browser offers
+	// one, with a small copy of `shown` under the pointer as it goes. Whatever it's let go
+	// over takes a copy.
+	void carry_out(const std::filesystem::path& file, const std::string& name, const picture& shown = {});
 
 	// A box ticked or not, with what it says, flipped with a click, Space or Enter.
 	view toggle(state<bool> on, std::string label);
