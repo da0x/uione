@@ -3064,7 +3064,11 @@ namespace one::generators {
             out.line("\"@vitejs/plugin-react\": \"^5.2.0\",");
             out.line("\"typescript\": \"~5.9.3\",");
             out.line("\"vite\": \"^7.3.6\"");
-            out.close("}");
+            out.close("},");
+            // rollup 4.67 stops with an illegal instruction on an older processor, so
+            // it's held at the last release that runs everywhere, for yarn and npm both.
+            out.line("\"resolutions\": { \"rollup\": \"4.66.0\" },");
+            out.line("\"overrides\": { \"rollup\": \"4.66.0\" }");
             out.close("}");
             return out;
         }
