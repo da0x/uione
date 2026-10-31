@@ -36,9 +36,9 @@ import type { CodeDisplay, NameStyle } from "./display.js";
 
 // A card's dot: gray not started, blue waiting, orange working, green done, red failed.
 // A status line along the foot, as an app's is and a site's footer is too, so both
-// look the same and change together: one line on a wide screen; on a phone it wraps,
-// so a message is read whole.
-const statusLine = "flex shrink-0 flex-wrap items-center gap-x-4 gap-y-0.5 border-t border-line px-3 py-1 text-xs text-muted sm:flex-nowrap sm:overflow-hidden sm:whitespace-nowrap";
+// look the same and change together: one line on a wide screen, as tall as one with
+// nothing said in it yet; on a phone it wraps, so a message is read whole.
+const statusLine = "flex min-h-[calc(1.5rem+1px)] shrink-0 flex-wrap items-center gap-x-4 gap-y-0.5 border-t border-line px-3 py-1 text-xs text-muted sm:flex-nowrap sm:overflow-hidden sm:whitespace-nowrap";
 
 const statusColors: Record<string, string> = {
   inactive: "var(--color-muted)",

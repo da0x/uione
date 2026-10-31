@@ -1153,6 +1153,15 @@ export function Paper({
     setApart({ id: b.id, words: wordsOf(el), language: b.parts?.language ?? "" });
     el.blur();
   };
+  // A drawn block deleted, from its header or where it's written apart; on a wider
+  // screen the caret's then at the end of the one before it.
+  const erase = (b: Block) => {
+    const i = shown.findIndex((s) => s.id === b.id);
+    if (!remove || !b.id || i < 0) return;
+    setApart(null);
+    void run(remove, { id: b.id });
+    if (!narrow && i > 0) goTo(i - 1, "end");
+  };
   // What was written apart kept, as if typed into the block, or let go.
   const keep = (kept: boolean) => {
     const el = apart && elements.current.get(apart.id);
@@ -1271,6 +1280,7 @@ export function Paper({
               if (!opening.current && narrow) writeApart(b);
             }}
             apart={!readOnly && kindOf(b.kind).apart ? () => writeApart(b) : undefined}
+            erase={!readOnly && remove && kindOf(b.kind).showing ? () => erase(b) : undefined}
             onBlur={() => send(b.id)}
             typing={() => written.current.has(b.id)}
           />
@@ -1286,6 +1296,7 @@ export function Paper({
           retyped={(words) => setApart({ ...apart, words })}
           relanguaged={(language) => setApart({ ...apart, language })}
           done={keep}
+          erase={remove ? () => erase(shown.find((b) => b.id === apart.id)!) : undefined}
         />
       )}
     </div>
@@ -1324,6 +1335,7 @@ function Apart({
   retyped,
   relanguaged,
   done,
+  erase,
 }: {
   block?: Block;
   words: string;
@@ -1333,6 +1345,7 @@ function Apart({
   retyped: (words: string) => void;
   relanguaged: (language: string) => void;
   done: (kept: boolean) => void;
+  erase?: () => void;
 }) {
   const kind = kindOf(block?.kind ?? "");
   const align = "center" as CSSProperties["textAlign"];
@@ -1375,9 +1388,16 @@ function Apart({
           Cancel
         </button>
         <span style={{ fontWeight: 600 }}>{kind.apart?.name}</span>
-        <button type="button" style={{ ...button, fontWeight: 600 }} onClick={() => done(true)}>
-          Accept
-        </button>
+        <span style={{ display: "flex" }}>
+          {erase && (
+            <button type="button" style={{ ...button, color: "var(--color-danger, #c8322b)" }} onClick={erase}>
+              Delete
+            </button>
+          )}
+          <button type="button" style={{ ...button, fontWeight: 600 }} onClick={() => done(true)}>
+            Accept
+          </button>
+        </span>
       </div>
       {kind.apart?.languages && (
         <label style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px 0", fontSize: 13, color: "var(--color-muted, #5b6577)" }}>
@@ -1546,6 +1566,7 @@ function PaperBlock({
   onMouseDown,
   onFocus,
   apart,
+  erase,
   onBlur,
   typing,
 }: {
@@ -1562,6 +1583,7 @@ function PaperBlock({
   onMouseDown: (e: MouseEvent<HTMLElement>) => void;
   onFocus: () => void;
   apart?: () => void; // pressed, written apart, as an equation is on a phone
+  erase?: () => void; // deleted, as a drawn block can be from its header
   onBlur: () => void;
   typing: () => boolean;
 }) {
@@ -1638,6 +1660,22 @@ function PaperBlock({
       {hint !== undefined && words === "" && (
         <div aria-hidden style={{ position: "absolute", inset: 0, textAlign: align, opacity: 0.45, pointerEvents: "none", color: "var(--color-muted, #5b6577)" }}>
           {hint}
+        </div>
+      )}
+      {/* While it's written in, a drawn block says over it what it is, and code its
+          language, with a button that deletes it; kept from taking the caret away. */}
+      {focused && erase && (
+        <div style={{ position: "absolute", bottom: "100%", left: 0, display: "flex", alignItems: "center", gap: 8, paddingBottom: 2, fontFamily: "var(--font-sans, sans-serif)", fontSize: 12, fontStyle: "normal", fontWeight: 400, lineHeight: "20px", color: "var(--color-muted, #5b6577)" }}>
+          <span>{[kind.apart?.name ?? block.kind[0]!.toUpperCase() + block.kind.slice(1), kind.apart?.languages && (languages.find((l) => l.name === block.parts?.language)?.title ?? "Plain text")].filter(Boolean).join(" · ")}</span>
+          <button
+            type="button"
+            onPointerDown={(e) => e.preventDefault()}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={erase}
+            style={{ font: "inherit", padding: "0 6px", border: "none", borderRadius: 4, background: "transparent", color: "var(--color-danger, #c8322b)", cursor: "pointer" }}
+          >
+            Delete
+          </button>
         </div>
       )}
       {showing.before}

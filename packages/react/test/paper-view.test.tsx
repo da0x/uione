@@ -317,6 +317,16 @@ describe("a paper", () => {
     expect(document.activeElement).toBe(blocks(drawn)[0]);
   });
 
+  it("says what a drawn block is while it's written in, code with its language, and deletes it from there", async () => {
+    const source = sourceWith([{ id: "b1", kind: "code", words: "int x;", position: 1, align: "left", language: "cpp" }]);
+    const drawn = renderPaper(source);
+    await waitFor(() => expect(blocks(drawn).length).toBe(1));
+    blocks(drawn)[0]!.focus();
+    await waitFor(() => expect(drawn.getByText("Code · C++")).toBeTruthy());
+    fireEvent.click(drawn.getByRole("button", { name: "Delete" }));
+    expect(source.runs.at(-1)).toMatchObject({ command: "studio::passage::delete", input: { id: "b1" } });
+  });
+
   it("keeps the lines of words pasted into code", async () => {
     const source = sourceWith([{ id: "b1", kind: "code", words: "", position: 1, align: "left" }]);
     const drawn = renderPaper(source);
