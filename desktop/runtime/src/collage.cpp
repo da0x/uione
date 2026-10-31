@@ -1846,6 +1846,9 @@ namespace one::desktop::runtime {
 			// which it's drawn moved by.
 			std::optional<desktop::point> swiping;
 			float swiped = 0;
+			// Pressed by the pointer at fit, where, until it's moved far enough to carry the
+			// picture out to another program.
+			std::optional<desktop::point> carrying;
 		};
 
 		// Whether a swipe across goes far enough to step: an eighth of the picture's
@@ -1985,16 +1988,24 @@ namespace one::desktop::runtime {
 				                }
 				                return true;
 			                }
-			                // At fit, a drag across is a swipe, as a finger's is; larger, it moves it about.
+			                // At fit, a finger's drag across is a swipe, and the pointer's carries the picture
+			                // out, to let go over another program; larger, either moves it about.
 			                if (l->times <= 1.0001f) {
-				                l->swiping = at, l->swiped = 0;
+				                if (desktop::by_finger()) l->swiping = at, l->swiped = 0;
+				                else l->carrying = at;
 				                return true;
 			                }
 			                l->held = at;
 			                return true;
 		                },
 		            .on_drag =
-		                [l](desktop::point at) {
+		                [l, shown, file = kept.empty() ? std::nullopt : p.file_here(kept), name = p.title()](desktop::point at) {
+			                if (l->carrying) {
+				                if (std::hypot(at.x - l->carrying->x, at.y - l->carrying->y) < 6) return;
+				                l->carrying.reset();
+				                if (file) desktop::carry_out(*file, name, shown);
+				                return;
+			                }
 			                if (l->swiping) {
 				                l->swiped = at.x - l->swiping->x;
 				                desktop::runtime::redraw();
@@ -2008,6 +2019,7 @@ namespace one::desktop::runtime {
 		            .on_release =
 		                [l, step](desktop::point at) {
 			                l->held.reset();
+			                l->carrying.reset();
 			                if (!l->swiping) return;
 			                float dx = at.x - l->swiping->x;
 			                l->swiping.reset();

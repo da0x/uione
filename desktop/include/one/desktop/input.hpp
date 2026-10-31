@@ -28,6 +28,8 @@ namespace one::desktop {
 		bool space = false;  // as a drawing program's hand is held to move what's shown
 	};
 	held_keys held();
+	// Whether what's pressed now is a finger on a touchscreen, not the pointer's button.
+	bool by_finger();
 
 	namespace keys {
 		// XKB's symbols for the keys a view usually listens for.
