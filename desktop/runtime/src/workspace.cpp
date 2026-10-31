@@ -284,11 +284,12 @@ namespace one::desktop::runtime {
 			}
 			return desktop::view(std::make_unique<alone_element>(taken("main").grow(), std::move(over))).grow();
 		}
-		// Filling the screen, it's only its work, like a picture on a wall.
-		if (fullscreen()) return taken("main").grow();
+		// Filling the screen, it's only its work, like a picture on a wall, with a side that's
+		// open, like a timeline along it; still scrolled as it was.
+		bool only_work = fullscreen();
 		std::vector<desktop::view> parts;
 		for (const char* across : {"bar", "toolbar"}) {
-			if (auto v = taken(across); v.get()) {
+			if (auto v = taken(across); v.get() && !only_work) {
 				v = drawn_across(across, std::move(v));
 				parts.push_back(std::move(v).padding(edges(6, 12)).background({.fill = t.surface}));
 				parts.push_back(desktop::divider());
@@ -296,7 +297,7 @@ namespace one::desktop::runtime {
 		}
 		std::vector<desktop::view> middle;
 		// Its tools in a column down its left side, as a drawing app's are.
-		if (auto tools = taken("tools"); tools.get()) {
+		if (auto tools = taken("tools"); tools.get() && !only_work) {
 			middle.push_back(std::move(tools).padding(edges(8, 6)).background({.fill = t.surface}));
 			middle.push_back(desktop::spacer().grow(0).width(1).background({.fill = t.line}));
 		}
@@ -328,7 +329,7 @@ namespace one::desktop::runtime {
 			}
 		}
 		parts.push_back(desktop::row(std::move(middle)).align(align::stretch).grow());
-		if (auto status = taken("status"); status.get()) {
+		if (auto status = taken("status"); status.get() && !only_work) {
 			parts.push_back(desktop::divider());
 			parts.push_back(std::move(status).padding(edges(4, 12)).background({.fill = t.surface}));
 		}
