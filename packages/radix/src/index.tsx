@@ -914,13 +914,54 @@ function useSeen(): CSSProperties | undefined {
   return seen;
 }
 
+// The caret, kept in sight in what can be seen of a workspace: each box that scrolls
+// it, from the nearest out, moved only as far as it takes to show it with a line's
+// room around it.
+function showCaret(frame: HTMLElement) {
+  const active = document.activeElement as HTMLElement | null;
+  if (!active || !frame.contains(active)) return;
+  const picked = getSelection();
+  const node = active.isContentEditable && picked?.rangeCount ? picked.focusNode : active.matches("input, textarea") ? active : null;
+  const held = node instanceof Element ? node : node?.parentElement;
+  if (!held) return;
+  const caret = () => {
+    const at = active.isContentEditable ? picked?.getRangeAt(0).getBoundingClientRect() : undefined;
+    return at?.height ? at : held.getBoundingClientRect();
+  };
+  const bounds = frame.getBoundingClientRect();
+  const room = 24;
+  for (let box = held.parentElement; box && box !== frame; box = box.parentElement) {
+    if (box.scrollHeight <= box.clientHeight || !/auto|scroll/.test(getComputedStyle(box).overflowY)) continue;
+    const seen = box.getBoundingClientRect();
+    const top = Math.max(seen.top, bounds.top) + room;
+    const bottom = Math.min(seen.bottom, bounds.bottom) - room;
+    const at = caret();
+    if (at.bottom > bottom) box.scrollTop += Math.min(at.bottom - bottom, at.top - top);
+    else if (at.top < top) box.scrollTop -= top - at.top;
+  }
+}
+
 // Inside a phone's safe area, so its status line is never under the home indicator or
-// the browser's own bar.
+// the browser's own bar. While its keyboard is up, what's written stays above it: as
+// it comes up, and as the caret moves.
 function WorkspaceWindow({ children }: { children: ReactNode }) {
+  const seen = useSeen();
+  const frame = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (seen && frame.current) showCaret(frame.current);
+  }, [seen?.height]);
+  const up = seen !== undefined;
+  useEffect(() => {
+    if (!up) return;
+    const moved = () => requestAnimationFrame(() => frame.current && showCaret(frame.current));
+    document.addEventListener("selectionchange", moved);
+    return () => document.removeEventListener("selectionchange", moved);
+  }, [up]);
   return (
     <div
+      ref={frame}
       className="fixed inset-0 flex min-h-0 touch-manipulation flex-col bg-sunken pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] text-ink"
-      style={useSeen()}
+      style={seen}
     >
       {children}
     </div>

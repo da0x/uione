@@ -347,6 +347,46 @@ describe("a workspace's side", () => {
   });
 });
 
+describe("a workspace written in on a phone", () => {
+  it("scrolls what's written so the caret stays above the keyboard as it comes up", () => {
+    const view = Object.assign(new EventTarget(), { height: window.innerHeight, offsetTop: 0 });
+    vi.stubGlobal("visualViewport", view);
+    const box = (top: number, bottom: number) => () => ({ top, bottom, height: bottom - top, left: 0, right: 300, width: 300, x: 0, y: top, toJSON() {} }) as DOMRect;
+    const Layout = radix.Layout;
+    const drawn = render(
+      <Layout
+        name="workspace"
+        regions={{
+          main: (
+            <div data-testid="scroller" style={{ overflowY: "auto" }}>
+              <p contentEditable suppressContentEditableWarning tabIndex={0}>
+                The last line
+              </p>
+            </div>
+          ),
+        }}
+      />,
+    );
+    const scroller = screen.getByTestId("scroller");
+    const line = drawn.container.querySelector("p")!;
+    const frame = drawn.container.firstElementChild as HTMLElement;
+    Object.defineProperty(line, "isContentEditable", { value: true });
+    Object.defineProperties(scroller, { scrollHeight: { value: 2000 }, clientHeight: { value: 600 } });
+    scroller.getBoundingClientRect = box(0, 600);
+    frame.getBoundingClientRect = box(0, 300);
+    line.getBoundingClientRect = () => box(500 - scroller.scrollTop, 520 - scroller.scrollTop)();
+    Range.prototype.getBoundingClientRect ??= box(0, 0);
+    line.focus();
+    getSelection()!.collapse(line.firstChild, 3);
+    act(() => {
+      view.height = 300;
+      view.dispatchEvent(new Event("resize"));
+    });
+    expect(scroller.scrollTop).toBe(244);
+    vi.unstubAllGlobals();
+  });
+});
+
 describe("a workspace that's only its picture", () => {
   it("draws its picture on black across all of the window, its bars over it while they're awake, and hidden but there while they're not, nor the pointer", () => {
     const Layout = radix.Layout;
