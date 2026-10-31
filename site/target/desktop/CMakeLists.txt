@@ -51,6 +51,11 @@ else()
 	install(CODE "message(FATAL_ERROR \"uione has no LICENSE beside its .one files, so it isn't installed or packaged\")")
 endif()
 install(FILES packaging/org.uione.uione.desktop DESTINATION share/applications)
+install(CODE "if(CMAKE_INSTALL_PREFIX AND NOT CMAKE_INSTALL_PREFIX MATCHES /_CPack_Packages/)
+  file(READ \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/share/applications/org.uione.uione.desktop\" written)
+  string(REPLACE \"Exec=uione-desktop \" \"Exec=\${CMAKE_INSTALL_PREFIX}/bin/uione-desktop \" written \"\${written}\")
+  file(WRITE \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/share/applications/org.uione.uione.desktop\" \"\${written}\")
+endif()")
 install(FILES packaging/org.uione.uione.svg DESTINATION share/icons/hicolor/scalable/apps)
 
 # Its package: cmake --build out --target package makes uione-desktop-<version>-linux-<machine>.tar.gz,

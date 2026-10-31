@@ -188,6 +188,8 @@ TEST_CASE("a desktop app is installed and packaged with its .desktop file, icon 
     CHECK(entry->content.find("Icon=org.uione.notes") != std::string::npos);
     CHECK(cmake->content.find("install(PROGRAMS $<TARGET_FILE:notes_desktop> DESTINATION bin RENAME notes-desktop)") != std::string::npos);
     CHECK(cmake->content.find("install(FILES packaging/LICENSE DESTINATION share/licenses/notes-desktop)") != std::string::npos);
+    // Installed into a prefix, it's run by its whole path there, since a launcher's PATH may not have it.
+    CHECK(cmake->content.find(R"(string(REPLACE \"Exec=notes-desktop \" \"Exec=\${CMAKE_INSTALL_PREFIX}/bin/notes-desktop \")") != std::string::npos);
     CHECK(cmake->content.find("set(CPACK_PACKAGE_FILE_NAME \"notes-desktop-${VERSION}-linux-${CMAKE_SYSTEM_PROCESSOR}\")") != std::string::npos);
     fs::remove(repository / "LICENSE");
     auto unlicensed = generators::generate_native(files, (repository / "app").string(), "desktop");

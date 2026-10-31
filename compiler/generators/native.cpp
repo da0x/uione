@@ -2752,6 +2752,15 @@ namespace one::generators {
             out.close("endif()");
             if (target_ == "desktop") {
                 out.line("install(FILES packaging/" + app_id() + ".desktop DESTINATION share/applications)");
+                // Installed into a prefix, as ~/.local is, it's run by its whole path, as what
+                // launches apps may not have that prefix's bin in its PATH; a package, staged by
+                // CPack and unpacked into wherever it's put, keeps its name alone.
+                const std::string entry = "\\$ENV{DESTDIR}\\${CMAKE_INSTALL_PREFIX}/share/applications/" + app_id() + ".desktop";
+                out.line("install(CODE \"if(CMAKE_INSTALL_PREFIX AND NOT CMAKE_INSTALL_PREFIX MATCHES /_CPack_Packages/)");
+                out.line("  file(READ \\\"" + entry + "\\\" written)");
+                out.line("  string(REPLACE \\\"Exec=" + installed + " \\\" \\\"Exec=\\${CMAKE_INSTALL_PREFIX}/bin/" + installed + " \\\" written \\\"\\${written}\\\")");
+                out.line("  file(WRITE \\\"" + entry + "\\\" \\\"\\${written}\\\")");
+                out.line("endif()\")");
                 if (!model_.project.icon.empty()) out.line("install(FILES packaging/" + app_id() + ".svg DESTINATION share/icons/hicolor/scalable/apps)");
             }
             out.line();
